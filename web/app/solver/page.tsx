@@ -281,10 +281,12 @@ export default function SolverPage() {
                               className="overflow-x-auto max-w-full"
                             />
                           ),
-                          code: ({ node, inline, ...props }) => (
+                          code: ({ node, ...props }: any) => (
                             <code
                               {...props}
-                              className={inline ? "break-words" : "block"}
+                              className={
+                                (props as any).inline ? "break-words" : "block"
+                              }
                             />
                           ),
                           table: ({ node, ...props }) => (
@@ -342,10 +344,12 @@ export default function SolverPage() {
                               className="overflow-x-auto max-w-full"
                             />
                           ),
-                          code: ({ node, inline, ...props }) => (
+                          code: ({ node, ...props }: any) => (
                             <code
                               {...props}
-                              className={inline ? "break-words" : "block"}
+                              className={
+                                (props as any).inline ? "break-words" : "block"
+                              }
                             />
                           ),
                           table: ({ node, ...props }) => (

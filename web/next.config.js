@@ -2,6 +2,8 @@
 const path = require("path");
 
 const nextConfig = {
+  // Enable standalone output for Docker optimization
+  output: "standalone",
   // Handle ESM packages compatibility
   experimental: {
     esmExternals: "loose",
