@@ -233,6 +233,18 @@ class DocumentAdder:
 
         # Define embedding function
         embedding_cfg = self.embedding_cfg
+        # ---- Validate embedding dimension compatibility ----
+        if embedding_cfg.get("binding") == "ollama":
+            dim = embedding_cfg.get("dim")
+            if dim not in (1536, 3072):
+                raise ValueError(
+                    f"Incompatible embedding dimension {dim} detected.\n"
+                    "LightRAG currently assumes OpenAI-compatible embedding dimensions "
+                    "(1536 or 3072).\n"
+                    "Ollama embeddings such as 'nomic-embed-text' (768-dim) are not yet supported."
+                )
+        # ---------------------------------------------------
+
         embedding_api_key = embedding_cfg["api_key"] or self.api_key
         embedding_base_url = embedding_cfg["base_url"] or self.base_url
         embedding_func = EmbeddingFunc(

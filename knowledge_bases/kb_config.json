@@ -1,0 +1,9 @@
+{
+  "knowledge_bases": {
+    "test_kb": {
+      "path": "test_kb",
+      "description": "Knowledge base: test_kb"
+    }
+  },
+  "default": "test_kb"
+}

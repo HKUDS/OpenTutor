@@ -1,0 +1,10 @@
+{
+  "kb_name": "test_kb",
+  "stage": "extracting_items",
+  "message": "Starting to extract numbered items...",
+  "current": 0,
+  "total": 0,
+  "file_name": "",
+  "progress_percent": 0,
+  "timestamp": "2026-01-05T17:29:01.920788"
+}
