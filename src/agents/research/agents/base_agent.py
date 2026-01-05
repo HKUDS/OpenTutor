@@ -19,11 +19,21 @@ sys.path.insert(0, str(project_root))
 research_dir = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(research_dir))
 
-from lightrag.llm.openai import openai_complete_if_cache
+try:
+    from lightrag.llm.openai import openai_complete_if_cache
+except ModuleNotFoundError:
+    openai_complete_if_cache = None
 
 from src.core.core import get_agent_params, get_llm_config, parse_language
-
 from ..utils.token_tracker import get_token_tracker
+
+
+LANGUAGE_MAP = {
+    "en": "en",
+    "zh": "zh",
+    "cn": "cn",
+}
+DEFAULT_LANGUAGE = "en"
 
 
 class BaseAgent(ABC):
@@ -75,54 +85,28 @@ class BaseAgent(ABC):
 
     def _load_prompts(self) -> dict[str, Any]:
         """Load prompt definitions for current Agent"""
-        # Get language configuration (unified in config/main.yaml system.language)
-        language = self.config.get("system", {}).get("language", "zh")
+
+        language = self.config.get("system", {}).get("language", DEFAULT_LANGUAGE)
         lang_code = parse_language(language)
 
-        # Determine language directory: 'en' or 'zh' (unified language codes)
-        # Note: research module prompts may be in 'cn' directory, we support both 'zh' and 'cn' for backward compatibility
-        if lang_code == "en":
-            lang_dir = "en"
-        else:
-            # Try 'zh' first, fall back to 'cn' for backward compatibility
-            lang_dir = "zh"
+        lang_dir = LANGUAGE_MAP.get(lang_code, DEFAULT_LANGUAGE)
 
-        # Get prompts directory: from agents/base_agent.py -> research/prompts/
         prompts_dir = Path(__file__).parent.parent / "prompts"
-
-        # Build prompt file path: prompts/{lang_dir}/{agent_name}.yaml
         prompt_file = prompts_dir / lang_dir / f"{self.agent_name}.yaml"
 
-        # Build cache key (include language info)
         cache_key = f"{self.agent_name}_{lang_dir}"
-
         if cache_key in BaseAgent._PROMPT_CACHE:
             return BaseAgent._PROMPT_CACHE[cache_key]
 
-        # Try loading specified language version first, fall back to 'cn' if 'zh' doesn't exist (backward compatibility)
-        if not prompt_file.exists() and lang_dir == "zh":
-            # If 'zh' version doesn't exist, try 'cn' for backward compatibility
-            prompt_file = prompts_dir / "cn" / f"{self.agent_name}.yaml"
-            if prompt_file.exists():
-                lang_dir = "cn"
-                cache_key = f"{self.agent_name}_{lang_dir}"
-            else:
-                # If neither 'zh' nor 'cn' exists, fall back to 'en'
-                prompt_file = prompts_dir / "en" / f"{self.agent_name}.yaml"
-                lang_dir = "en"
-                cache_key = f"{self.agent_name}_{lang_dir}"
-        elif not prompt_file.exists() and lang_dir == "en":
-            # If English version doesn't exist, fall back to 'zh' or 'cn'
-            prompt_file = prompts_dir / "zh" / f"{self.agent_name}.yaml"
-            if prompt_file.exists():
-                lang_dir = "zh"
-                cache_key = f"{self.agent_name}_{lang_dir}"
-            else:
-                prompt_file = prompts_dir / "cn" / f"{self.agent_name}.yaml"
-                lang_dir = "cn"
-                cache_key = f"{self.agent_name}_{lang_dir}"
-        if cache_key in BaseAgent._PROMPT_CACHE:
-            return BaseAgent._PROMPT_CACHE[cache_key]
+        # Fallback to other languages
+        if not prompt_file.exists():
+            for fallback_lang in LANGUAGE_MAP.values():
+                candidate = prompts_dir / fallback_lang / f"{self.agent_name}.yaml"
+                if candidate.exists():
+                    prompt_file = candidate
+                    lang_dir = fallback_lang
+                    cache_key = f"{self.agent_name}_{lang_dir}"
+                    break
 
         if not prompt_file.exists():
             print(f"⚠️ Prompt file not found: {prompt_file}")
@@ -140,23 +124,12 @@ class BaseAgent(ABC):
         return data
 
     def get_prompt(self, section: str, field: str, fallback: str = "") -> str:
-        """
-        Get specified prompt template
-
-        Args:
-            section: Prompt section name
-            field: Field name
-            fallback: Default value
-
-        Returns:
-            Prompt template
-        """
+        """Get specified prompt template"""
         template = self.prompts.get(section, {}).get(field)
         return template if template is not None else fallback
 
     def get_model(self) -> str:
         """Get model name (only loaded from environment variables, ignore model in config file)"""
-        # If config accidentally contains model field, ignore it (can log one-time warning here)
         return self.default_model
 
     def get_temperature(self) -> float:
@@ -179,24 +152,11 @@ class BaseAgent(ABC):
     ) -> str:
         """
         Unified interface for calling LLM
-
-        Args:
-            user_prompt: User prompt
-            system_prompt: System prompt
-            temperature: Temperature parameter
-            model: Model name
-            max_tokens: Maximum token count
-            verbose: Whether to print output
-            stage: Stage marker (for logging)
-
-        Returns:
-            LLM response
         """
         model = model or self.get_model()
         temperature = temperature if temperature is not None else self.get_temperature()
         max_tokens = max_tokens or self.get_max_tokens()
 
-        # Record call start time
         start_time = time.time()
 
         kwargs = {
@@ -210,23 +170,22 @@ class BaseAgent(ABC):
 
         if max_tokens:
             kwargs["max_tokens"] = max_tokens
+        if openai_complete_if_cache is None:
+            raise RuntimeError(
+                "Optional dependency 'lightrag' is not installed. "
+                "Install it to enable LLM functionality."
+            )
 
-        # Call LLM and record errors
-        response = None
-        error = None
+
         try:
             response = await openai_complete_if_cache(**kwargs)
         except Exception as e:
-            error = e
-            # Log error
             if hasattr(self, "logger") and self.logger:
                 self.logger.error(f"LLM call failed: {e}")
             raise
 
-        # Calculate call duration
         call_duration = time.time() - start_time
 
-        # Record token usage (optional)
         try:
             tracker = get_token_tracker()
             tracker.add_usage(
@@ -240,9 +199,10 @@ class BaseAgent(ABC):
         except Exception:
             pass
 
-        # Log LLM call info
         if hasattr(self, "logger") and self.logger:
-            self.logger.debug(f"LLM call completed: model={model}, duration={call_duration:.2f}s")
+            self.logger.debug(
+                f"LLM call completed: model={model}, duration={call_duration:.2f}s"
+            )
 
         if verbose:
             print(f"\n{'=' * 70}")
