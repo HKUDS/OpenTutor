@@ -6,7 +6,10 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "audit": "playwright test --project=ui-audit",
+    "audit:ui": "playwright test --ui --project=ui-audit",
+    "audit:report": "playwright show-report"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -27,6 +30,7 @@
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "@types/node": "^25",
     "@types/react": "^19",
     "@types/react-dom": "^19",
