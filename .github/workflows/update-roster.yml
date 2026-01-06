@@ -1,9 +1,9 @@
 name: Update Repo Roster
 
 on:
-  # Run every 2 hours
+  # Run twice a day (at 00:00 and 12:00 UTC)
   schedule:
-    - cron: '0 */2 * * *'
+    - cron: '0 0,12 * * *'
   # Allow manual trigger
   workflow_dispatch:
   # Run when stars/forks might change (on push to main)
@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v5

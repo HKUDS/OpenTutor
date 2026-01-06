@@ -12,7 +12,13 @@ import base64
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
+import ssl
 import urllib.request
+
+# Create SSL context that doesn't verify certificates (for macOS compatibility)
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
 
 
 def fetch_github_api(url: str, token: str = None, count_only: bool = False) -> tuple:
@@ -31,7 +37,7 @@ def fetch_github_api(url: str, token: str = None, count_only: bool = False) -> t
         req = urllib.request.Request(paginated_url, headers=headers)
 
         try:
-            with urllib.request.urlopen(req, timeout=30) as response:
+            with urllib.request.urlopen(req, timeout=30, context=ssl_context) as response:
                 data = json.loads(response.read().decode())
                 if not data:
                     break
@@ -48,7 +54,9 @@ def fetch_github_api(url: str, token: str = None, count_only: bool = False) -> t
                         paginated_url = f"{url}?per_page={per_page}&page={page}"
                         req = urllib.request.Request(paginated_url, headers=headers)
                         try:
-                            with urllib.request.urlopen(req, timeout=30) as resp:
+                            with urllib.request.urlopen(
+                                req, timeout=30, context=ssl_context
+                            ) as resp:
                                 more_data = json.loads(resp.read().decode())
                                 if not more_data:
                                     break
@@ -74,7 +82,7 @@ def fetch_avatar_as_base64(avatar_url: str, size: int = 48) -> str:
             avatar_url += f"?s={size}"
 
         req = urllib.request.Request(avatar_url, headers={"User-Agent": "Repo-Roster-Generator"})
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=10, context=ssl_context) as response:
             data = response.read()
             content_type = response.headers.get("Content-Type", "image/png")
             base64_data = base64.b64encode(data).decode("utf-8")

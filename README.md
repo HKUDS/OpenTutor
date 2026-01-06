@@ -225,7 +225,6 @@
 ## 📋 Todo
 
 > 🌟 Star to follow our future updates!
-- [-] Support Local LLM Services (e.g., ollama)
 - [-] Refactor RAG Module (see [Discussions](https://github.com/HKUDS/DeepTutor/discussions))
 - [ ] Deep-coding from idea generation
 - [ ] Personalized Interaction with Notebook

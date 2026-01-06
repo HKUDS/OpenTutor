@@ -1,8 +1,8 @@
 # Contributing
 
-Thank you for your interest in contributing to DeepTutor! 🎉
+Thank you for your interest in contributing to DeepTutor! That means a lot for our team! 🎉
 
-We welcome contributions from the community! To ensure code quality and consistency, please follow the guidelines below.
+You can join our [Discord community](https://discord.gg/aka9p9EW) for further discussion.
 
 ## Ways to Contribute
 
@@ -10,6 +10,15 @@ We welcome contributions from the community! To ensure code quality and consiste
 - 💡 **Suggest features** — Share your ideas in discussions
 - 📖 **Improve docs** — Fix typos, add examples
 - 🔧 **Submit PRs** — Code contributions welcome!
+
+## 🔄 Pull Request Process
+
+1. **Create a branch**: `git checkout -b feature/your-feature`
+2. **Make changes**: Follow existing code style and conventions
+3. **Test locally**: Ensure your changes work correctly
+4. **Run pre-commit**: `pre-commit run --all-files` ⚠️ **Required before PR!**
+5. **Commit**: Pre-commit hooks will auto-format your code
+6. **Push & PR**: Open a pull request with a clear description
 
 ## Development Setup
 
@@ -56,7 +65,9 @@ pre-commit install
 pre-commit run --all-files
 ```
 
-## Code Quality Tools
+> After installing Git hooks, they will run **automatically** on every commit — no need to remember!
+
+## 🛠️ Code Quality Tools
 
 We use automated tools to maintain code quality:
 
@@ -66,7 +77,11 @@ We use automated tools to maintain code quality:
 | **Prettier** | Frontend code formatting | `web/.prettierrc.json` |
 | **detect-secrets** | Security check | `.secrets.baseline` |
 
-> **Note**: The project uses **Ruff format** instead of Black to avoid formatting conflicts.
+::: warning IMPORTANT
+**Before submitting a PR, you MUST run:** `pre-commit run --all-files`
+
+CI will automatically check this and **reject PRs** that fail pre-commit checks.
+:::
 
 Every time you run `git commit`, pre-commit hooks will automatically:
 - Format Python code with Ruff
@@ -75,21 +90,15 @@ Every time you run `git commit`, pre-commit hooks will automatically:
 - Validate YAML/JSON files
 - Detect potential security issues
 
-## Pull Request Process
+> **Note**: The project uses **Ruff format** instead of Black to avoid formatting conflicts.
 
-1. **Create Branch**: `git checkout -b feature/amazing-feature`
-2. **Make Changes**: Write your code following the project's style
-3. **Test**: Ensure your changes work correctly
-4. **Commit**: Pre-commit hooks will automatically format your code
-5. **Push and PR**: Push to your fork and create a Pull Request
-
-### Common Commands
+## Common Commands
 
 ```bash
-# Normal commit (hooks run automatically)
+# Normal commit (hooks run automatically if installed)
 git commit -m "Your commit message"
 
-# Manually check all files
+# Manually check all files (do this before pushing!)
 pre-commit run --all-files
 
 # Update hooks to latest versions
@@ -99,15 +108,26 @@ pre-commit autoupdate
 git commit --no-verify -m "Emergency fix"
 ```
 
-## Contribution Guidelines
+## 📋 Commit Message Format
 
-1. **Fork and Clone**: Fork the repository and clone your fork
-2. **Create Branch**: Create a feature branch from `main`
-3. **Install Pre-commit**: Follow the setup steps above
-4. **Make Changes**: Write your code following the project's style
-5. **Test**: Ensure your changes work correctly
-6. **Commit**: Pre-commit hooks will automatically format your code
-7. **Push and PR**: Push to your fork and create a Pull Request
+```
+<type>: <short description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+**Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+
+**Examples**:
+- `feat`: for a new feature (MINOR version bump)
+- `fix`: for a bug fix (PATCH version bump)
+- `docs`: for documentation-only changes
+- `style`: for formatting changes (whitespace, semicolons)
+- `refactor`: for code changes that neither fix a bug nor add a feature
+- `test`: for adding or correcting tests
+- `chore`: for routine tasks (build processes, dependencies)
 
 ## Reporting Issues
 
@@ -122,8 +142,9 @@ Please be respectful and inclusive. We're building a welcoming community for lea
 ## Questions?
 
 - Open a [GitHub Discussion](https://github.com/HKUDS/DeepTutor/discussions)
+- Join our [Discord Community](https://discord.gg/aka9p9EW)
 - Check existing issues for similar questions
 
 ---
 
-❤️ Thank you for helping make DeepTutor better!
+### Let's build a tutoring system for the whole community TOGETHER! 🚀

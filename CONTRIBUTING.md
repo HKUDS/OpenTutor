@@ -22,10 +22,8 @@ We use automated tools to maintain code quality:
 - **detect-secrets** — Security scanning
 
 > [!IMPORTANT]
-> **Before submitting a PR, you MUST run:**
-> ```bash
-> pre-commit run --all-files
-> ```
+> **Before submitting a PR, you MUST run:** `pre-commit run --all-files`
+>
 > CI will automatically check this and **reject PRs** that fail pre-commit checks.
 
 ### Setting Up Pre-commit (First Time Only)
