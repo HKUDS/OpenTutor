@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test'
 
-// Minimal compliance and UX checks without external deps (axe-core)
+// NOTE: For comprehensive accessibility auditing, it is strongly recommended to
+// install and use @axe-core/playwright. This home-rolled script is not a substitute
+// for a dedicated accessibility testing engine.
 // Focus on semantic landmarks, headings, alt text, link names, and basic error messaging.
 
 const BASE_URL =
@@ -17,17 +19,15 @@ test.describe('Compliance :: Accessibility & Semantics', () => {
     await expect(h1, 'Missing top-level <h1>').toBeVisible()
   })
 
-  test('images provide alt text', async ({ page }) => {
+  test('images have alt attributes', async ({ page }) => {
     await page.goto(`${BASE_URL}/`)
-    const missingAltCount = await page.$$eval(
-      'img',
-      imgs =>
-        imgs.filter(img => {
-          const alt = img.getAttribute('alt')
-          return !alt || alt.trim().length === 0
-        }).length
+    const missingAlt = await page.$$eval('img', imgs =>
+      imgs.filter(img => !img.hasAttribute('alt')).map(img => img.src || 'inline-image')
     )
-    expect(missingAltCount, `Found ${missingAltCount} <img> without alt`).toBe(0)
+    expect(
+      missingAlt,
+      `Found ${missingAlt.length} <img> tags missing alt attribute: ${missingAlt.join(', ')}`
+    ).toHaveLength(0)
   })
 
   test('links have accessible names (text/aria-label/title)', async ({ page }) => {

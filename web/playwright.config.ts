@@ -12,6 +12,11 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: preferSerialExecution ? 1 : undefined,
   reporter: [['html', { open: 'never' }], ['list']],
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+  },
   use: {
     baseURL: BASE_URL,
     trace: 'on-first-retry',
@@ -20,6 +25,11 @@ export default defineConfig({
     {
       name: 'ui-audit',
       testMatch: /.*\.audit\.ts$/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'accessibility',
+      testMatch: /.*\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'] },
     },
   ],
