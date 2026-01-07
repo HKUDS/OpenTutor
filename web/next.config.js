@@ -9,17 +9,16 @@ const nextConfig = {
   // Transpile mermaid and related packages for proper ESM handling
   transpilePackages: ["mermaid"],
 
-  // Turbopack configuration (Next.js 16+ uses Turbopack by default)
+  // Turbopack configuration (Next.js 16+ uses Turbopack by default for dev)
   turbopack: {
     resolveAlias: {
       // Fix for mermaid's cytoscape dependency - use CJS version
-      // Use package-relative path for Turbopack
       cytoscape: "cytoscape/dist/cytoscape.cjs.js",
     },
   },
 
-  // Webpack fallback for compatibility (used when --webpack flag is passed)
-  webpack: (config, { isServer }) => {
+  // Webpack configuration (used for production builds - next build)
+  webpack: (config) => {
     const path = require("path");
     config.resolve.alias = {
       ...config.resolve.alias,
@@ -28,7 +27,6 @@ const nextConfig = {
         "node_modules/cytoscape/dist/cytoscape.cjs.js",
       ),
     };
-
     return config;
   },
 };

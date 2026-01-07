@@ -6,20 +6,20 @@ on:
       - main
       - develop
     paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'requirements.txt'
-      - 'pyproject.toml'
-      - '.github/workflows/tests.yml'
+      - "src/**"
+      - "tests/**"
+      - "requirements.txt"
+      - "pyproject.toml"
+      - ".github/workflows/tests.yml"
   pull_request:
     branches:
       - main
       - develop
     paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'requirements.txt'
-      - 'pyproject.toml'
+      - "src/**"
+      - "tests/**"
+      - "requirements.txt"
+      - "pyproject.toml"
 
 jobs:
   test:
@@ -28,7 +28,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ['3.10', '3.11']
+        python-version: ["3.10", "3.11"]
       fail-fast: false
 
     steps:
@@ -39,7 +39,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -74,8 +74,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-          cache: 'pip'
+          python-version: "3.10"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -86,6 +86,6 @@ jobs:
         run: |
           python -c "from src.core.core import get_llm_config, load_config_with_main; print('✅ Core imports OK')"
           python -c "from src.knowledge.kb import KnowledgeBase; print('✅ Knowledge imports OK')"
-          python -c "from src.tools.rag_tool import RAGTool; print('✅ Tools imports OK')"
+          python -c "from src.tools.rag_tool import rag_search; print('✅ Tools imports OK')"
         env:
           PYTHONPATH: ${{ github.workspace }}

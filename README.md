@@ -311,7 +311,7 @@ cp .env.example .env
 <summary><b>🚀 Option A: Pre-built Image (Fastest)</b></summary>
 
 ```bash
-# Pull and run pre-built image (~30 seconds)
+# Pull and run pre-built image (Linux/macOS)
 docker run -d --name deeptutor \
   -p 8001:8001 -p 3782:3782 \
   -e LLM_MODEL=gpt-4o \
@@ -322,6 +322,19 @@ docker run -d --name deeptutor \
   -e EMBEDDING_BINDING_HOST=https://api.openai.com/v1 \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/config:/app/config:ro \
+  ghcr.io/hkuds/deeptutor:latest
+
+# Windows PowerShell: use ${PWD} instead of $(pwd)
+docker run -d --name deeptutor `
+  -p 8001:8001 -p 3782:3782 `
+  -e LLM_MODEL=gpt-4o `
+  -e LLM_BINDING_API_KEY=your-api-key `
+  -e LLM_BINDING_HOST=https://api.openai.com/v1 `
+  -e EMBEDDING_MODEL=text-embedding-3-large `
+  -e EMBEDDING_BINDING_API_KEY=your-api-key `
+  -e EMBEDDING_BINDING_HOST=https://api.openai.com/v1 `
+  -v ${PWD}/data:/app/data `
+  -v ${PWD}/config:/app/config:ro `
   ghcr.io/hkuds/deeptutor:latest
 ```
 

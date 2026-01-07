@@ -462,9 +462,9 @@ export default function ResearchPage() {
                       <span>Optimizing topic...</span>
                     </div>
                   ) : (
-                    <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none">
-                      {msg.content}
-                    </ReactMarkdown>
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
                   )}
                 </div>
                 {msg.type === "topic_proposal" &&

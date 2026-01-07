@@ -994,11 +994,10 @@ export default function QuestionPage() {
                               <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">
                                 Correct Answer
                               </p>
-                              <div className="text-emerald-800 dark:text-emerald-200 text-base leading-relaxed [&_.katex]:text-emerald-800 dark:[&_.katex]:text-emerald-200 [&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto">
+                              <div className="text-emerald-800 dark:text-emerald-200 text-base leading-relaxed [&_.katex]:text-emerald-800 dark:[&_.katex]:text-emerald-200 [&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto prose prose-emerald dark:prose-invert max-w-none prose-p:my-2 prose-p:leading-relaxed">
                                 <ReactMarkdown
                                   remarkPlugins={[remarkMath]}
                                   rehypePlugins={[rehypeKatex]}
-                                  className="prose prose-emerald dark:prose-invert max-w-none prose-p:my-2 prose-p:leading-relaxed"
                                 >
                                   {processLatexContent(
                                     String(
