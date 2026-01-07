@@ -43,7 +43,7 @@ tts:
 question:
   max_rounds: 10
   rag_query_count: 3
-  max_parallel_questions: 3
+  max_parallel_questions: 1
   rag_mode: naive
   agents:
     question_generation:
@@ -74,8 +74,8 @@ research:
   researching:
     max_iterations: 5
     new_topic_min_score: 0.85
-    execution_mode: parallel
-    max_parallel_topics: 5
+    execution_mode: series
+    max_parallel_topics: 1
     enable_rag_naive: true
     enable_rag_hybrid: true
     enable_paper_search: true

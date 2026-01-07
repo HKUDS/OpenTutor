@@ -8,6 +8,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-Join-7289DA?style=flat&logo=discord&logoColor=white)](https://discord.gg/aka9p9EW)
 [![Feishu](https://img.shields.io/badge/Feishu-Group-blue?style=flat)](./Communication.md)
 [![WeChat](https://img.shields.io/badge/WeChat-Group-green?style=flat&logo=wechat)](./Communication.md)
 
@@ -224,133 +225,192 @@
 
 ## 🚀 快速开始
 
-### 第一步：克隆仓库并创建虚拟环境
+### 第一步：预配置
+
+**① 克隆仓库**
 
 ```bash
-# 克隆仓库
 git clone https://github.com/HKUDS/DeepTutor.git
 cd DeepTutor
+```
 
-# 创建虚拟环境（选择一种方式）
+**② 设置环境变量**
 
-# 选项 A：使用 conda（推荐）
+```bash
+cp .env.example .env
+# 使用您的 API 密钥编辑 .env 文件
+```
+
+<details>
+<summary>📋 <b>环境变量参考</b></summary>
+
+| 变量 | 必需 | 描述 |
+|:---|:---:|:---|
+| `LLM_MODEL` | **是** | 模型名称（例如：`gpt-4o`） |
+| `LLM_BINDING_API_KEY` | **是** | 您的 LLM API 密钥 |
+| `LLM_BINDING_HOST` | **是** | API 端点 URL |
+| `EMBEDDING_MODEL` | **是** | 嵌入模型名称 |
+| `EMBEDDING_BINDING_API_KEY` | **是** | 嵌入 API 密钥 |
+| `EMBEDDING_BINDING_HOST` | **是** | 嵌入 API 端点 |
+| `BACKEND_PORT` | 否 | 后端端口（默认：`8001`） |
+| `FRONTEND_PORT` | 否 | 前端端口（默认：`3782`） |
+| `TTS_*` | 否 | 文本转语音设置 |
+| `PERPLEXITY_API_KEY` | 否 | 用于网络搜索 |
+
+</details>
+
+**③ 配置端口和 LLM** *(可选)*
+
+- **端口**：编辑 `config/main.yaml` → `server.backend_port` / `server.frontend_port`
+- **LLM**：编辑 `config/agents.yaml` → 每个模块的 `temperature` / `max_tokens`
+- 详细信息请参阅[配置文档](config/README.md)
+
+**④ 试用演示知识库** *(可选)*
+
+<details>
+<summary>📚 <b>可用演示</b></summary>
+
+- **研究论文** — 来自我们实验室的 5 篇论文（[AI-Researcher](https://github.com/HKUDS/AI-Researcher)、[LightRAG](https://github.com/HKUDS/LightRAG) 等）
+- **数据科学教科书** — 8 章，296 页（[书籍链接](https://ma-lab-berkeley.github.io/deep-representation-learning-book/)）
+
+</details>
+
+1. 从 [Google Drive](https://drive.google.com/drive/folders/1iWwfZXiTuQKQqUYb5fGDZjLCeTUP6DA6?usp=sharing) 下载
+2. 解压到 `data/` 目录
+
+> 演示知识库使用 `text-embedding-3-large`，维度为 `dimensions = 3072`
+
+**⑤ 创建您自己的知识库** *(启动后)*
+
+1. 访问 http://localhost:3782/knowledge
+2. 点击"新建知识库" → 输入名称 → 上传 PDF/TXT/MD 文件
+3. 在终端中监控进度
+
+---
+
+### 第二步：选择安装方式
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+<h3 align="center">🐳 Docker 部署</h3>
+<p align="center"><b>推荐</b> — 无需 Python/Node.js 设置</p>
+
+---
+
+**前置要求**：[Docker](https://docs.docker.com/get-docker/) 和 [Docker Compose](https://docs.docker.com/compose/install/)
+
+<details open>
+<summary><b>🚀 方式 A：预构建镜像（最快）</b></summary>
+
+```bash
+# 拉取并运行预构建镜像（约 30 秒）
+docker run -d --name deeptutor \
+  -p 8001:8001 -p 3782:3782 \
+  -e LLM_MODEL=gpt-4o \
+  -e LLM_BINDING_API_KEY=your-api-key \
+  -e LLM_BINDING_HOST=https://api.openai.com/v1 \
+  -e EMBEDDING_MODEL=text-embedding-3-large \
+  -e EMBEDDING_BINDING_API_KEY=your-api-key \
+  -e EMBEDDING_BINDING_HOST=https://api.openai.com/v1 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/config:/app/config:ro \
+  ghcr.io/hkuds/deeptutor:latest
+```
+
+或使用 `.env` 文件：
+
+```bash
+docker run -d --name deeptutor \
+  -p 8001:8001 -p 3782:3782 \
+  --env-file .env \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/config:/app/config:ro \
+  ghcr.io/hkuds/deeptutor:latest
+```
+
+</details>
+
+<details>
+<summary><b>🔨 方式 B：从源码构建</b></summary>
+
+```bash
+# 构建并启动（首次运行约 5-10 分钟）
+docker compose up --build -d
+
+# 查看日志
+docker compose logs -f
+```
+
+</details>
+
+**命令**：
+
+```bash
+docker compose up -d      # 启动
+docker compose logs -f    # 日志
+docker compose down       # 停止
+docker compose up --build # 重建
+docker pull ghcr.io/hkuds/deeptutor:latest  # 更新镜像
+```
+
+> **开发模式**：添加 `-f docker-compose.dev.yml`
+
+</td>
+<td width="50%" valign="top">
+
+<h3 align="center">💻 手动安装</h3>
+<p align="center">适用于开发或非 Docker 环境</p>
+
+---
+
+**前置要求**：Python 3.10+、Node.js 18+
+
+**设置环境**：
+
+```bash
+# 使用 conda（推荐）
 conda create -n deeptutor python=3.10
 conda activate deeptutor
 
-# 选项 B：使用 venv
+# 或使用 venv
 python -m venv venv
-# 在 Windows:
-venv\Scripts\activate
-# 在 macOS/Linux:
 source venv/bin/activate
 ```
 
-### 第二步：安装依赖
-
-运行一键安装脚本自动安装所有依赖：
+**安装依赖**：
 
 ```bash
-# 推荐：使用 bash 脚本
 bash scripts/install_all.sh
 
-# 或使用 Python 脚本
-python scripts/install_all.py
-
-# 说明：安装脚本会检测 conda/venv 等隔离环境；如果未检测到隔离环境，会给出警告，但仍会继续安装。
-
-# 或手动安装
+# 或手动：
 pip install -r requirements.txt
-npm install
+npm install --prefix web
 ```
 
-### 第三步：配置环境变量
-
-在项目根目录基于 `.env.example` 创建 `.env` 文件：
+**启动**：
 
 ```bash
-# 从 .env.example 模板复制（如果存在）
-cp .env.example .env
-
-# 然后使用您的 API 密钥编辑 .env 文件：
-```
-
-### 第四步：配置端口和 LLM 参数 *(可选)*
-
-默认情况下，应用使用：
-- **后端 (FastAPI)**: `8001`
-- **前端 (Next.js)**: `3782`
-
-您可以通过编辑 `config/main.yaml` 中的 `server.backend_port` 和 `server.frontend_port` 值来修改这些端口。
-
-**LLM 参数**：所有 agent 的 `temperature` 和 `max_tokens` 设置都集中在 `config/agents.yaml` 中。每个模块（guide、solve、research、question、ideagen、co_writer）都有自己的一组参数。详细信息请参阅[配置文档](config/README.md)。
-
-### 第五步：使用我们的演示 *(可选)*
-
-为了快速体验我们的系统，我们提供了两个预处理的知识库以及一系列具有挑战性的问题和使用示例。
-
-<details>
-<summary><b>研究论文集合</b> — 5 篇论文（20-50 页每篇）</summary>
-
-来自我们实验室的 5 篇 RAG 和 Agent 领域的精选研究论文。此演示代表具有**广泛知识覆盖**的研究场景。
-
-**使用的论文**: [AI-Researcher](https://github.com/HKUDS/AI-Researcher) | [AutoAgent](https://github.com/HKUDS/AutoAgent) | [RAG-Anything](https://github.com/HKUDS/RAG-Anything) | [LightRAG](https://github.com/HKUDS/LightRAG) | [VideoRAG](https://github.com/HKUDS/VideoRAG)
-
-</details>
-
-<details>
-<summary><b>数据科学教科书</b> — 8 章，296 页</summary>
-
-一本综合性且具有挑战性的数据科学教科书。此演示代表具有**深层知识深度**的学习场景。
-
-**书籍链接**: [Deep Representation Learning Book](https://ma-lab-berkeley.github.io/deep-representation-learning-book/)
-</details>
-
-<br>
-
-**下载和设置：**
-
-1. 从以下位置下载演示包：[Google Drive](https://drive.google.com/drive/folders/1iWwfZXiTuQKQqUYb5fGDZjLCeTUP6DA6?usp=sharing)
-2. 将压缩文件直接解压到 `data/` 目录
-3. 启动项目后，知识库将自动在系统中可用
-
-> **注意：** 我们在初始化知识库时使用 `text-embedding-3-large` 作为嵌入模型，维度为 `dimensions = 3072`。请确保您的嵌入模型维度也是 3072。
-
-### 第六步：启动应用
-
-```bash
-# 确保虚拟环境已激活
-conda activate deeptutor  # 或: source venv/bin/activate
-
-# 启动 Web 界面（前端 + 后端）
+# 启动 Web 界面
 python scripts/start_web.py
 
-# 或仅启动 CLI 界面
+# 或仅 CLI
 python scripts/start.py
 
-# 要停止服务，请按 Ctrl+C
+# 停止：Ctrl+C
 ```
 
-### 第七步：创建自己的知识库
-
-启动应用后，您可以通过 Web 界面创建自己的知识库，支持任何模态。
-
-1. **访问知识库页面**：访问 http://localhost:{frontend_port}/knowledge
-2. **创建新知识库**：点击"新建知识库"按钮
-3. **命名知识库**：为您的知识库输入唯一名称
-4. **上传文件**：上传一个或多个文件
-5. **等待处理**：系统将在后台自动处理您的文件
-   - 在运行 `start_web.py` 的终端中监控创建进度
-   - 处理完成后，知识库将可用
-
-> **提示：** 大文件可能需要几分钟才能处理。您可以一次上传多个文件进行批处理。
+</td>
+</tr>
+</table>
 
 ### 访问 URL
 
-| 服务 | 网址 | 描述 |
+| 服务 | URL | 描述 |
 |:---:|:---|:---|
-| **前端** | http://localhost:{frontend_port} | 主 Web 界面 |
-| **API 文档** | http://localhost:{backend_port}/docs | 交互式 API 文档 |
-| **健康检查** | http://localhost:{backend_port}/api/v1/knowledge/health | 系统健康检查 |
+| **前端** | http://localhost:3782 | 主 Web 界面 |
+| **API 文档** | http://localhost:8001/docs | 交互式 API 文档 |
 
 ---
 

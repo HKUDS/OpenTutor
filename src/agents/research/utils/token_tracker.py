@@ -21,7 +21,7 @@ except ImportError:
 # Try importing litellm (optional)
 try:
     import litellm  # type: ignore
-    from litellm import completion_cost, token_counter  # type: ignore
+    from litellm import token_counter  # type: ignore
 
     LITELLM_AVAILABLE = True
 except ImportError:

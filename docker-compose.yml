@@ -1,0 +1,90 @@
+# ============================================
+# DeepTutor Docker Compose Configuration
+# ============================================
+# This file provides orchestration for DeepTutor services
+#
+# Usage:
+#   Production:  docker compose up -d
+#   Development: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#   Build only:  docker compose build
+#
+# Prerequisites:
+#   1. Copy .env.example to .env and configure your API keys
+#   2. Optionally customize config/main.yaml and config/agents.yaml
+# ============================================
+
+services:
+  # ============================================
+  # All-in-One DeepTutor Service
+  # ============================================
+  deeptutor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      args:
+        # Pass backend port at build time for Next.js static optimization
+        - BACKEND_PORT=${BACKEND_PORT:-8001}
+    container_name: deeptutor
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8001}:${BACKEND_PORT:-8001}"
+      - "${FRONTEND_PORT:-3782}:${FRONTEND_PORT:-3782}"
+
+    # Load environment variables from .env file
+    env_file:
+      - .env
+
+    environment:
+      # LLM Configuration (Required)
+      - LLM_BINDING=${LLM_BINDING:-openai}
+      - LLM_MODEL=${LLM_MODEL}
+      - LLM_BINDING_API_KEY=${LLM_BINDING_API_KEY}
+      - LLM_BINDING_HOST=${LLM_BINDING_HOST}
+      - DISABLE_SSL_VERIFY=${DISABLE_SSL_VERIFY:-false}
+      # Embedding Configuration (Required for Knowledge Base)
+      - EMBEDDING_BINDING=${EMBEDDING_BINDING:-openai}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-large}
+      - EMBEDDING_BINDING_API_KEY=${EMBEDDING_BINDING_API_KEY}
+      - EMBEDDING_BINDING_HOST=${EMBEDDING_BINDING_HOST}
+      - EMBEDDING_DIM=${EMBEDDING_DIM:-3072}
+      - EMBEDDING_MAX_TOKENS=${EMBEDDING_MAX_TOKENS:-8192}
+      # TTS Configuration (Optional)
+      - TTS_MODEL=${TTS_MODEL:-}
+      - TTS_API_KEY=${TTS_API_KEY:-}
+      - TTS_URL=${TTS_URL:-}
+      - TTS_VOICE=${TTS_VOICE:-alloy}
+      # Web Search Configuration (Optional)
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
+      # Logging Configuration
+      - RAG_TOOL_MODULE_LOG_LEVEL=${RAG_TOOL_MODULE_LOG_LEVEL:-INFO}
+      # Service Ports
+      - BACKEND_PORT=${BACKEND_PORT:-8001}
+      - FRONTEND_PORT=${FRONTEND_PORT:-3782}
+      # External API URL (for browser access if different from localhost)
+      - NEXT_PUBLIC_API_BASE_EXTERNAL=${NEXT_PUBLIC_API_BASE_EXTERNAL:-}
+
+    volumes:
+      # Mount local config directory (read-only)
+      - ./config:/app/config:ro
+      # Mount local data directory for persistence (read-write)
+      # This ensures all outputs go to your local ./data directory
+      - ./data/user:/app/data/user
+      - ./data/knowledge_bases:/app/data/knowledge_bases
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT:-8001}/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    networks:
+      - deeptutor-network
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  deeptutor-network:
+    driver: bridge

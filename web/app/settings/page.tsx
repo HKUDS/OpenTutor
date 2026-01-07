@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Settings as SettingsIcon,
   Sun,
@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { apiUrl } from "@/lib/api";
 import { getTranslation } from "@/lib/i18n";
+import { setTheme } from "@/lib/theme";
+import { debounce } from "@/lib/debounce";
 
 import { useGlobal } from "@/context/GlobalContext";
 
@@ -120,8 +122,17 @@ interface TestResults {
   tts: { status: string; model: string | null; error: string | null };
 }
 
+interface LLMProvider {
+  name: string;
+  binding: string;
+  base_url: string;
+  api_key: string;
+  model: string;
+  is_active: boolean;
+}
+
 // Tab types
-type SettingsTab = "general" | "environment";
+type SettingsTab = "general" | "environment" | "llm_providers";
 
 export default function SettingsPage() {
   const { uiSettings, refreshSettings } = useGlobal();
@@ -137,6 +148,48 @@ export default function SettingsPage() {
   const [editedConfig, setEditedConfig] = useState<ConfigData | null>(null);
   const [editedUI, setEditedUI] = useState<UISettings | null>(null);
 
+  // --- Helper Data ---
+
+  interface ProviderPreset {
+    id: string;
+    name: string;
+    binding: "openai" | "azure_openai" | "ollama";
+    base_url?: string;
+    default_model: string;
+    models: string[];
+    requires_key: boolean;
+    help_text?: string;
+  }
+
+  const PROVIDER_PRESETS: ProviderPreset[] = [
+    {
+      id: "ollama",
+      name: "Ollama (Local)",
+      binding: "ollama",
+      base_url: "http://localhost:11434/v1",
+      default_model: "llama3.2",
+      models: [
+        "llama3.3",
+        "llama3.2",
+        "qwen2.5",
+        "mistral-nemo",
+        "deepseek-r1",
+      ],
+      requires_key: false,
+      help_text: "Ensure Ollama is running (`ollama serve`).",
+    },
+    {
+      id: "lmstudio",
+      name: "LM Studio (Local)",
+      binding: "openai",
+      base_url: "http://localhost:1234/v1",
+      default_model: "uploaded-model",
+      models: [],
+      requires_key: false,
+      help_text: "Ensure LM Studio is running. Standard port is 1234.",
+    },
+  ];
+
   // Environment variables states
   const [envConfig, setEnvConfig] = useState<EnvConfigResponse | null>(null);
   const [editedEnvVars, setEditedEnvVars] = useState<Record<string, string>>(
@@ -151,10 +204,255 @@ export default function SettingsPage() {
   const [testResults, setTestResults] = useState<TestResults | null>(null);
   const [testing, setTesting] = useState(false);
 
+  // LLM Providers state
+  const [providers, setProviders] = useState<LLMProvider[]>([]);
+  const [loadingProviders, setLoadingProviders] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<LLMProvider | null>(
+    null,
+  ); // null means adding new
+  const [selectedPresetId, setSelectedPresetId] = useState<string>("ollama");
+  const [customModelInput, setCustomModelInput] = useState(true);
+  const [showProviderForm, setShowProviderForm] = useState(false);
+  const [testProviderResult, setTestProviderResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [testingProvider, setTestingProvider] = useState(false);
+  const [fetchedModels, setFetchedModels] = useState<string[]>([]);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [savingProvider, setSavingProvider] = useState(false);
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [originalProviderName, setOriginalProviderName] = useState<
+    string | null
+  >(null);
+
+  // Create debounced theme save function
+  const debouncedSaveTheme = useRef(
+    debounce(async (themeValue: "light" | "dark", uiSettings: UISettings) => {
+      try {
+        await fetch(apiUrl("/api/v1/settings/ui"), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...uiSettings, theme: themeValue }),
+        });
+      } catch (err) {
+        // Silently fail - theme is still saved to localStorage
+      }
+    }, 500),
+  ).current;
+
   useEffect(() => {
     fetchSettings();
     fetchEnvConfig();
-  }, [uiSettings]);
+    if (activeTab === "llm_providers") {
+      fetchProviders();
+    }
+  }, [uiSettings, activeTab]);
+
+  const fetchProviders = async () => {
+    setLoadingProviders(true);
+    try {
+      const res = await fetch(apiUrl("/api/v1/config/llm"));
+      if (res.ok) {
+        const data = await res.json();
+        setProviders(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch providers:", err);
+    } finally {
+      setLoadingProviders(false);
+    }
+  };
+
+  const fetchModels = async () => {
+    if (!editingProvider || !editingProvider.base_url) return;
+    setFetchingModels(true);
+    setFetchedModels([]);
+
+    // Determine endpoints to try based on provider/URL
+    // We try multiple strategies if one fails
+    let errorMsg = "";
+
+    try {
+      let models: string[] = [];
+      let success = false;
+
+      const headers = editingProvider.api_key
+        ? {
+            Authorization: `Bearer ${editingProvider.api_key}`,
+          }
+        : undefined;
+
+      // Strategy 1: Ollama /api/tags
+      if (
+        !success &&
+        (editingProvider.base_url.includes("11434") ||
+          selectedPresetId === "ollama")
+      ) {
+        try {
+          // Remove /v1 if present for the tags endpoint
+          const baseUrl = editingProvider.base_url.replace(/\/v1\/?$/, "");
+          const res = await fetch(`${baseUrl}/api/tags`, { headers });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.models)) {
+              models = data.models.map((m: any) => m.name);
+              success = true;
+            }
+          }
+        } catch (e) {
+          console.warn("Ollama fetch failed", e);
+        }
+      }
+
+      // Strategy 2: LM Studio /api/v0/models (user requested specific format)
+      if (
+        !success &&
+        (editingProvider.base_url.includes("1234") ||
+          selectedPresetId === "lmstudio")
+      ) {
+        try {
+          const baseUrl = editingProvider.base_url.replace(/\/v1\/?$/, "");
+          const res = await fetch(`${baseUrl}/api/v0/models`, { headers });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.data)) {
+              models = data.data.map((m: any) => m.id);
+              success = true;
+            }
+          }
+        } catch (e) {
+          console.warn("LM Studio v0 fetch failed", e);
+        }
+      }
+
+      // Strategy 3: Standard OpenAI /models
+      if (!success) {
+        try {
+          let url = editingProvider.base_url;
+          if (url.endsWith("/")) url = url.slice(0, -1);
+          // Don't append /models if it's already there (rare but possible)
+          if (!url.endsWith("/models")) url = `${url}/models`;
+
+          const res = await fetch(url, { headers });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.data)) {
+              models = data.data.map((m: any) => m.id || m.model || m.name);
+              success = true;
+            } else if (Array.isArray(data.models)) {
+              models = data.models.map((m: any) => m.id || m.model || m.name);
+              success = true;
+            }
+          } else {
+            errorMsg = `HTTP ${res.status}`;
+          }
+        } catch (e) {
+          errorMsg = (e as any).message;
+        }
+      }
+
+      if (success && models.length > 0) {
+        setFetchedModels(models);
+        setCustomModelInput(false);
+      } else {
+        // Fallback to preset models if available
+        const preset = PROVIDER_PRESETS.find((p) => p.id === selectedPresetId);
+        if (preset && preset.models.length > 0) {
+          setFetchedModels(preset.models);
+          alert(
+            `Could not fetch models from API (${errorMsg}), used preset defaults.`,
+          );
+        } else {
+          alert(`No models found. Error: ${errorMsg || "Unknown"}`);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to fetch models: " + (err as any).message);
+    } finally {
+      setFetchingModels(false);
+    }
+  };
+
+  const handleProviderSave = async (provider: LLMProvider) => {
+    setSavingProvider(true);
+    setProviderError(null);
+    try {
+      const isUpdate = originalProviderName !== null;
+      const method = isUpdate ? "PUT" : "POST";
+      const url = isUpdate
+        ? apiUrl(`/api/v1/config/llm/${originalProviderName}`)
+        : apiUrl("/api/v1/config/llm");
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(provider),
+      });
+
+      if (res.ok) {
+        fetchProviders();
+        setShowProviderForm(false);
+        setEditingProvider(null);
+      } else {
+        const err = await res.json();
+        setProviderError(err.detail || "Failed to save provider");
+      }
+    } catch (err) {
+      console.error(err);
+      setProviderError("Failed to save provider: " + (err as any).message);
+    } finally {
+      setSavingProvider(false);
+    }
+  };
+
+  const handleDeleteProvider = async (name: string) => {
+    if (!confirm(`Delete provider ${name}?`)) return;
+    try {
+      const res = await fetch(apiUrl(`/api/v1/config/llm/${name}`), {
+        method: "DELETE",
+      });
+      if (res.ok) fetchProviders();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleActivateProvider = async (name: string) => {
+    try {
+      const res = await fetch(apiUrl("/api/v1/config/llm/active"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (res.ok) fetchProviders();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleTestProvider = async (provider: LLMProvider) => {
+    setTestingProvider(true);
+    setTestProviderResult(null);
+    try {
+      // Find preset to check if key is required
+      const preset = PROVIDER_PRESETS.find((p) => p.id === selectedPresetId);
+      const requiresKey = preset ? preset.requires_key : true;
+
+      const res = await fetch(apiUrl("/api/v1/config/llm/test"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...provider, requires_key: requiresKey }),
+      });
+      const data = await res.json();
+      setTestProviderResult(data);
+    } catch (err) {
+      setTestProviderResult({ success: false, message: "Connection failed" });
+    } finally {
+      setTestingProvider(false);
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -164,10 +462,17 @@ export default function SettingsPage() {
         setData(responseData);
         setEditedConfig(JSON.parse(JSON.stringify(responseData.config)));
         if (!editedUI) {
-          setEditedUI(JSON.parse(JSON.stringify(responseData.ui)));
-        }
-        if (responseData.ui.theme) {
-          applyTheme(responseData.ui.theme);
+          const uiData = JSON.parse(JSON.stringify(responseData.ui));
+          // localStorage takes priority over backend
+          const storedTheme = localStorage.getItem("deeptutor-theme");
+          if (storedTheme === "light" || storedTheme === "dark") {
+            uiData.theme = storedTheme;
+          }
+          setEditedUI(uiData);
+          // Apply theme if present
+          if (uiData.theme) {
+            applyTheme(uiData.theme);
+          }
         }
       } else {
         setError("Failed to load settings");
@@ -299,11 +604,8 @@ export default function SettingsPage() {
   };
 
   const applyTheme = (theme: "light" | "dark") => {
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    // Persist theme to localStorage and document immediately
+    setTheme(theme);
   };
 
   const handleSave = async () => {
@@ -335,6 +637,11 @@ export default function SettingsPage() {
       setData((prev) =>
         prev ? { ...prev, config: newConfig, ui: newUI } : null,
       );
+
+      // Sync theme immediately when saving
+      if (editedUI.theme) {
+        setTheme(editedUI.theme);
+      }
 
       await refreshSettings();
 
@@ -374,7 +681,11 @@ export default function SettingsPage() {
     setEditedUI((prev) => {
       if (!prev) return null;
       const newUI = { ...prev, [key]: value };
-      if (key === "theme") applyTheme(value);
+      if (key === "theme") {
+        applyTheme(value);
+        // Debounced auto-save to backend
+        debouncedSaveTheme(value, newUI);
+      }
       return newUI;
     });
   };
@@ -396,6 +707,41 @@ export default function SettingsPage() {
 
   return (
     <div className="h-[calc(100vh-4rem)] overflow-y-auto animate-fade-in">
+      {/* Sticky Save Button at Top */}
+      <div className="sticky top-0 z-50 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 shadow-md">
+        <div className="max-w-4xl mx-auto p-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+              System Settings
+            </h1>
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className={`py-2 px-6 rounded-lg font-medium flex items-center gap-2 transition-all ${
+              saving
+                ? "bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500"
+                : saveSuccess
+                  ? "bg-green-500 text-white"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+            }`}
+          >
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : saveSuccess ? (
+              <Check className="w-4 h-4" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {saving
+              ? t("Saving...")
+              : saveSuccess
+                ? t("Saved")
+                : t("Save All Changes")}
+          </button>
+        </div>
+      </div>
+
       <div className="max-w-4xl mx-auto p-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -450,6 +796,17 @@ export default function SettingsPage() {
                 }`}
               />
             )}
+          </button>
+          <button
+            onClick={() => setActiveTab("llm_providers")}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              activeTab === "llm_providers"
+                ? "bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm"
+                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+            }`}
+          >
+            <Brain className="w-4 h-4" />
+            LLM Providers
           </button>
         </div>
 
@@ -735,30 +1092,6 @@ export default function SettingsPage() {
                 </div>
               </section>
             )}
-
-            {/* Save Button */}
-            <div className="flex justify-center pt-4 pb-8">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className={`w-full max-w-sm py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all ${
-                  saving
-                    ? "bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500"
-                    : saveSuccess
-                      ? "bg-green-500 text-white shadow-xl shadow-green-500/30 scale-105"
-                      : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-1"
-                }`}
-              >
-                {saving ? (
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                ) : saveSuccess ? (
-                  <Check className="w-6 h-6" />
-                ) : (
-                  <Save className="w-6 h-6" />
-                )}
-                {saveSuccess ? t("Configuration Saved") : t("Save All Changes")}
-              </button>
-            </div>
           </div>
         )}
 
@@ -797,7 +1130,6 @@ export default function SettingsPage() {
                       {t("Runtime Configuration")}
                     </p>
                     <p className="text-blue-600 dark:text-blue-400">
-                      {t("Environment variables are loaded from")}{" "}
                       <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">
                         .env
                       </code>{" "}
@@ -952,6 +1284,446 @@ export default function SettingsPage() {
                   : t("Apply Environment Changes")}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* LLM Providers Tab */}
+        {activeTab === "llm_providers" && (
+          <div className="space-y-6">
+            {/* Header & Add Button */}
+            <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  LLM Service Providers
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Configure and manage multiple LLM backends.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  const defaultPreset = PROVIDER_PRESETS[0];
+                  setEditingProvider({
+                    name: "",
+                    binding: defaultPreset.binding,
+                    base_url: defaultPreset.base_url || "",
+                    api_key: "",
+                    model: defaultPreset.default_model,
+                    is_active: false,
+                  });
+                  setOriginalProviderName(null);
+                  setSelectedPresetId(defaultPreset.id);
+                  setFetchedModels([]);
+                  setShowProviderForm(true);
+                  setTestProviderResult(null);
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 text-sm font-medium transition-colors"
+              >
+                <SettingsIcon className="w-4 h-4" />
+                Add Provider
+              </button>
+            </div>
+
+            {/* Provider List */}
+            {loadingProviders ? (
+              <div className="flex justify-center p-8">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+              </div>
+            ) : providers.length === 0 ? (
+              <div className="text-center p-12 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                <Brain className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-500 dark:text-slate-400">
+                  No providers configured yet.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {providers.map((provider) => (
+                  <div
+                    key={provider.name}
+                    className={`bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border transition-all ${provider.is_active ? "border-blue-500 ring-1 ring-blue-500/20" : "border-slate-200 dark:border-slate-700"}`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-start gap-4">
+                        <div
+                          className={`p-3 rounded-xl ${provider.is_active ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"}`}
+                        >
+                          <Server className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-lg">
+                              {provider.name}
+                            </h3>
+                            {provider.is_active && (
+                              <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full font-medium">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 space-y-1">
+                            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                              <span className="text-xs bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 uppercase tracking-wider font-semibold">
+                                {provider.binding}
+                              </span>
+                              <span>{provider.model}</span>
+                            </div>
+                            <div className="text-xs text-slate-400 font-mono">
+                              {provider.base_url}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {!provider.is_active && (
+                          <button
+                            onClick={() =>
+                              handleActivateProvider(provider.name)
+                            }
+                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                            title="Set as Active"
+                          >
+                            <CheckCircle className="w-5 h-5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleTestProvider(provider)}
+                          className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                          title="Test Connection"
+                        >
+                          <RefreshCw className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingProvider({ ...provider });
+                            setOriginalProviderName(provider.name);
+                            // Try to infer preset from URL
+                            const preset =
+                              PROVIDER_PRESETS.find(
+                                (p) =>
+                                  p.base_url &&
+                                  provider.base_url.includes(p.base_url),
+                              ) ||
+                              PROVIDER_PRESETS.find((p) => p.id === "custom");
+                            if (preset) setSelectedPresetId(preset.id);
+                            setFetchedModels([]);
+                            setShowProviderForm(true);
+                            setTestProviderResult(null);
+                          }}
+                          className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
+                          title="Edit"
+                        >
+                          <Sliders className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProvider(provider.name)}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                          title="Delete"
+                        >
+                          <XCircle className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Edit/Add Form Modal */}
+            {showProviderForm && editingProvider && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+                  <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                    <h3 className="font-semibold text-lg text-slate-900 dark:text-slate-100">
+                      {editingProvider.name ? "Edit Provider" : "Add Provider"}
+                    </h3>
+                    <button
+                      onClick={() => setShowProviderForm(false)}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <XCircle className="w-6 h-6" />
+                    </button>
+                  </div>
+                  <div className="p-6 overflow-y-auto space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        Provider Service
+                      </label>
+                      <select
+                        value={selectedPresetId}
+                        onChange={(e) => {
+                          const newId = e.target.value;
+                          setSelectedPresetId(newId);
+                          const preset = PROVIDER_PRESETS.find(
+                            (p) => p.id === newId,
+                          );
+                          if (preset && editingProvider) {
+                            setEditingProvider({
+                              ...editingProvider,
+                              binding: preset.binding,
+                              base_url:
+                                preset.base_url || editingProvider.base_url,
+                              model:
+                                preset.default_model || editingProvider.model,
+                              // don't clear api key if switching between compatible presets? maybe better to clear or keep? keeping for now.
+                            });
+                            setCustomModelInput(preset.models.length === 0);
+                            setFetchedModels([]);
+                          }
+                        }}
+                        className="w-full p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-100 font-medium"
+                      >
+                        {PROVIDER_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.name}
+                          </option>
+                        ))}
+                      </select>
+                      {PROVIDER_PRESETS.find((p) => p.id === selectedPresetId)
+                        ?.help_text && (
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          {
+                            PROVIDER_PRESETS.find(
+                              (p) => p.id === selectedPresetId,
+                            )?.help_text
+                          }
+                        </p>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          Name
+                        </label>
+                        <input
+                          type="text"
+                          value={editingProvider.name}
+                          onChange={(e) =>
+                            setEditingProvider((prev) =>
+                              prev ? { ...prev, name: e.target.value } : null,
+                            )
+                          }
+                          disabled={
+                            !!providers.find(
+                              (p) =>
+                                p.name === editingProvider.name &&
+                                p.name !== "",
+                            )
+                          }
+                          placeholder="My Provider"
+                          className="w-full p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        {/* Hidden binding but kept for data structure */}
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          Binding
+                        </label>
+                        <input
+                          type="text"
+                          value={editingProvider.binding}
+                          disabled
+                          className="w-full p-2.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                        Base URL
+                      </label>
+                      <input
+                        type="text"
+                        value={editingProvider.base_url}
+                        onChange={(e) =>
+                          setEditingProvider((prev) =>
+                            prev ? { ...prev, base_url: e.target.value } : null,
+                          )
+                        }
+                        placeholder="https://api.openai.com/v1"
+                        className="w-full p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg font-mono text-sm"
+                      />
+                    </div>
+
+                    {PROVIDER_PRESETS.find((p) => p.id === selectedPresetId)
+                      ?.requires_key !== false && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                          API Key
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="password"
+                            value={editingProvider.api_key}
+                            onChange={(e) =>
+                              setEditingProvider((prev) =>
+                                prev
+                                  ? { ...prev, api_key: e.target.value }
+                                  : null,
+                              )
+                            }
+                            placeholder="sk-..."
+                            className="w-full p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg font-mono text-sm"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 flex justify-between">
+                        <span>Model</span>
+                        {PROVIDER_PRESETS.find((p) => p.id === selectedPresetId)
+                          ?.models.length! > 0 && (
+                          <button
+                            onClick={() =>
+                              setCustomModelInput(!customModelInput)
+                            }
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            {customModelInput
+                              ? "Select from list"
+                              : "Enter custom"}
+                          </button>
+                        )}
+                      </label>
+                      <div className="flex gap-2">
+                        {!customModelInput &&
+                        (fetchedModels.length > 0 ||
+                          PROVIDER_PRESETS.find(
+                            (p) => p.id === selectedPresetId,
+                          )?.models.length! > 0) ? (
+                          <div className="relative flex-1">
+                            <select
+                              value={editingProvider.model}
+                              onChange={(e) =>
+                                setEditingProvider((prev) =>
+                                  prev
+                                    ? { ...prev, model: e.target.value }
+                                    : null,
+                                )
+                              }
+                              className="w-full p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg appearance-none"
+                            >
+                              {fetchedModels.length > 0 ? (
+                                <>
+                                  <option value="" disabled>
+                                    Select a fetched model
+                                  </option>
+                                  {fetchedModels.map((m) => (
+                                    <option key={m} value={m}>
+                                      {m}
+                                    </option>
+                                  ))}
+                                </>
+                              ) : (
+                                PROVIDER_PRESETS.find(
+                                  (p) => p.id === selectedPresetId,
+                                )?.models.map((m) => (
+                                  <option key={m} value={m}>
+                                    {m}
+                                  </option>
+                                ))
+                              )}
+                            </select>
+                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-slate-500">
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  d="M19 9l-7 7-7-7"
+                                ></path>
+                              </svg>
+                            </div>
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            value={editingProvider.model}
+                            onChange={(e) =>
+                              setEditingProvider((prev) =>
+                                prev
+                                  ? { ...prev, model: e.target.value }
+                                  : null,
+                              )
+                            }
+                            placeholder="gpt-4o-mini"
+                            className="flex-1 p-2.5 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg"
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={fetchModels}
+                          disabled={fetchingModels || !editingProvider.base_url}
+                          className="p-2.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                          title="Refresh Models from API"
+                        >
+                          {fetchingModels ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <RotateCcw className="w-5 h-5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleTestProvider(editingProvider)}
+                        disabled={testingProvider}
+                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                      >
+                        {testingProvider ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-3 h-3" />
+                        )}
+                        Test Connection
+                      </button>
+                      {testProviderResult && (
+                        <div
+                          className={`mt-2 p-2 text-xs rounded ${testProviderResult.success ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"}`}
+                        >
+                          {testProviderResult.success
+                            ? "Connection Successful!"
+                            : `Failed: ${testProviderResult.message}`}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-6 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex flex-col gap-3">
+                    {providerError && (
+                      <div className="p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
+                        {providerError}
+                      </div>
+                    )}
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={() => setShowProviderForm(false)}
+                        className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg font-medium"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handleProviderSave(editingProvider)}
+                        disabled={savingProvider}
+                        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {savingProvider && (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        )}
+                        {savingProvider ? "Saving..." : "Save Provider"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -8,6 +8,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-Join-7289DA?style=flat&logo=discord&logoColor=white)](https://discord.gg/aka9p9EW)
 [![Feishu](https://img.shields.io/badge/Feishu-Group-blue?style=flat)](./Communication.md)
 [![WeChat](https://img.shields.io/badge/WeChat-Group-green?style=flat&logo=wechat)](./Communication.md)
 
@@ -206,131 +207,192 @@
 
 ## 🚀 البدء السريع
 
-### الخطوة 1: استنساخ وإنشاء بيئة افتراضية
+### الخطوة 1: الإعداد المسبق
+
+**① استنساخ المستودع**
 
 ```bash
-# استنساخ المستودع
 git clone https://github.com/HKUDS/DeepTutor.git
 cd DeepTutor
+```
 
-# إنشاء بيئة افتراضية (اختر طريقة)
+**② تكوين متغيرات البيئة**
 
-# الخيار A: استخدام conda (موصى به)
+```bash
+cp .env.example .env
+# عدّل ملف .env بمفاتيح API الخاصة بك
+```
+
+<details>
+<summary>📋 <b>مرجع متغيرات البيئة</b></summary>
+
+| المتغير | مطلوب | الوصف |
+|:---|:---:|:---|
+| `LLM_MODEL` | **نعم** | اسم النموذج (مثال: `gpt-4o`) |
+| `LLM_BINDING_API_KEY` | **نعم** | مفتاح API الخاص بك لـ LLM |
+| `LLM_BINDING_HOST` | **نعم** | عنوان URL لنقطة نهاية API |
+| `EMBEDDING_MODEL` | **نعم** | اسم نموذج التضمين |
+| `EMBEDDING_BINDING_API_KEY` | **نعم** | مفتاح API للتضمين |
+| `EMBEDDING_BINDING_HOST` | **نعم** | نقطة نهاية API للتضمين |
+| `BACKEND_PORT` | لا | منفذ الخلفية (افتراضي: `8001`) |
+| `FRONTEND_PORT` | لا | منفذ الواجهة الأمامية (افتراضي: `3782`) |
+| `TTS_*` | لا | إعدادات تحويل النص إلى كلام |
+| `PERPLEXITY_API_KEY` | لا | للبحث على الويب |
+
+</details>
+
+**③ تكوين المنافذ و LLM** *(اختياري)*
+
+- **المنافذ**: عدّل `config/main.yaml` → `server.backend_port` / `server.frontend_port`
+- **LLM**: عدّل `config/agents.yaml` → `temperature` / `max_tokens` لكل وحدة
+- راجع [وثائق التكوين](config/README.md) للتفاصيل
+
+**④ تجربة قواعد المعرفة التجريبية** *(اختياري)*
+
+<details>
+<summary>📚 <b>العروض التوضيحية المتاحة</b></summary>
+
+- **أوراق البحث** — 5 أوراق من معملنا ([AI-Researcher](https://github.com/HKUDS/AI-Researcher), [LightRAG](https://github.com/HKUDS/LightRAG), إلخ)
+- **كتاب علوم البيانات** — 8 فصول، 296 صفحة ([رابط الكتاب](https://ma-lab-berkeley.github.io/deep-representation-learning-book/))
+
+</details>
+
+1. التنزيل من [Google Drive](https://drive.google.com/drive/folders/1iWwfZXiTuQKQqUYb5fGDZjLCeTUP6DA6?usp=sharing)
+2. استخراج إلى دليل `data/`
+
+> قواعد المعرفة التجريبية تستخدم `text-embedding-3-large` مع `dimensions = 3072`
+
+**⑤ إنشاء قاعدة معرفة خاصة بك** *(بعد البدء)*
+
+1. اذهب إلى http://localhost:3782/knowledge
+2. انقر على "New Knowledge Base" → أدخل الاسم → حمّل ملفات PDF/TXT/MD
+3. راقب التقدم في الطرفية
+
+---
+
+### الخطوة 2: اختر طريقة التثبيت
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+<h3 align="center">🐳 نشر Docker</h3>
+<p align="center"><b>موصى به</b> — لا حاجة لإعداد Python/Node.js</p>
+
+---
+
+**المتطلبات الأساسية**: [Docker](https://docs.docker.com/get-docker/) و [Docker Compose](https://docs.docker.com/compose/install/)
+
+<details open>
+<summary><b>🚀 الخيار أ: صورة مسبقة البناء (الأسرع)</b></summary>
+
+```bash
+# سحب وتشغيل الصورة المسبقة البناء (~30 ثانية)
+docker run -d --name deeptutor \
+  -p 8001:8001 -p 3782:3782 \
+  -e LLM_MODEL=gpt-4o \
+  -e LLM_BINDING_API_KEY=your-api-key \
+  -e LLM_BINDING_HOST=https://api.openai.com/v1 \
+  -e EMBEDDING_MODEL=text-embedding-3-large \
+  -e EMBEDDING_BINDING_API_KEY=your-api-key \
+  -e EMBEDDING_BINDING_HOST=https://api.openai.com/v1 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/config:/app/config:ro \
+  ghcr.io/hkuds/deeptutor:latest
+```
+
+أو استخدام ملف `.env`:
+
+```bash
+docker run -d --name deeptutor \
+  -p 8001:8001 -p 3782:3782 \
+  --env-file .env \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/config:/app/config:ro \
+  ghcr.io/hkuds/deeptutor:latest
+```
+
+</details>
+
+<details>
+<summary><b>🔨 الخيار ب: البناء من الكود المصدري</b></summary>
+
+```bash
+# بناء والبدء (~5-10 دقيقة في المرة الأولى)
+docker compose up --build -d
+
+# عرض السجلات
+docker compose logs -f
+```
+
+</details>
+
+**الأوامر**:
+
+```bash
+docker compose up -d      # البدء
+docker compose logs -f    # السجلات
+docker compose down       # الإيقاف
+docker compose up --build # إعادة البناء
+docker pull ghcr.io/hkuds/deeptutor:latest  # تحديث الصورة
+```
+
+> **وضع التطوير**: أضف `-f docker-compose.dev.yml`
+
+</td>
+<td width="50%" valign="top">
+
+<h3 align="center">💻 التثبيت اليدوي</h3>
+<p align="center">للتطوير أو البيئات غير Docker</p>
+
+---
+
+**المتطلبات الأساسية**: Python 3.10+, Node.js 18+
+
+**إعداد البيئة**:
+
+```bash
+# استخدام conda (موصى به)
 conda create -n deeptutor python=3.10
 conda activate deeptutor
 
-# الخيار B: استخدام venv
+# أو استخدام venv
 python -m venv venv
-# في Windows:
-venv\Scripts\activate
-# في macOS/Linux:
 source venv/bin/activate
 ```
 
-### الخطوة 2: تثبيت المتطلبات
-
-قم بتشغيل سكريبت التثبيت بنقرة واحدة لتثبيت جميع المتطلبات تلقائياً:
+**تثبيت المتطلبات**:
 
 ```bash
-# موصى به: استخدام سكريبت bash
 bash scripts/install_all.sh
 
-# بديل: استخدام سكريبت Python
-python scripts/install_all.py
-
-# ملاحظة: يقوم المُثبّت باكتشاف بيئات conda/venv للعزل. إذا لم يتم اكتشاف بيئة معزولة، فسيعرض تحذيراً لكنه سيواصل التثبيت.
-
-# أو التثبيت يدوياً
+# أو يدوياً:
 pip install -r requirements.txt
-npm install
+npm install --prefix web
 ```
 
-### الخطوة 3: تكوين متغيرات البيئة
-
-إنشاء ملف `.env` في دليل المشروع الجذر بناءً على `.env.example`:
+**البدء**:
 
 ```bash
-# انسخ من نموذج .env.example (إن وجد)
-cp .env.example .env
-
-# ثم عدّل ملف .env بمفاتيح API الخاصة بك:
-```
-
-### الخطوة 4: تكوين المنافذ *(اختياري)*
-
-بشكل افتراضي، يستخدم التطبيق:
-- **Backend (FastAPI)**: `8001`
-- **Frontend (Next.js)**: `3782`
-
-يمكنك تعديل هذه المنافذ في `config/main.yaml` بتحرير قيم `server.backend_port` و `server.frontend_port`.
-
-### الخطوة 5: استخدم عروضنا التوضيحية *(اختياري)*
-
-لتجربة سريعة لنظامنا، نوفر قاعدتي معرفة معالجتين مسبقاً بالإضافة إلى مجموعة من الأسئلة الصعبة وأمثلة الاستخدام.
-
-<details>
-<summary><b>مجموعة أوراق البحث</b> — 5 أوراق (20-50 صفحة لكل منها)</summary>
-
-مجموعة منسقة من 5 أوراق بحث في مجالات RAG و Agent من معملنا. يمثل هذا العرض التوضيحي سيناريوهات ذات **تغطية معرفة واسعة** لأغراض البحث.
-
-**الأوراق المستخدمة**: [AI-Researcher](https://github.com/HKUDS/AI-Researcher) | [AutoAgent](https://github.com/HKUDS/AutoAgent) | [RAG-Anything](https://github.com/HKUDS/RAG-Anything) | [LightRAG](https://github.com/HKUDS/LightRAG) | [VideoRAG](https://github.com/HKUDS/VideoRAG)
-
-</details>
-
-<details>
-<summary><b>كتاب علوم البيانات</b> — 8 فصول، 296 صفحة</summary>
-
-كتاب علوم بيانات شامل وصعب. يمثل هذا العرض التوضيحي سيناريوهات ذات **عمق معرفة عميق** لأغراض التعليم.
-
-**رابط الكتاب**: [Deep Representation Learning Book](https://ma-lab-berkeley.github.io/deep-representation-learning-book/)
-</details>
-
-<br>
-
-**التنزيل والإعداد:**
-
-1. قم بتنزيل حزمة العرض التوضيحي من: [Google Drive](https://drive.google.com/drive/folders/1iWwfZXiTuQKQqUYb5fGDZjLCeTUP6DA6?usp=sharing)
-2. استخرج الملفات المضغوطة مباشرة في دليل `data/`
-3. ستكون قواعد المعرفة متاحة تلقائياً في النظام بعد بدء المشروع
-
-> **ملاحظة:** نستخدم `text-embedding-3-large` كنموذج تضمين عند تهيئة قواعد معرفتنا، مع `dimensions = 3072`. تأكد من أن أبعاد نموذج التضمين الخاص بك تبلغ أيضاً 3072.
-
-### الخطوة 6: ابدأ التطبيق
-
-```bash
-# تأكد من تفعيل البيئة الافتراضية
-conda activate deeptutor  # أو: source venv/bin/activate
-
-# ابدأ واجهة الويب (frontend + backend)
+# بدء واجهة الويب
 python scripts/start_web.py
 
-# أو ابدأ واجهة CLI فقط
+# أو CLI فقط
 python scripts/start.py
 
-# لإيقاف الخدمة، اضغط على Ctrl+C
+# الإيقاف: Ctrl+C
 ```
 
-### الخطوة 7: إنشاء قاعدة معرفة الخاصة بك
-
-بعد بدء التطبيق، يمكنك إنشاء قاعدة معرفة الخاصة بك من خلال واجهة الويب، تحت أي نمط.
-
-1. **الوصول إلى صفحة قاعدة المعرفة**: زر http://localhost:{frontend_port}/knowledge
-2. **إنشاء قاعدة معرفة جديدة**: انقر على زر "New Knowledge Base"
-3. **سمي قاعدة معرفتك**: أدخل اسماً فريداً لقاعدة معرفتك
-4. **تحميل الملفات**: قم بتحميل ملف واحد أو أكثر
-5. **انتظر المعالجة**: سيقوم النظام بمعالجة ملفاتك تلقائياً في الخلفية
-   - راقب تقدم الإنشاء في الطرفية حيث يعمل `start_web.py`
-   - ستكون قاعدة المعرفة متاحة بمجرد اكتمال المعالجة
-
-> **نصائح:** قد تستغرق الملفات الكبيرة عدة دقائق في المعالجة. يمكنك تحميل ملفات متعددة في المرة الواحدة لمعالجة دفعية.
+</td>
+</tr>
+</table>
 
 ### عناوين URL للوصول
 
 | الخدمة | URL | الوصف |
 |:---:|:---|:---|
-| **Frontend** | http://localhost:{frontend_port} | واجهة الويب الرئيسية |
-| **وثائق API** | http://localhost:{backend_port}/docs | وثائق API التفاعلية |
-| **الصحة** | http://localhost:{backend_port}/api/v1/knowledge/health | فحص صحة النظام |
+| **الواجهة الأمامية** | http://localhost:3782 | واجهة الويب الرئيسية |
+| **وثائق API** | http://localhost:8001/docs | وثائق API التفاعلية |
 
 ---
 

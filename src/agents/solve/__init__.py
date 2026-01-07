@@ -19,7 +19,6 @@ from .base_agent import BaseAgent
 from .utils import (
     ConfigValidator,
     PerformanceMonitor,
-    PromptLoader,
 )
 
 # Backwards compatibility
@@ -60,7 +59,6 @@ __all__ = [
     "SolveAgentLogger",  # Backwards compatibility
     "PerformanceMonitor",
     "ConfigValidator",
-    "PromptLoader",
     # Memory system
     "InvestigateMemory",
     "KnowledgeItem",

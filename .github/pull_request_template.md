@@ -41,6 +41,7 @@ This template assists contributors in providing a clear and concise description 
 
 ## Checklist
 
+- [ ] ✅ Ran `pre-commit run --all-files` (required — CI will fail otherwise)
 - [ ] Changes tested locally
 - [ ] Code follows project style guidelines
 - [ ] Self-review completed

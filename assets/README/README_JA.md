@@ -8,6 +8,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-Join-7289DA?style=flat&logo=discord&logoColor=white)](https://discord.gg/aka9p9EW)
 [![Feishu](https://img.shields.io/badge/Feishu-Group-blue?style=flat)](./Communication.md)
 [![WeChat](https://img.shields.io/badge/WeChat-Group-green?style=flat&logo=wechat)](./Communication.md)
 
@@ -224,133 +225,192 @@
 
 ## 🚀 クイックスタート
 
-### ステップ 1: リポジトリのクローンと仮想環境の作成
+### ステップ 1: 事前設定
+
+**① リポジトリをクローン**
 
 ```bash
-# リポジトリをクローン
 git clone https://github.com/HKUDS/DeepTutor.git
 cd DeepTutor
+```
 
-# 仮想環境を作成（方法を選択）
+**② 環境変数を設定**
 
-# オプション A: conda を使用（推奨）
+```bash
+cp .env.example .env
+# API キーで .env ファイルを編集
+```
+
+<details>
+<summary>📋 <b>環境変数リファレンス</b></summary>
+
+| 変数 | 必須 | 説明 |
+|:---|:---:|:---|
+| `LLM_MODEL` | **はい** | モデル名（例：`gpt-4o`） |
+| `LLM_BINDING_API_KEY` | **はい** | LLM API キー |
+| `LLM_BINDING_HOST` | **はい** | API エンドポイント URL |
+| `EMBEDDING_MODEL` | **はい** | 埋め込みモデル名 |
+| `EMBEDDING_BINDING_API_KEY` | **はい** | 埋め込み API キー |
+| `EMBEDDING_BINDING_HOST` | **はい** | 埋め込み API エンドポイント |
+| `BACKEND_PORT` | いいえ | バックエンドポート（デフォルト：`8001`） |
+| `FRONTEND_PORT` | いいえ | フロントエンドポート（デフォルト：`3782`） |
+| `TTS_*` | いいえ | テキスト読み上げ設定 |
+| `PERPLEXITY_API_KEY` | いいえ | ウェブ検索用 |
+
+</details>
+
+**③ ポートと LLM を設定** *(オプション)*
+
+- **ポート**：`config/main.yaml` を編集 → `server.backend_port` / `server.frontend_port`
+- **LLM**：`config/agents.yaml` を編集 → 各モジュールの `temperature` / `max_tokens`
+- 詳細は[設定ドキュメント](config/README.md)を参照
+
+**④ デモナレッジベースを試す** *(オプション)*
+
+<details>
+<summary>📚 <b>利用可能なデモ</b></summary>
+
+- **研究論文** — 私たちのラボからの 5 論文（[AI-Researcher](https://github.com/HKUDS/AI-Researcher)、[LightRAG](https://github.com/HKUDS/LightRAG) など）
+- **データサイエンス教科書** — 8 章、296 ページ（[書籍リンク](https://ma-lab-berkeley.github.io/deep-representation-learning-book/)）
+
+</details>
+
+1. [Google Drive](https://drive.google.com/drive/folders/1iWwfZXiTuQKQqUYb5fGDZjLCeTUP6DA6?usp=sharing) からダウンロード
+2. `data/` ディレクトリに解凍
+
+> デモ KB は `text-embedding-3-large` を使用し、`dimensions = 3072`
+
+**⑤ 独自のナレッジベースを作成** *(起動後)*
+
+1. http://localhost:3782/knowledge にアクセス
+2. 「New Knowledge Base」をクリック → 名前を入力 → PDF/TXT/MD ファイルをアップロード
+3. ターミナルで進捗を監視
+
+---
+
+### ステップ 2: インストール方法を選択
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+<h3 align="center">🐳 Docker デプロイ</h3>
+<p align="center"><b>推奨</b> — Python/Node.js 設定不要</p>
+
+---
+
+**前提条件**：[Docker](https://docs.docker.com/get-docker/) と [Docker Compose](https://docs.docker.com/compose/install/)
+
+<details open>
+<summary><b>🚀 オプション A: 事前構築済みイメージ（最速）</b></summary>
+
+```bash
+# 事前構築済みイメージをプルして実行（約30秒）
+docker run -d --name deeptutor \
+  -p 8001:8001 -p 3782:3782 \
+  -e LLM_MODEL=gpt-4o \
+  -e LLM_BINDING_API_KEY=your-api-key \
+  -e LLM_BINDING_HOST=https://api.openai.com/v1 \
+  -e EMBEDDING_MODEL=text-embedding-3-large \
+  -e EMBEDDING_BINDING_API_KEY=your-api-key \
+  -e EMBEDDING_BINDING_HOST=https://api.openai.com/v1 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/config:/app/config:ro \
+  ghcr.io/hkuds/deeptutor:latest
+```
+
+または `.env` ファイルを使用：
+
+```bash
+docker run -d --name deeptutor \
+  -p 8001:8001 -p 3782:3782 \
+  --env-file .env \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/config:/app/config:ro \
+  ghcr.io/hkuds/deeptutor:latest
+```
+
+</details>
+
+<details>
+<summary><b>🔨 オプション B: ソースコードからビルド</b></summary>
+
+```bash
+# ビルドして起動（初回実行は約 5-10 分）
+docker compose up --build -d
+
+# ログを表示
+docker compose logs -f
+```
+
+</details>
+
+**コマンド**：
+
+```bash
+docker compose up -d      # 起動
+docker compose logs -f    # ログ
+docker compose down       # 停止
+docker compose up --build # 再ビルド
+docker pull ghcr.io/hkuds/deeptutor:latest  # イメージを更新
+```
+
+> **開発モード**：`-f docker-compose.dev.yml` を追加
+
+</td>
+<td width="50%" valign="top">
+
+<h3 align="center">💻 手動インストール</h3>
+<p align="center">開発または非 Docker 環境用</p>
+
+---
+
+**前提条件**：Python 3.10+、Node.js 18+
+
+**環境を設定**：
+
+```bash
+# conda を使用（推奨）
 conda create -n deeptutor python=3.10
 conda activate deeptutor
 
-# オプション B: venv を使用
+# または venv を使用
 python -m venv venv
-# Windows:
-venv\Scripts\activate
-# macOS/Linux:
 source venv/bin/activate
 ```
 
-### ステップ 2: 依存関係をインストール
-
-一鍵インストールスクリプトを実行して、すべての依存関係を自動インストール：
+**依存関係をインストール**：
 
 ```bash
-# 推奨：bash スクリプトを使用
 bash scripts/install_all.sh
 
-# または Python スクリプトを使用
-python scripts/install_all.py
-
-# 注：インストーラーは conda/venv の隔離環境を検出します。隔離環境が検出できない場合は警告を表示しますが、インストールは継続します。
-
-# または手動でインストール
+# または手動：
 pip install -r requirements.txt
-npm install
+npm install --prefix web
 ```
 
-### ステップ 3: 環境変数を設定
-
-プロジェクトのルートディレクトリに `.env.example` に基づいて `.env` ファイルを作成：
+**起動**：
 
 ```bash
-# .env.example テンプレートからコピー（存在する場合）
-cp .env.example .env
-
-# その後、.env ファイルを API キーで編集：
-```
-
-### ステップ 4: ポートを設定 *(オプション)*
-
-デフォルトでは、アプリケーションは以下を使用：
-- **バックエンド (FastAPI)**: `8001`
-- **フロントエンド (Next.js)**: `3782`
-
-`config/main.yaml` の `server.backend_port` および `server.frontend_port` 値を編集して、これらのポートを変更できます。
-
-**LLM パラメータ**：すべてのエージェントの `temperature` と `max_tokens` 設定は `config/agents.yaml` に集中しています。各モジュール（guide、solve、research、question、ideagen、co_writer）には独自のパラメータセットがあります。詳細については[設定ドキュメント](config/README.md)を参照してください。
-
-### ステップ 5: デモを使用 *(オプション)*
-
-システムを素早く体験するために、2 つの前処理されたナレッジベースと、一連のチャレンジングな質問とユース例を提供しています。
-
-<details>
-<summary><b>研究論文集合</b> — 5 論文（各 20-50 ページ）</summary>
-
-私たちのラボからの RAG と Agent フィールドの厳選された 5 つの研究論文。このデモは**幅広い知識カバレッジ**を持つ研究シナリオを表しています。
-
-**使用論文**: [AI-Researcher](https://github.com/HKUDS/AI-Researcher) | [AutoAgent](https://github.com/HKUDS/AutoAgent) | [RAG-Anything](https://github.com/HKUDS/RAG-Anything) | [LightRAG](https://github.com/HKUDS/LightRAG) | [VideoRAG](https://github.com/HKUDS/VideoRAG)
-
-</details>
-
-<details>
-<summary><b>データサイエンス教科書</b> — 8 章、296 ページ</summary>
-
-包括的でチャレンジングなデータサイエンス教科書。このデモは**深い知識の深さ**を持つ学習シナリオを表しています。
-
-**書籍リンク**: [Deep Representation Learning Book](https://ma-lab-berkeley.github.io/deep-representation-learning-book/)
-</details>
-
-<br>
-
-**ダウンロードとセットアップ：**
-
-1. デモパッケージをダウンロード: [Google Drive](https://drive.google.com/drive/folders/1iWwfZXiTuQKQqUYb5fGDZjLCeTUP6DA6?usp=sharing)
-2. 圧縮ファイルを `data/` ディレクトリに直接抽出
-3. プロジェクト開始後、ナレッジベースは自動的にシステムで利用可能
-
-> **注意：** ナレッジベースを初期化する際、`text-embedding-3-large` を埋め込みモデルとして使用し、`dimensions = 3072` としています。埋め込みモデルの次元も 3072 であることを確認してください。
-
-### ステップ 6: アプリケーションを開始
-
-```bash
-# 仮想環境が有効化されていることを確認
-conda activate deeptutor  # または: source venv/bin/activate
-
-# Web インターフェース（フロントエンド + バックエンド）を開始
+# Web インターフェースを起動
 python scripts/start_web.py
 
-# または CLI インターフェースのみを開始
+# または CLI のみ
 python scripts/start.py
 
-# サービスを停止するには、Ctrl+C を押す
+# 停止：Ctrl+C
 ```
 
-### ステップ 7: 独自のナレッジベースを作成
-
-アプリケーション開始後、Web インターフェースを通じて独自のナレッジベースを作成できます。
-
-1. **ナレッジベースページへアクセス**: http://localhost:{frontend_port}/knowledge にアクセス
-2. **新規ナレッジベースを作成**: 「New Knowledge Base」ボタンをクリック
-3. **ナレッジベースに名前を付ける**: ナレッジベースに一意の名前を入力
-4. **ファイルをアップロード**: 1 つ以上のファイルをアップロード
-5. **処理を待つ**: システムがファイルをバックグラウンドで自動処理
-   - `start_web.py` を実行しているターミナルで作成進度を監視
-   - 処理完了後、ナレッジベースが利用可能になる
-
-> **ヒント：** 大きなファイルは処理に数分かかる場合があります。複数のファイルを一度にアップロードしてバッチ処理できます。
+</td>
+</tr>
+</table>
 
 ### アクセス URL
 
 | サービス | URL | 説明 |
 |:---:|:---|:---|
-| **フロントエンド** | http://localhost:{frontend_port} | メイン Web インターフェース |
-| **API ドキュメント** | http://localhost:{backend_port}/docs | インタラクティブ API ドキュメント |
-| **ヘルスチェック** | http://localhost:{backend_port}/api/v1/knowledge/health | システムヘルスチェック |
+| **フロントエンド** | http://localhost:3782 | メイン Web インターフェース |
+| **API ドキュメント** | http://localhost:8001/docs | インタラクティブ API ドキュメント |
 
 ---
 

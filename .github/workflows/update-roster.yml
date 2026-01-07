@@ -1,0 +1,47 @@
+name: Update Repo Roster
+
+on:
+  # Run twice a day (at 00:00 and 12:00 UTC)
+  schedule:
+    - cron: '0 0,12 * * *'
+  # Allow manual trigger
+  workflow_dispatch:
+  # Run when stars/forks might change (on push to main)
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/generate_roster.py'
+
+jobs:
+  update-roster:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Generate roster images
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/generate_roster.py \
+            --repo HKUDS/DeepTutor \
+            --output assets/roster \
+            --theme dark \
+            --display 6
+
+      - name: Commit and push if changed
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add assets/roster/
+          git diff --quiet --cached || git commit -m "chore: update repo roster images [skip ci]"
+          git push

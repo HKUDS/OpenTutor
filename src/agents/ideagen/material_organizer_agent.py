@@ -1,30 +1,21 @@
 """
-Material Organizer Agent
-Extracts knowledge points from notebook records
+Material Organizer Agent - Extracts knowledge points from notebook records.
+Uses unified PromptManager for prompt loading.
 """
 
 import json
 from pathlib import Path
+import sys
 from typing import Any
 
-import yaml
+# Add project root to path
+_project_root = Path(__file__).parent.parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+from src.core.prompt_manager import get_prompt_manager
 
 from .base_idea_agent import BaseIdeaAgent
-
-
-def _load_prompts(language: str = "en") -> dict:
-    """Load prompts from YAML file based on language"""
-    prompts_dir = Path(__file__).parent / "prompts" / language
-    prompt_file = prompts_dir / "material_organizer.yaml"
-    if prompt_file.exists():
-        with open(prompt_file, encoding="utf-8") as f:
-            return yaml.safe_load(f)
-    # Fallback to English if language file not found
-    fallback_file = Path(__file__).parent / "prompts" / "en" / "material_organizer.yaml"
-    if fallback_file.exists():
-        with open(fallback_file, encoding="utf-8") as f:
-            return yaml.safe_load(f)
-    return {}
 
 
 class MaterialOrganizerAgent(BaseIdeaAgent):
@@ -33,7 +24,11 @@ class MaterialOrganizerAgent(BaseIdeaAgent):
     def __init__(self, language: str = "en", **kwargs):
         super().__init__(**kwargs)
         self.language = language
-        self._prompts = _load_prompts(language)
+        self._prompts = get_prompt_manager().load_prompts(
+            module_name="ideagen",
+            agent_name="material_organizer",
+            language=language,
+        )
 
     async def process(
         self, records: list[dict[str, Any]], user_thoughts: str | None = None

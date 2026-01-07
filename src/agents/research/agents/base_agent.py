@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
-BaseAgent 2.0 - Improved Agent base class
-Integrates env_config, prompt_loader, token_tracker, logger
+BaseAgent - Base class for research module agents.
+Uses unified PromptManager for prompt loading.
 """
 
 from abc import ABC, abstractmethod
@@ -10,26 +10,20 @@ import sys
 import time
 from typing import Any
 
-import yaml
-
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
-# Add research directory to path (for importing utils and other local modules)
-research_dir = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(research_dir))
 
 from lightrag.llm.openai import openai_complete_if_cache
 
-from src.core.core import get_agent_params, get_llm_config, parse_language
+from src.core.core import get_agent_params, get_llm_config
+from src.core.prompt_manager import get_prompt_manager
 
 from ..utils.token_tracker import get_token_tracker
 
 
 class BaseAgent(ABC):
-    """Improved Agent base class"""
-
-    _PROMPT_CACHE: dict[str, dict[str, Any]] = {}
+    """Base class for research module agents."""
 
     def __init__(
         self,
@@ -70,89 +64,17 @@ class BaseAgent(ABC):
         self.llm_config = config.get("llm", {})
         self.enabled = self.agent_config.get("enabled", True)
 
-        # Load prompts
-        self.prompts = self._load_prompts()
-
-    def _load_prompts(self) -> dict[str, Any]:
-        """Load prompt definitions for current Agent"""
-        # Get language configuration (unified in config/main.yaml system.language)
+        # Load prompts using unified PromptManager
         language = self.config.get("system", {}).get("language", "zh")
-        lang_code = parse_language(language)
+        self.prompts = get_prompt_manager().load_prompts(
+            module_name="research",
+            agent_name=self.agent_name,
+            language=language,
+        )
 
-        # Determine language directory: 'en' or 'zh' (unified language codes)
-        # Note: research module prompts may be in 'cn' directory, we support both 'zh' and 'cn' for backward compatibility
-        if lang_code == "en":
-            lang_dir = "en"
-        else:
-            # Try 'zh' first, fall back to 'cn' for backward compatibility
-            lang_dir = "zh"
-
-        # Get prompts directory: from agents/base_agent.py -> research/prompts/
-        prompts_dir = Path(__file__).parent.parent / "prompts"
-
-        # Build prompt file path: prompts/{lang_dir}/{agent_name}.yaml
-        prompt_file = prompts_dir / lang_dir / f"{self.agent_name}.yaml"
-
-        # Build cache key (include language info)
-        cache_key = f"{self.agent_name}_{lang_dir}"
-
-        if cache_key in BaseAgent._PROMPT_CACHE:
-            return BaseAgent._PROMPT_CACHE[cache_key]
-
-        # Try loading specified language version first, fall back to 'cn' if 'zh' doesn't exist (backward compatibility)
-        if not prompt_file.exists() and lang_dir == "zh":
-            # If 'zh' version doesn't exist, try 'cn' for backward compatibility
-            prompt_file = prompts_dir / "cn" / f"{self.agent_name}.yaml"
-            if prompt_file.exists():
-                lang_dir = "cn"
-                cache_key = f"{self.agent_name}_{lang_dir}"
-            else:
-                # If neither 'zh' nor 'cn' exists, fall back to 'en'
-                prompt_file = prompts_dir / "en" / f"{self.agent_name}.yaml"
-                lang_dir = "en"
-                cache_key = f"{self.agent_name}_{lang_dir}"
-        elif not prompt_file.exists() and lang_dir == "en":
-            # If English version doesn't exist, fall back to 'zh' or 'cn'
-            prompt_file = prompts_dir / "zh" / f"{self.agent_name}.yaml"
-            if prompt_file.exists():
-                lang_dir = "zh"
-                cache_key = f"{self.agent_name}_{lang_dir}"
-            else:
-                prompt_file = prompts_dir / "cn" / f"{self.agent_name}.yaml"
-                lang_dir = "cn"
-                cache_key = f"{self.agent_name}_{lang_dir}"
-        if cache_key in BaseAgent._PROMPT_CACHE:
-            return BaseAgent._PROMPT_CACHE[cache_key]
-
-        if not prompt_file.exists():
-            print(f"⚠️ Prompt file not found: {prompt_file}")
-            BaseAgent._PROMPT_CACHE[cache_key] = {}
-            return {}
-
-        try:
-            with open(prompt_file, encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-        except Exception as exc:
-            print(f"⚠️ Failed to load prompt file {prompt_file}: {exc}")
-            data = {}
-
-        BaseAgent._PROMPT_CACHE[cache_key] = data
-        return data
-
-    def get_prompt(self, section: str, field: str, fallback: str = "") -> str:
-        """
-        Get specified prompt template
-
-        Args:
-            section: Prompt section name
-            field: Field name
-            fallback: Default value
-
-        Returns:
-            Prompt template
-        """
-        template = self.prompts.get(section, {}).get(field)
-        return template if template is not None else fallback
+    def get_prompt(self, section: str, field: str = None, fallback: str = "") -> str:
+        """Get prompt template from loaded prompts."""
+        return get_prompt_manager().get_prompt(self.prompts, section, field, fallback)
 
     def get_model(self) -> str:
         """Get model name (only loaded from environment variables, ignore model in config file)"""

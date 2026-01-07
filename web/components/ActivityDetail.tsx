@@ -1,5 +1,10 @@
 import { useState } from "react";
 import { X, FileText, HelpCircle, Search, Clock, Database } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
+import { processLatexContent } from "@/lib/latex";
 
 interface ActivityDetailProps {
   activity: any;
@@ -13,8 +18,8 @@ export default function ActivityDetail({
   if (!activity) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-300">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[150vh] flex flex-col animate-in zoom-in-95 duration-300">
         {/* Header */}
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center gap-4">
@@ -85,11 +90,15 @@ export default function ActivityDetail({
               </div>
               <div className="space-y-2">
                 <h3 className="font-bold text-slate-900">Final Answer</h3>
-                <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm prose prose-slate max-w-none">
-                  {/* Simplified rendering for history view */}
-                  <pre className="whitespace-pre-wrap font-sans text-sm">
-                    {activity.content.answer}
-                  </pre>
+                <div className="p-6 bg-white rounded-xl border border-slate-200 shadow-sm">
+                  <div className="prose prose-slate dark:prose-invert max-w-none prose-sm">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                    >
+                      {processLatexContent(activity.content.answer)}
+                    </ReactMarkdown>
+                  </div>
                 </div>
               </div>
             </>

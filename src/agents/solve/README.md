@@ -175,7 +175,6 @@ solve_agents/
 │   ├── logger.py               # Logging system
 │   ├── performance_monitor.py  # Performance monitoring
 │   ├── config_validator.py     # Configuration validation
-│   ├── prompt_loader.py        # Prompt loader
 │   ├── json_utils.py           # JSON utilities
 │   ├── tag_parser.py           # Tag parser
 │   └── error_handler.py        # Error handling
@@ -407,8 +406,9 @@ class MyAgent(BaseAgent):
 
     async def process(self, **kwargs):
         # Implement processing logic
-        prompt = self.prompt_loader.load('my_agent')
-        response = await self.call_llm(prompt)
+        # Prompts are auto-loaded via unified PromptManager
+        system_prompt = self.get_prompt("system")
+        response = await self.call_llm(user_prompt, system_prompt)
         return self.parse_response(response)
 ```
 

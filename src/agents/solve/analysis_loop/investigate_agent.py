@@ -30,7 +30,6 @@ class InvestigateAgent(BaseAgent):
             api_key=api_key,
             base_url=base_url,
             agent_name="investigate_agent",
-            use_prompt_loader=True,
             token_tracker=token_tracker,
         )
         # Read web_search enabled config from tools.web_search.enabled

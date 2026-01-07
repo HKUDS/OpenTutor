@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
-BaseGuideAgent - Base class for Guided Learning Agents
+BaseGuideAgent - Base class for guided learning agents.
+Uses unified PromptManager for prompt loading.
 """
 
 from abc import ABC, abstractmethod
@@ -9,9 +10,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-import yaml
-
-# Add project root to path for logs import
+# Add project root to path
 _project_root = Path(__file__).parent.parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
@@ -20,6 +19,7 @@ from lightrag.llm.openai import openai_complete_if_cache
 
 from src.core.core import get_agent_params, load_config_with_main
 from src.core.logging import LLMStats, get_logger
+from src.core.prompt_manager import get_prompt_manager
 
 
 class BaseGuideAgent(ABC):
@@ -57,8 +57,14 @@ class BaseGuideAgent(ABC):
             # Fallback logger
             self.logger = get_logger(f"Guide.{agent_name}")
 
-        # Load prompts
-        self.prompts = self._load_prompts()
+        # Load prompts using unified PromptManager
+        self.prompts = get_prompt_manager().load_prompts(
+            module_name="guide",
+            agent_name=self.agent_name,
+            language=self.language,
+        )
+        if self.prompts:
+            self.logger.info(f"Loaded prompts: {self.agent_name} ({self.language})")
 
     @classmethod
     def get_stats(cls) -> LLMStats:
@@ -78,32 +84,6 @@ class BaseGuideAgent(ABC):
         """Print stats summary."""
         if cls._shared_stats:
             cls._shared_stats.print_summary()
-
-    def _load_prompts(self) -> dict[str, str] | None:
-        """Load Agent's prompt configuration."""
-        # Get prompts directory: from agents/base_guide_agent.py -> guide/prompts/
-        prompts_dir = Path(__file__).parent.parent / "prompts"
-
-        # Map language to directory: 'en' or 'english' -> 'en', otherwise -> 'zh'
-        if self.language.lower() in ["en", "english"]:
-            lang_dir = "en"
-        else:
-            lang_dir = "zh"
-
-        prompt_file = prompts_dir / lang_dir / f"{self.agent_name}.yaml"
-
-        if prompt_file.exists():
-            try:
-                with open(prompt_file, encoding="utf-8") as f:
-                    prompts = yaml.safe_load(f)
-                    self.logger.info(f"Loaded prompts: {self.agent_name} ({self.language})")
-                    return prompts
-            except Exception as e:
-                self.logger.warning(f"Failed to load prompts {prompt_file}: {e}")
-                return None
-        else:
-            self.logger.warning(f"Prompt file not found: {prompt_file}")
-            return None
 
     def get_model(self) -> str:
         """Get model name."""

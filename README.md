@@ -5,11 +5,19 @@
 # DeepTutor: AI-Powered Personalized Learning Assistant
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/downloads/)
-[![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind-3.4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
-[![Feishu](https://img.shields.io/badge/Feishu-Group-blue?style=flat)](./Communication.md)
-[![WeChat](https://img.shields.io/badge/WeChat-Group-green?style=flat&logo=wechat)](./Communication.md)
+
+<p align="center">
+  <a href="https://discord.gg/zpP9cssj"><img src="https://img.shields.io/badge/Discord-Join_Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+  &nbsp;&nbsp;
+  <a href="./Communication.md"><img src="https://img.shields.io/badge/Feishu-Join_Group-00D4AA?style=for-the-badge&logo=feishu&logoColor=white" alt="Feishu"></a>
+  &nbsp;&nbsp;
+  <a href="./Communication.md"><img src="https://img.shields.io/badge/WeChat-Join_Group-07C160?style=for-the-badge&logo=wechat&logoColor=white" alt="WeChat"></a>
+</p>
 
 
 
@@ -27,11 +35,13 @@
 </div>
 
 ---
-> **[2026.1.1]** Happy New Year! Join our [GitHub Discussions](https://github.com/HKUDS/DeepTutor/discussions) — shape the future of DeepTutor! 💬
+> **[2026.1.3]** Released DeepTutor [v0.3.0](https://github.com/HKUDS/DeepTutor/releases/tag/v0.3.0) - Any feedbacks are welcomed! ❤️
 
-> **[2025.12.30]** Visit our [Official Website](https://hkuds.github.io/DeepTutor/) for more details! !
+> **[2026.1.1]** Join our [Discord Community](https://discord.gg/zpP9cssj) and [GitHub Discussions](https://github.com/HKUDS/DeepTutor/discussions) - shape the future of DeepTutor! 💬
 
-> **[2025.12.29]** DeepTutor v0.1 is now live! ✨
+> **[2025.12.30]** Visit our [Official Website](https://hkuds.github.io/DeepTutor/) for more details!
+
+> **[2025.12.29]** DeepTutor is now live! ✨
 ---
 
 ## Key Features of DeepTutor
@@ -137,7 +147,7 @@
 </a>
 
 **Automated IdeaGen**  
-<sub>Systematic Brainstorming and Concept Synthesis with Dual-filter Workflow</sub>
+<sub>Brainstorming and Concept Synthesis with Dual-filter Workflow</sub>
 
 </td>
 <td width="33%" align="center">
@@ -215,139 +225,213 @@
 ## 📋 Todo
 
 > 🌟 Star to follow our future updates!
-- [ ] Support Local LLM Services (e.g., ollama)
-- [ ] Refactor RAG Module (see [Discussions](https://github.com/HKUDS/DeepTutor/discussions))
+- [-] Refactor RAG Module (see [Discussions](https://github.com/HKUDS/DeepTutor/discussions))
 - [ ] Deep-coding from idea generation
 - [ ] Personalized Interaction with Notebook
 
-## 🚀 Quick Start
+## 🚀 Getting Started
 
-### Step 1: Clone Repository and Set Up Environment
+### Step 1: Pre-Configuration
+
+**① Clone Repository**
 
 ```bash
-# Clone the repository
 git clone https://github.com/HKUDS/DeepTutor.git
 cd DeepTutor
+```
 
-# Set Up Virtual Environment (Choose One Option)
+**② Set Up Environment Variables**
 
-# Option A: Using conda (Recommended)
+```bash
+cp .env.example .env
+# Edit .env file with your API keys
+```
+
+<details>
+<summary>📋 <b>Environment Variables Reference</b></summary>
+
+| Variable | Required | Description |
+|:---|:---:|:---|
+| `LLM_MODEL` | **Yes** | Model name (e.g., `gpt-4o`) |
+| `LLM_BINDING_API_KEY` | **Yes** | Your LLM API key |
+| `LLM_BINDING_HOST` | **Yes** | API endpoint URL |
+| `EMBEDDING_MODEL` | **Yes** | Embedding model name |
+| `EMBEDDING_BINDING_API_KEY` | **Yes** | Embedding API key |
+| `EMBEDDING_BINDING_HOST` | **Yes** | Embedding API endpoint |
+| `BACKEND_PORT` | No | Backend port (default: `8001`) |
+| `FRONTEND_PORT` | No | Frontend port (default: `3782`) |
+| `TTS_*` | No | Text-to-Speech settings |
+| `SEARCH_PROVIDER` | No | Search provider (options: `perplexity`, `baidu`, default: `perplexity`) |
+| `PERPLEXITY_API_KEY` | No | For Perplexity web search |
+| `BAIDU_API_KEY` | No | For Baidu AI search |
+
+</details>
+
+**③ Configure Ports & LLM** *(Optional)*
+
+- **Ports**: Edit `config/main.yaml` → `server.backend_port` / `server.frontend_port`
+- **LLM**: Edit `config/agents.yaml` → `temperature` / `max_tokens` per module
+- See [Configuration Docs](config/README.md) for details
+
+**④ Try Demo Knowledge Bases** *(Optional)*
+
+<details>
+<summary>📚 <b>Available Demos</b></summary>
+
+- **Research Papers** — 5 papers from our lab ([AI-Researcher](https://github.com/HKUDS/AI-Researcher), [LightRAG](https://github.com/HKUDS/LightRAG), etc.)
+- **Data Science Textbook** — 8 chapters, 296 pages ([Book Link](https://ma-lab-berkeley.github.io/deep-representation-learning-book/))
+
+</details>
+
+1. Download from [Google Drive](https://drive.google.com/drive/folders/1iWwfZXiTuQKQqUYb5fGDZjLCeTUP6DA6?usp=sharing)
+2. Extract into `data/` directory
+
+> Demo KBs use `text-embedding-3-large` with `dimensions = 3072`
+
+**⑤ Create Your Own Knowledge Base** *(After Launch)*
+
+1. Go to http://localhost:3782/knowledge
+2. Click "New Knowledge Base" → Enter name → Upload PDF/TXT/MD files
+3. Monitor progress in terminal
+
+---
+
+### Step 2: Choose Your Installation Method
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+<h3 align="center">🐳 Docker Deployment</h3>
+<p align="center"><b>Recommended</b> — No Python/Node.js setup</p>
+
+---
+
+**Prerequisites**: [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/)
+
+<details open>
+<summary><b>🚀 Option A: Pre-built Image (Fastest)</b></summary>
+
+```bash
+# Pull and run pre-built image (Linux/macOS)
+docker run -d --name deeptutor \
+  -p 8001:8001 -p 3782:3782 \
+  -e LLM_MODEL=gpt-4o \
+  -e LLM_BINDING_API_KEY=your-api-key \
+  -e LLM_BINDING_HOST=https://api.openai.com/v1 \
+  -e EMBEDDING_MODEL=text-embedding-3-large \
+  -e EMBEDDING_BINDING_API_KEY=your-api-key \
+  -e EMBEDDING_BINDING_HOST=https://api.openai.com/v1 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/config:/app/config:ro \
+  ghcr.io/hkuds/deeptutor:latest
+
+# Windows PowerShell: use ${PWD} instead of $(pwd)
+docker run -d --name deeptutor `
+  -p 8001:8001 -p 3782:3782 `
+  -e LLM_MODEL=gpt-4o `
+  -e LLM_BINDING_API_KEY=your-api-key `
+  -e LLM_BINDING_HOST=https://api.openai.com/v1 `
+  -e EMBEDDING_MODEL=text-embedding-3-large `
+  -e EMBEDDING_BINDING_API_KEY=your-api-key `
+  -e EMBEDDING_BINDING_HOST=https://api.openai.com/v1 `
+  -v ${PWD}/data:/app/data `
+  -v ${PWD}/config:/app/config:ro `
+  ghcr.io/hkuds/deeptutor:latest
+```
+
+Or use with `.env` file:
+
+```bash
+docker run -d --name deeptutor \
+  -p 8001:8001 -p 3782:3782 \
+  --env-file .env \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/config:/app/config:ro \
+  ghcr.io/hkuds/deeptutor:latest
+```
+
+</details>
+
+<details>
+<summary><b>🔨 Option B: Build from Source</b></summary>
+
+```bash
+# Build and start (~5-10 min first run)
+docker compose up --build -d
+
+# View logs
+docker compose logs -f
+```
+
+</details>
+
+**Commands**:
+
+```bash
+docker compose up -d      # Start
+docker compose logs -f    # Logs
+docker compose down       # Stop
+docker compose up --build # Rebuild
+docker pull ghcr.io/hkuds/deeptutor:latest  # Update image
+```
+
+> **Dev Mode**: Add `-f docker-compose.dev.yml`
+
+</td>
+<td width="50%" valign="top">
+
+<h3 align="center">💻 Manual Installation</h3>
+<p align="center">For development or non-Docker environments</p>
+
+---
+
+**Prerequisites**: Python 3.10+, Node.js 18+
+
+**Set Up Environment**:
+
+```bash
+# Using conda (Recommended)
 conda create -n deeptutor python=3.10
 conda activate deeptutor
 
-# Option B: Using venv
+# Or using venv
 python -m venv venv
-# On Windows:
-venv\Scripts\activate
-
-# On macOS/Linux:
 source venv/bin/activate
 ```
 
-### Step 2: Install Dependencies
-
-Run the automated installation script to install all required dependencies:
+**Install Dependencies**:
 
 ```bash
-# Recommended
 bash scripts/install_all.sh
 
-# Alternative Python Scripts
-python scripts/install_all.py
-
-# Or Install Dependencies Manually
+# Or manually:
 pip install -r requirements.txt
-npm install
+npm install --prefix web
 ```
 
-### Step 3: Set Up Environment Variables
-
-Create a `.env` file in the project root directory based on `.env.example`:
+**Launch**:
 
 ```bash
-# Copy from .env.example template (if exists)
-cp .env.example .env
-
-# Then edit .env file with your API keys.
-```
-
-### Step 4: Configure Ports and LLM Settings *(Optional)*
-
-By default, the application uses:
-- **Backend (FastAPI)**: `8001`
-- **Frontend (Next.js)**: `3782`
-
-You can modify these ports in `config/main.yaml` by editing the `server.backend_port` and `server.frontend_port` values.
-
-**LLM Configuration**: Agent settings for `temperature` and `max_tokens` are centralized in `config/agents.yaml`. Each module (guide, solve, research, question, ideagen, co_writer) has customizable parameters. See [Configuration Documentation](config/README.md) for details.
-
-### Step 5: Try Our Demos *(Optional)*
-
-Experience the system quickly with two pre-built knowledge bases and a collection of challenging questions with usage examples.
-
-<details>
-<summary><b>Research Papers Collection</b> — 5 papers (20-50 pages each)</summary>
-
-A curated collection of 5 research papers from our lab covering RAG and Agent fields. This demo showcases broad knowledge coverage for research scenarios.
-
-**Used Papers**: [AI-Researcher](https://github.com/HKUDS/AI-Researcher) | [AutoAgent](https://github.com/HKUDS/AutoAgent) | [RAG-Anything](https://github.com/HKUDS/RAG-Anything) | [LightRAG](https://github.com/HKUDS/LightRAG) | [VideoRAG](https://github.com/HKUDS/VideoRAG)
-
-</details>
-
-<details>
-<summary><b>Data Science Textbook</b> — 8 chapters, 296 pages</summary>
-
-A comprehensive data science textbook with challenging content. This demo showcases **deep knowledge depth** for learning scenarios.
-
-**Book Link**: [Deep Representation Learning Book](https://ma-lab-berkeley.github.io/deep-representation-learning-book/)
-</details>
-
-<br>
-
-**Download and Setup:**
-
-1. Download the demo package: [Google Drive](https://drive.google.com/drive/folders/1iWwfZXiTuQKQqUYb5fGDZjLCeTUP6DA6?usp=sharing)
-2. Extract the compressed files directly into the `data/` directory
-3. Knowledge bases will be automatically available once you start the system
-
-> **Note:** Our **demo knowledge bases** use `text-embedding-3-large` with `dimensions = 3072`. Ensure your embeddings model has matching dimensions (3072) for compatibility.
-
-### Step 6: Launch the Application
-
-```bash
-# Activate virtual environment
-conda activate aitutor  # or: source venv/bin/activate
-
-# Start web interface (frontend + backend)
+# Start web interface
 python scripts/start_web.py
 
-# Alternative: CLI interface only
+# Or CLI only
 python scripts/start.py
 
-# Stop the service: Ctrl+C
+# Stop: Ctrl+C
 ```
 
-### Step 7: Create Your Own Knowledge Base
-
-Create custom knowledge bases through the web interface with support for multiple file formats.
-
-1. **Access Knowledge Base**: Navigate to http://localhost:{frontend_port}/knowledge
-2. **Create New Base**: Click "New Knowledge Base"
-3. **Configure Settings**: Enter a unique name for your knowledge base
-4. **Upload Content**: Add single or multiple files for batch processing
-5. **Monitor Progress**: Track processing status in the terminal running `start_web.py`
-   - Large files may take several minutes to complete
-   - Knowledge base becomes available once processing finishes
-
-> **Tips:** Large files may require several minutes to process. Multiple files can be uploaded simultaneously for efficient batch processing.
+</td>
+</tr>
+</table>
 
 ### Access URLs
 
 | Service | URL | Description |
 |:---:|:---|:---|
-| **Frontend** | http://localhost:{frontend_port} | Main web interface |
-| **API Docs** | http://localhost:{backend_port}/docs | Interactive API documentation |
-| **Health** | http://localhost:{backend_port}/api/v1/knowledge/health | System health check |
+| **Frontend** | http://localhost:3782 | Main web interface |
+| **API Docs** | http://localhost:8001/docs | Interactive API documentation |
 
 ---
 
@@ -1237,109 +1321,38 @@ This will extract numbered items (Definitions, Theorems, Equations, etc.) from y
 
 </details>
 
-## 📄 License
 
-This project is licensed under the **[AGPL-3.0 License](LICENSE)**.
+</div>
 
-<!--
 ## ⭐ Star History
 
 <div align="center">
-<a href="https://star-history.com/#HKUDS/DeepTutor&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HKUDS/DeepTutor&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=HKUDS/DeepTutor&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=HKUDS/DeepTutor&type=Date" />
- </picture>
-</a>
-</div> 2-->
 
+<p>
+  <a href="https://github.com/HKUDS/DeepTutor/stargazers"><img src="assets/roster/stargazers.svg" alt="Stargazers"/></a>
+  &nbsp;&nbsp;
+  <a href="https://github.com/HKUDS/DeepTutor/network/members"><img src="assets/roster/forkers.svg" alt="Forkers"/></a>
+</p>
+
+<a href="https://www.star-history.com/#HKUDS/DeepTutor&type=timeline&legend=top-left">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HKUDS/DeepTutor&type=timeline&theme=dark&legend=top-left" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=HKUDS/DeepTutor&type=timeline&legend=top-left" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=HKUDS/DeepTutor&type=timeline&legend=top-left" />
+  </picture>
+</a>
+
+</div>
 
 ## 🤝 Contribution
 
-We welcome contributions from the community! To ensure code quality and consistency, please follow the guidelines below.
-
-<details>
-<summary><b>Development Setup</b></summary>
-
-### Pre-commit Hooks Setup
-
-This project uses **pre-commit hooks** to automatically format code and check for issues before commits.
-
-**Step 1: Install pre-commit**
-```bash
-# Using pip
-pip install pre-commit
-
-# Or using conda
-conda install -c conda-forge pre-commit
-```
-
-**Step 2: Install Git hooks**
-```bash
-cd DeepTutor
-pre-commit install
-```
-
-**Step 3: (Optional) Run checks on all files**
-```bash
-pre-commit run --all-files
-```
-
-Every time you run `git commit`, pre-commit hooks will automatically:
-- Format Python code with Ruff
-- Format frontend code with Prettier
-- Check for syntax errors
-- Validate YAML/JSON files
-- Detect potential security issues
-
-### Code Quality Tools
-
-| Tool | Purpose | Configuration |
-|:---:|:---|:---:|
-| **Ruff** | Python linting & formatting | `pyproject.toml` |
-| **Prettier** | Frontend code formatting | `web/.prettierrc.json` |
-| **detect-secrets** | Security check | `.secrets.baseline` |
-
-> **Note**: The project uses **Ruff format** instead of Black to avoid formatting conflicts.
-
-### Common Commands
-
-```bash
-# Normal commit (hooks run automatically)
-git commit -m "Your commit message"
-
-# Manually check all files
-pre-commit run --all-files
-
-# Update hooks to latest versions
-pre-commit autoupdate
-
-# Skip hooks (not recommended, only for emergencies)
-git commit --no-verify -m "Emergency fix"
-```
-
-</details>
-
-### Contribution Guidelines
-
-1. **Fork and Clone**: Fork the repository and clone your fork
-2. **Create Branch**: Create a feature branch from `main`
-3. **Install Pre-commit**: Follow the setup steps above
-4. **Make Changes**: Write your code following the project's style
-5. **Test**: Ensure your changes work correctly
-6. **Commit**: Pre-commit hooks will automatically format your code
-7. **Push and PR**: Push to your fork and create a Pull Request
-
-### Reporting Issues
-
-- Use GitHub Issues to report bugs or suggest features
-- Provide detailed information about the issue
-- Include steps to reproduce if it's a bug
-
 <div align="center">
-<br>
-❤️ We thank all our contributors for their valuable contributions.
+
+We hope DeepTutor could become a gift for the community. 🎁
+
+<a href="https://github.com/HKUDS/DeepTutor/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=HKUDS/DeepTutor" />
+</a>
 
 </div>
 
@@ -1355,15 +1368,9 @@ git commit --no-verify -m "Emergency fix"
 
 [⭐ Star us](https://github.com/HKUDS/DeepTutor/stargazers) · [🐛 Report a bug](https://github.com/HKUDS/DeepTutor/issues) · [💬 Discussions](https://github.com/HKUDS/DeepTutor/discussions)
 
-[![Stargazers repo roster for @HKUDS/DeepTutor](https://reporoster.com/stars/dark/HKUDS/DeepTutor)](https://github.com/HKUDS/DeepTutor/stargazers)
-
-[![Forkers repo roster for @HKUDS/DeepTutor](https://reporoster.com/forks/dark/HKUDS/DeepTutor)](https://github.com/HKUDS/DeepTutor/network/members)
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=HKUDS/DeepTutor&type=timeline&legend=top-left)](https://www.star-history.com/#HKUDS/DeepTutor&type=timeline&legend=top-left)
-
 ---
+
+This project is licensed under the ***[AGPL-3.0 License](LICENSE)***.
 
 *✨ Thanks for visiting **DeepTutor**!*
 

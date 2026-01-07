@@ -11,6 +11,7 @@ Version: v1.0
 Based on: TODO.md specification
 """
 
+import os
 from pathlib import Path
 import re
 import shutil
@@ -151,9 +152,24 @@ class TexDownloader:
             return False
 
     def _extract_tar(self, tar_path: Path, extract_dir: Path):
-        """Extract tar file"""
+        """Extract tar file safely (prevent ZipSlip/TarSlip)"""
         with tarfile.open(tar_path, "r:*") as tar:
-            tar.extractall(extract_dir)
+            # Safe extraction filter
+            def is_within_directory(directory, target):
+                abs_directory = os.path.abspath(directory)
+                abs_target = os.path.abspath(target)
+                prefix = os.path.commonprefix([abs_directory, abs_target])
+                return prefix == abs_directory
+
+            def safe_members(members):
+                for member in members:
+                    member_path = os.path.join(extract_dir, member.name)
+                    if not is_within_directory(extract_dir, member_path):
+                        print(f"Suspicious file path in tar: {member.name}. Skipping.")
+                        continue
+                    yield member
+
+            tar.extractall(extract_dir, members=safe_members(tar))
 
     def _extract_zip(self, zip_path: Path, extract_dir: Path):
         """Extract zip file"""

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
-BaseAgent - Base class for all Agents, providing unified initialization, configuration handling, and LLM calling interface
+BaseAgent - Base class for solve module agents.
+Uses unified PromptManager for prompt loading.
 """
 
 from abc import ABC, abstractmethod
@@ -11,19 +12,20 @@ from typing import Any
 
 from lightrag.llm.openai import openai_complete_if_cache
 
-from .utils import PromptLoader
 from .utils.token_tracker import TokenTracker
 
-# Add project root to path for logs import
+# Add project root to path
 _project_root = Path(__file__).parent.parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
+
 from src.core.core import get_agent_params
 from src.core.logging import get_logger
+from src.core.prompt_manager import get_prompt_manager
 
 
 class BaseAgent(ABC):
-    """Base class for Agents, providing unified configuration and LLM calling interface"""
+    """Base class for solve module agents."""
 
     def __init__(
         self,
@@ -31,79 +33,56 @@ class BaseAgent(ABC):
         api_key: str,
         base_url: str,
         agent_name: str,
-        use_prompt_loader: bool = True,  # Enable Prompt Loader by default
-        token_tracker: TokenTracker | None = None,  # Token tracker
+        token_tracker: TokenTracker | None = None,
     ):
         """
-        Initialize base Agent
+        Initialize base Agent.
 
         Args:
             config: Complete configuration dictionary
             api_key: API key
             base_url: API endpoint
-            agent_name: Agent name, used to read dedicated configuration from config
-            use_prompt_loader: Whether to use PromptLoader to load Prompts (default True, for backward compatibility)
+            agent_name: Agent name
+            token_tracker: Token usage tracker
         """
         self.config = config
         self.api_key = api_key
         self.base_url = base_url
         self.agent_name = agent_name
 
-        # Initialize logger, used uniformly by all subclasses
+        # Initialize logger
         self.logger = get_logger(name=agent_name)
 
         # Load agent parameters from unified config (agents.yaml)
         self._agent_params = get_agent_params("solve")
 
-        # Get dedicated configuration for this Agent
+        # Get agent-specific configuration
         self.agent_config = config.get("agents", {}).get(agent_name, {})
 
         # Get general LLM configuration
         self.llm_config = config.get("llm", {})
 
-        # Agent status (enabled by default)
-        self.enabled = True  # All agents are enabled by default, no configuration needed
+        # Agent status
+        self.enabled = True
 
         # Token tracker
         self.token_tracker = token_tracker
 
-        # Prompt management
-        self.use_prompt_loader = use_prompt_loader
-        self.prompts = None
-
-        if use_prompt_loader:
-            # Initialize PromptLoader - read language setting from config
-            # Language config is now unified in config/main.yaml system.language
-            from src.core.core import parse_language
-
-            language = config.get("system", {}).get("language", "zh")
-            lang_code = parse_language(language)
-
-            # Prompts are in src/agents/solve/prompts/
-            prompts_dir = Path(__file__).parent / "prompts"
-            self.prompt_loader = PromptLoader(base_dir=prompts_dir, language=lang_code)
-
-            # Try to load Prompts for this Agent
-            try:
-                self.prompts = self.prompt_loader.load(agent_name)
-                # Successfully loaded, log it
-                if hasattr(self, "logger"):
-                    self.logger.debug(f"[{agent_name}] Prompt configuration loaded from YAML")
-            except FileNotFoundError as e:
-                # If config file not found, log error but don't raise, allow Agent to use hardcoded Prompt
+        # Load prompts using unified PromptManager
+        language = config.get("system", {}).get("language", "zh")
+        try:
+            self.prompts = get_prompt_manager().load_prompts(
+                module_name="solve",
+                agent_name=agent_name,
+                language=language,
+            )
+            if self.prompts:
+                self.logger.debug(f"[{agent_name}] Prompts loaded from YAML")
+            else:
                 self.prompts = None
-                if hasattr(self, "logger"):
-                    self.logger.warning(
-                        f"[{agent_name}] Prompt config file not found: {e!s}, will use hardcoded Prompt"
-                    )
-            except Exception as e:
-                # Other errors, log detailed error information
-                self.prompts = None
-                error_msg = f"[{agent_name}] Failed to load Prompt configuration: {e!s}, will use hardcoded Prompt"
-                if hasattr(self, "logger"):
-                    self.logger.error(error_msg, exc_info=True)
-                else:
-                    print(f"Error: {error_msg}")
+        except Exception as e:
+            self.prompts = None
+            self.logger.warning(f"[{agent_name}] Failed to load prompts: {e}")
 
     def get_model(self, key: str = "model") -> str:
         """
@@ -120,16 +99,23 @@ class BaseAgent(ABC):
         Raises:
             ValueError: If environment variable LLM_MODEL is not set
         """
-        # Must read from environment variable
+        # 1. Try to get from agent's specific config
+        if hasattr(self, "agent_config") and self.agent_config.get("model"):
+            return self.agent_config["model"]
+
+        # 2. Try to get from general LLM config (injected from MainSolver)
+        if hasattr(self, "llm_config") and self.llm_config.get("model"):
+            return self.llm_config["model"]
+
+        # 3. Fallback to environment variable (for backward compatibility)
         env_model = os.getenv("LLM_MODEL")
-        if not env_model:
-            raise ValueError(
-                f"Error: Environment variable LLM_MODEL is not set\n"
-                f"Please configure LLM_MODEL in your .env file, for example:\n"
-                f"LLM_MODEL=gpt-4o-mini\n"
-                f"Agent: {self.agent_name}"
-            )
-        return env_model
+        if env_model:
+            return env_model
+
+        raise ValueError(
+            f"Error: Model not configured for agent {self.agent_name}\n"
+            f"Please configure LLM_MODEL in .env OR activate a provider."
+        )
 
     def get_temperature(self) -> float:
         """
@@ -286,26 +272,13 @@ class BaseAgent(ABC):
         return self.enabled
 
     def get_prompt(self, prompt_type: str = "system") -> str | None:
-        """
-        Get Prompt (if using PromptLoader)
-
-        Args:
-            prompt_type: Prompt type ('system' | 'user_template' | 'output_format')
-
-        Returns:
-            Prompt content, returns None if not found
-        """
+        """Get prompt by type ('system', 'user_template', 'output_format')."""
         if self.prompts and prompt_type in self.prompts:
             return self.prompts[prompt_type]
         return None
 
     def has_prompts(self) -> bool:
-        """
-        Check if Prompts have been loaded
-
-        Returns:
-            Whether loaded
-        """
+        """Check if prompts have been loaded."""
         return self.prompts is not None
 
     @abstractmethod

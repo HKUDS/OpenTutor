@@ -17,6 +17,8 @@ import {
   Microscope,
   PenTool,
   Plus,
+  Lightbulb,
+  LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import ActivityDetail from "@/components/ActivityDetail";
@@ -24,6 +26,48 @@ import SystemStatus from "@/components/SystemStatus";
 import { apiUrl } from "@/lib/api";
 import { getTranslation } from "@/lib/i18n";
 import { useGlobal } from "@/context/GlobalContext";
+
+// Icon mapping for data-driven UI
+const ICON_MAP: Record<string, LucideIcon> = {
+  HelpCircle,
+  FileText,
+  Search,
+  PenTool,
+  BookOpen,
+  Lightbulb,
+  LayoutDashboard,
+};
+
+// Color mapping for Tailwind classes
+const COLOR_MAP: Record<string, string> = {
+  blue: "text-blue-500",
+  purple: "text-purple-500",
+  emerald: "text-emerald-500",
+  amber: "text-amber-500",
+  indigo: "text-indigo-500",
+  yellow: "text-yellow-500",
+  slate: "text-slate-500",
+};
+
+// Fallback agent config (used if API fails)
+const FALLBACK_AGENT_CONFIG: Record<string, AgentConfig> = {
+  solve: { icon: "HelpCircle", color: "blue", label_key: "Problem Solved" },
+  question: {
+    icon: "FileText",
+    color: "purple",
+    label_key: "Question Generated",
+  },
+  research: { icon: "Search", color: "emerald", label_key: "Research Report" },
+  co_writer: { icon: "PenTool", color: "amber", label_key: "Co-Writer" },
+  guide: { icon: "BookOpen", color: "indigo", label_key: "Guided Learning" },
+  ideagen: { icon: "Lightbulb", color: "yellow", label_key: "Idea Generated" },
+};
+
+interface AgentConfig {
+  icon: string;
+  color: string;
+  label_key: string;
+}
 
 interface Activity {
   id: string;
@@ -66,8 +110,19 @@ export default function DashboardPage() {
   const [notebookStats, setNotebookStats] = useState<NotebookStats | null>(
     null,
   );
+  const [agentConfig, setAgentConfig] = useState<Record<string, AgentConfig>>(
+    FALLBACK_AGENT_CONFIG,
+  );
 
   useEffect(() => {
+    // Fetch agent configuration
+    fetch(apiUrl("/api/v1/config/agents"))
+      .then((res) => res.json())
+      .then((data) => setAgentConfig(data))
+      .catch((err) => {
+        console.error("Failed to fetch agent config, using fallback:", err);
+      });
+
     // Fetch activities
     fetch(apiUrl("/api/v1/dashboard/recent?limit=10"))
       .then((res) => res.json())
@@ -86,30 +141,18 @@ export default function DashboardPage() {
       });
   }, []);
 
+  // Data-driven icon getter
   const getIcon = (type: string) => {
-    switch (type) {
-      case "solve":
-        return <HelpCircle className="w-5 h-5 text-blue-500" />;
-      case "question":
-        return <FileText className="w-5 h-5 text-purple-500" />;
-      case "research":
-        return <Search className="w-5 h-5 text-emerald-500" />;
-      default:
-        return <LayoutDashboard className="w-5 h-5 text-slate-500" />;
-    }
+    const config = agentConfig[type];
+    const IconComponent = ICON_MAP[config?.icon] || LayoutDashboard;
+    const colorClass = COLOR_MAP[config?.color] || "text-slate-500";
+    return <IconComponent className={`w-5 h-5 ${colorClass}`} />;
   };
 
+  // Data-driven label getter
   const getLabel = (type: string) => {
-    switch (type) {
-      case "solve":
-        return t("Problem Solved");
-      case "question":
-        return t("Question Generated");
-      case "research":
-        return t("Research Report");
-      default:
-        return t("Activity");
-    }
+    const config = agentConfig[type];
+    return t(config?.label_key || "Activity");
   };
 
   return (

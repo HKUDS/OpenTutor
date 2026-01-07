@@ -48,6 +48,10 @@ def get_llm_config() -> dict:
     """
     Return complete environment configuration for LLM.
 
+    Priority:
+    1. Active provider from llm_providers.json
+    2. Environment variables (.env)
+
     Returns:
         dict: Dictionary containing the following keys:
             - binding: LLM service provider
@@ -58,6 +62,24 @@ def get_llm_config() -> dict:
     Raises:
         ValueError: If required configuration is missing
     """
+    # 1. Try to get active provider from new system
+    try:
+        from src.core.llm_provider import provider_manager
+
+        active_provider = provider_manager.get_active_provider()
+
+        if active_provider:
+            # Map provider fields to config format
+            return {
+                "binding": active_provider.binding,
+                "model": active_provider.model,
+                "api_key": active_provider.api_key,
+                "base_url": active_provider.base_url,
+            }
+    except Exception as e:
+        print(f"⚠️ Failed to load active provider: {e}")
+
+    # 2. Fallback to environment variables
     binding = _strip_value(os.getenv("LLM_BINDING", "openai"))
     model = _strip_value(os.getenv("LLM_MODEL"))
     api_key = _strip_value(os.getenv("LLM_BINDING_API_KEY"))
@@ -65,11 +87,21 @@ def get_llm_config() -> dict:
 
     # Validate required configuration
     if not model:
-        raise ValueError("Error: LLM_MODEL not set, please configure it in .env file")
-    if not api_key:
-        raise ValueError("Error: LLM_BINDING_API_KEY not set, please configure it in .env file")
+        raise ValueError(
+            "Error: LLM_MODEL not set, please configure it in .env file or activate a provider"
+        )
+
+    # Check if API key is required (default to true for security/backward compatibility)
+    requires_key = os.getenv("LLM_API_KEY_REQUIRED", "true").lower() == "true"
+
+    if requires_key and not api_key:
+        raise ValueError(
+            "Error: LLM_BINDING_API_KEY not set, please configure it in .env file or activate a provider"
+        )
     if not base_url:
-        raise ValueError("Error: LLM_BINDING_HOST not set, please configure it in .env file")
+        raise ValueError(
+            "Error: LLM_BINDING_HOST not set, please configure it in .env file or activate a provider"
+        )
 
     return {
         "binding": binding,
@@ -196,7 +228,11 @@ def get_embedding_config() -> dict:
     # Strict mode: All model configuration must come from .env, no automatic fallback or default inference
     if not model:
         raise ValueError("Error: EMBEDDING_MODEL not set, please configure it in .env file")
-    if not api_key:
+
+    # Check if API key is required (default to true for security/backward compatibility)
+    requires_key = os.getenv("EMBEDDING_API_KEY_REQUIRED", "true").lower() == "true"
+
+    if requires_key and not api_key:
         raise ValueError(
             "Error: EMBEDDING_BINDING_API_KEY not set, please configure it in .env file"
         )

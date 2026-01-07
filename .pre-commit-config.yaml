@@ -54,7 +54,7 @@ repos:
     hooks:
       # Ruff linting - removing --exit-zero to ensure we catch issues before they land
       - id: ruff
-        args: [--fix, --exit-zero]
+        args: [--fix]
 
       # Ruff import sorting
       - id: ruff-format

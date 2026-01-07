@@ -8,6 +8,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-Join-7289DA?style=flat&logo=discord&logoColor=white)](https://discord.gg/aka9p9EW)
 [![Feishu](https://img.shields.io/badge/Feishu-Group-blue?style=flat)](./Communication.md)
 [![WeChat](https://img.shields.io/badge/WeChat-Group-green?style=flat&logo=wechat)](./Communication.md)
 
@@ -206,131 +207,192 @@
 
 ## 🚀 Início Rápido
 
-### Passo 1: Clonar e Criar Ambiente Virtual
+### Passo 1: Pré-configuração
+
+**① Clonar Repositório**
 
 ```bash
-# Clonar o repositório
 git clone https://github.com/HKUDS/DeepTutor.git
 cd DeepTutor
+```
 
-# Criar ambiente virtual (escolha um método)
+**② Configurar Variáveis de Ambiente**
 
-# Opção A: Usar conda (Recomendado)
+```bash
+cp .env.example .env
+# Edite o arquivo .env com suas chaves de API
+```
+
+<details>
+<summary>📋 <b>Referência de Variáveis de Ambiente</b></summary>
+
+| Variável | Obrigatório | Descrição |
+|:---|:---:|:---|
+| `LLM_MODEL` | **Sim** | Nome do modelo (ex: `gpt-4o`) |
+| `LLM_BINDING_API_KEY` | **Sim** | Sua chave API LLM |
+| `LLM_BINDING_HOST` | **Sim** | URL do endpoint da API |
+| `EMBEDDING_MODEL` | **Sim** | Nome do modelo de incorporação |
+| `EMBEDDING_BINDING_API_KEY` | **Sim** | Chave API de incorporação |
+| `EMBEDDING_BINDING_HOST` | **Sim** | Endpoint da API de incorporação |
+| `BACKEND_PORT` | Não | Porta do backend (padrão: `8001`) |
+| `FRONTEND_PORT` | Não | Porta do frontend (padrão: `3782`) |
+| `TTS_*` | Não | Configurações de texto para voz |
+| `PERPLEXITY_API_KEY` | Não | Para busca na web |
+
+</details>
+
+**③ Configurar Portas e LLM** *(Opcional)*
+
+- **Portas**: Edite `config/main.yaml` → `server.backend_port` / `server.frontend_port`
+- **LLM**: Edite `config/agents.yaml` → `temperature` / `max_tokens` por módulo
+- Consulte [Documentação de Configuração](config/README.md) para detalhes
+
+**④ Experimentar Bases de Conhecimento Demo** *(Opcional)*
+
+<details>
+<summary>📚 <b>Demos Disponíveis</b></summary>
+
+- **Artigos de Pesquisa** — 5 artigos do nosso laboratório ([AI-Researcher](https://github.com/HKUDS/AI-Researcher), [LightRAG](https://github.com/HKUDS/LightRAG), etc.)
+- **Livro Didático de Ciência de Dados** — 8 capítulos, 296 páginas ([Link do Livro](https://ma-lab-berkeley.github.io/deep-representation-learning-book/))
+
+</details>
+
+1. Baixar de [Google Drive](https://drive.google.com/drive/folders/1iWwfZXiTuQKQqUYb5fGDZjLCeTUP6DA6?usp=sharing)
+2. Extrair para o diretório `data/`
+
+> Os KBs demo usam `text-embedding-3-large` com `dimensions = 3072`
+
+**⑤ Criar Sua Própria Base de Conhecimento** *(Após o Início)*
+
+1. Ir para http://localhost:3782/knowledge
+2. Clicar em "New Knowledge Base" → Inserir nome → Fazer upload de arquivos PDF/TXT/MD
+3. Monitorar o progresso no terminal
+
+---
+
+### Passo 2: Escolha seu Método de Instalação
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+<h3 align="center">🐳 Implantação Docker</h3>
+<p align="center"><b>Recomendado</b> — Sem configuração Python/Node.js</p>
+
+---
+
+**Pré-requisitos**: [Docker](https://docs.docker.com/get-docker/) e [Docker Compose](https://docs.docker.com/compose/install/)
+
+<details open>
+<summary><b>🚀 Opção A: Imagem Pré-construída (Mais Rápido)</b></summary>
+
+```bash
+# Baixar e executar imagem pré-construída (~30 segundos)
+docker run -d --name deeptutor \
+  -p 8001:8001 -p 3782:3782 \
+  -e LLM_MODEL=gpt-4o \
+  -e LLM_BINDING_API_KEY=your-api-key \
+  -e LLM_BINDING_HOST=https://api.openai.com/v1 \
+  -e EMBEDDING_MODEL=text-embedding-3-large \
+  -e EMBEDDING_BINDING_API_KEY=your-api-key \
+  -e EMBEDDING_BINDING_HOST=https://api.openai.com/v1 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/config:/app/config:ro \
+  ghcr.io/hkuds/deeptutor:latest
+```
+
+Ou usar arquivo `.env`:
+
+```bash
+docker run -d --name deeptutor \
+  -p 8001:8001 -p 3782:3782 \
+  --env-file .env \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/config:/app/config:ro \
+  ghcr.io/hkuds/deeptutor:latest
+```
+
+</details>
+
+<details>
+<summary><b>🔨 Opção B: Construir do Código Fonte</b></summary>
+
+```bash
+# Construir e iniciar (~5-10 min primeira execução)
+docker compose up --build -d
+
+# Ver logs
+docker compose logs -f
+```
+
+</details>
+
+**Comandos**:
+
+```bash
+docker compose up -d      # Iniciar
+docker compose logs -f    # Logs
+docker compose down       # Parar
+docker compose up --build # Reconstruir
+docker pull ghcr.io/hkuds/deeptutor:latest  # Atualizar imagem
+```
+
+> **Modo Dev**: Adicionar `-f docker-compose.dev.yml`
+
+</td>
+<td width="50%" valign="top">
+
+<h3 align="center">💻 Instalação Manual</h3>
+<p align="center">Para desenvolvimento ou ambientes não Docker</p>
+
+---
+
+**Pré-requisitos**: Python 3.10+, Node.js 18+
+
+**Configurar Ambiente**:
+
+```bash
+# Usando conda (Recomendado)
 conda create -n deeptutor python=3.10
 conda activate deeptutor
 
-# Opção B: Usar venv
+# Ou usando venv
 python -m venv venv
-# No Windows:
-venv\Scripts\activate
-# No macOS/Linux:
 source venv/bin/activate
 ```
 
-### Passo 2: Instalar Dependências
-
-Execute o script de instalação com um clique para instalar automaticamente todas as dependências:
+**Instalar Dependências**:
 
 ```bash
-# Recomendado: Usar script bash
 bash scripts/install_all.sh
 
-# Alternativa: Usar script Python
-python scripts/install_all.py
-
-# Nota: O instalador detecta conda/venv para isolamento. Se nenhum ambiente isolado for detectado, exibirá um aviso mas continuará a instalação.
-
-# Ou instalar manualmente
+# Ou manualmente:
 pip install -r requirements.txt
-npm install
+npm install --prefix web
 ```
 
-### Passo 3: Configurar Variáveis de Ambiente
-
-Crie um arquivo `.env` no diretório raiz do projeto baseado em `.env.example`:
+**Iniciar**:
 
 ```bash
-# Copiar do modelo .env.example (se existir)
-cp .env.example .env
-
-# Depois edite o arquivo .env com suas chaves de API:
-```
-
-### Passo 4: Configurar Portas *(Opcional)*
-
-Por padrão, a aplicação usa:
-- **Backend (FastAPI)**: `8001`
-- **Frontend (Next.js)**: `3782`
-
-Você pode modificar essas portas em `config/main.yaml` editando os valores `server.backend_port` e `server.frontend_port`.
-
-### Passo 5: Usar Nossas Demos *(Opcional)*
-
-Para experimentar rapidamente nosso sistema, fornecemos duas bases de conhecimento pré-processadas junto com uma coleção de questões desafiadoras e exemplos de uso.
-
-<details>
-<summary><b>Coleção de Artigos de Pesquisa</b> — 5 artigos (20-50 páginas cada)</summary>
-
-Uma coleção selecionada de 5 artigos de pesquisa nos campos RAG e Agent do nosso laboratório. Esta demo representa cenários com **ampla cobertura de conhecimento** para fins de pesquisa.
-
-**Artigos Utilizados**: [AI-Researcher](https://github.com/HKUDS/AI-Researcher) | [AutoAgent](https://github.com/HKUDS/AutoAgent) | [RAG-Anything](https://github.com/HKUDS/RAG-Anything) | [LightRAG](https://github.com/HKUDS/LightRAG) | [VideoRAG](https://github.com/HKUDS/VideoRAG)
-
-</details>
-
-<details>
-<summary><b>Livro Didático de Ciência de Dados</b> — 8 capítulos, 296 páginas</summary>
-
-Um livro didático de ciência de dados abrangente e desafiador. Esta demo representa cenários com **profundidade de conhecimento profunda** para fins de aprendizado.
-
-**Link do Livro**: [Deep Representation Learning Book](https://ma-lab-berkeley.github.io/deep-representation-learning-book/)
-</details>
-
-<br>
-
-**Baixar e Configurar:**
-
-1. Baixe o pacote de demonstração de: [Google Drive](https://drive.google.com/drive/folders/1iWwfZXiTuQKQqUYb5fGDZjLCeTUP6DA6?usp=sharing)
-2. Extraia os arquivos compactados diretamente no diretório `data/`
-3. As bases de conhecimento estarão automaticamente disponíveis no sistema após iniciar o projeto
-
-> **Nota:** Usamos `text-embedding-3-large` como modelo de incorporação ao inicializar nossas bases de conhecimento, com `dimensions = 3072`. Certifique-se de que as dimensões do seu modelo de incorporação também sejam 3072.
-
-### Passo 6: Iniciar a Aplicação
-
-```bash
-# Certifique-se de que o ambiente virtual está ativado
-conda activate deeptutor  # ou: source venv/bin/activate
-
-# Iniciar interface web (frontend + backend)
+# Iniciar interface web
 python scripts/start_web.py
 
-# Ou iniciar apenas a interface CLI
+# Ou apenas CLI
 python scripts/start.py
 
-# Para parar o serviço, pressione Ctrl+C
+# Parar: Ctrl+C
 ```
 
-### Passo 7: Criar Sua Própria Base de Conhecimento
-
-Após iniciar a aplicação, você pode criar sua própria base de conhecimento através da interface web, em qualquer modalidade.
-
-1. **Acessar a Página de Base de Conhecimento**: Visite http://localhost:{frontend_port}/knowledge
-2. **Criar Nova Base de Conhecimento**: Clique no botão "New Knowledge Base"
-3. **Nomear Sua Base de Conhecimento**: Digite um nome único para sua base de conhecimento
-4. **Fazer Upload de Arquivos**: Faça upload de um ou vários arquivos
-5. **Aguardar Processamento**: O sistema processará automaticamente seus arquivos em segundo plano
-   - Monitore o progresso da criação no terminal onde `start_web.py` está em execução
-   - A base de conhecimento estará disponível assim que o processamento terminar
-
-> **Dicas:** Arquivos grandes podem levar vários minutos para processar. Você pode fazer upload de vários arquivos de uma vez para processamento em lote.
+</td>
+</tr>
+</table>
 
 ### URLs de Acesso
 
 | Serviço | URL | Descrição |
 |:---:|:---|:---|
-| **Frontend** | http://localhost:{frontend_port} | Interface web principal |
-| **Documentação API** | http://localhost:{backend_port}/docs | Documentação de API interativa |
-| **Saúde** | http://localhost:{backend_port}/api/v1/knowledge/health | Verificação de saúde do sistema |
+| **Frontend** | http://localhost:3782 | Interface web principal |
+| **Documentação API** | http://localhost:8001/docs | Documentação de API interativa |
 
 ---
 

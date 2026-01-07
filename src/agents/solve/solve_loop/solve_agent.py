@@ -37,7 +37,6 @@ class SolveAgent(BaseAgent):
             api_key=api_key,
             base_url=base_url,
             agent_name="solve_agent",
-            use_prompt_loader=True,
             token_tracker=token_tracker,
         )
 
@@ -270,7 +269,8 @@ class SolveAgent(BaseAgent):
                 continue
 
             tool_type = str(item.get("type", "")).strip().lower()
-            query = str(item.get("query", "")).strip()
+            # query = str(item.get("query", "")).strip()
+            query = str(item.get("intent", "")).strip()
 
             if not tool_type:
                 continue
@@ -287,37 +287,10 @@ class SolveAgent(BaseAgent):
     # Query preprocessing & helper
     # ------------------------------------------------------------------ #
     def _prepare_query(self, tool_type: str, query: str, current_step: SolveChainStep) -> str:
-        if tool_type == "code_execution":
-            return self._prepare_code_query(query)
         return query.strip()
 
     def _summarize_none_answer(self, text: str) -> str:
         return text.strip()
-
-    def _prepare_code_query(self, raw_query: str | None) -> str:
-        if not raw_query:
-            return ""
-
-        text = raw_query.strip()
-
-        # In JSON format, raw_query is already a string.
-        # If LLM still outputs markdown code block markers (```python ... ```), we need to remove them.
-        # If LLM directly outputs code (without markdown markers), it should also be compatible.
-
-        # Check if code fence is present
-        fence_match = re.search(
-            r"```(?:[A-Za-z0-9_+\-]*)?\s*\n?(?P<code>[\s\S]*?)```", text, re.DOTALL
-        )
-
-        if fence_match:
-            code = fence_match.group("code").strip()
-        else:
-            # If no fence, assume entire text is code
-            # Exclude common non-code interference (though rare in JSON format, LLM may put reasoning in query)
-            code = text
-
-        # Clean up possible leading/trailing whitespace again
-        return code.strip()
 
     def _normalize_latex_sequences(self, text: str) -> str:
         if not text or not text.strip():

@@ -21,7 +21,7 @@ except ImportError:
 # Try importing litellm (optional advanced library)
 try:
     import litellm
-    from litellm import completion_cost, token_counter
+    from litellm import token_counter
 
     LITELLM_AVAILABLE = True
 except ImportError:

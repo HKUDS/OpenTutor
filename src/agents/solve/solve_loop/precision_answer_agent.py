@@ -24,7 +24,6 @@ class PrecisionAnswerAgent(BaseAgent):
             api_key=api_key,
             base_url=base_url,
             agent_name="precision_answer_agent",
-            use_prompt_loader=True,
             token_tracker=token_tracker,
         )
 

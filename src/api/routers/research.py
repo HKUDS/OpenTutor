@@ -109,6 +109,7 @@ async def websocket_research_run(websocket: WebSocket):
         await websocket.send_json({"type": "task_id", "task_id": task_id})
 
         # Use unified logger
+        config = load_config()
         try:
             # Get log_dir from config
             log_dir = config.get("paths", {}).get("user_log_dir") or config.get("logging", {}).get(
@@ -120,8 +121,6 @@ async def websocket_research_run(websocket: WebSocket):
             logger.warning(f"Failed to initialize research logger: {e}")
 
         # 2. Initialize Pipeline
-        config = load_config()
-
         # Initialize nested config structures from research.* (main.yaml structure)
         # This ensures all research module configs are properly inherited from main.yaml
         research_config = config.get("research", {})

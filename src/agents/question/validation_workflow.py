@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
-Question Validation Workflow: retrieve → validate → return
+Question Validation Workflow: retrieve -> validate -> return.
+Uses unified PromptManager for prompt loading.
 """
 
 from collections.abc import Callable
@@ -11,7 +12,6 @@ import sys
 from typing import Any
 
 from openai import AsyncOpenAI
-import yaml
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent.parent
@@ -19,25 +19,11 @@ sys.path.insert(0, str(project_root))
 
 from src.core.core import get_agent_params, load_config_with_main
 from src.core.logging import get_logger
+from src.core.prompt_manager import get_prompt_manager
 from src.tools.rag_tool import rag_search
 
 # Module logger
 logger = get_logger("QuestionValidation")
-
-
-def _load_prompts(language: str = "en") -> dict:
-    """Load prompts from YAML file based on language"""
-    prompts_dir = Path(__file__).parent / "prompts" / language
-    prompt_file = prompts_dir / "validation_workflow.yaml"
-    if prompt_file.exists():
-        with open(prompt_file, encoding="utf-8") as f:
-            return yaml.safe_load(f)
-    # Fallback to English if language file not found
-    fallback_file = Path(__file__).parent / "prompts" / "en" / "validation_workflow.yaml"
-    if fallback_file.exists():
-        with open(fallback_file, encoding="utf-8") as f:
-            return yaml.safe_load(f)
-    return {}
 
 
 class QuestionValidationWorkflow:
@@ -79,8 +65,12 @@ class QuestionValidationWorkflow:
         self.token_stats_callback = token_stats_callback
         self.language = language
 
-        # Load prompts
-        self._prompts = _load_prompts(language)
+        # Load prompts using unified PromptManager
+        self._prompts = get_prompt_manager().load_prompts(
+            module_name="question",
+            agent_name="validation_workflow",
+            language=language,
+        )
 
         # Get agent parameters from unified config
         self._agent_params = get_agent_params("question")

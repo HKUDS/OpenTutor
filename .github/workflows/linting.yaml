@@ -41,4 +41,27 @@ jobs:
         run: npm ci
 
       - name: Run pre-commit
+        id: pre-commit
         run: pre-commit run --all-files --show-diff-on-failure
+        continue-on-error: true
+
+      - name: Provide fix instructions on failure
+        if: steps.pre-commit.outcome == 'failure'
+        run: |
+          echo ""
+          echo "╔═══════════════════════════════════════════════════════════════════════════╗"
+          echo "║                     ❌ Pre-commit checks failed!                          ║"
+          echo "╠═══════════════════════════════════════════════════════════════════════════╣"
+          echo "║  Please run the following commands locally to fix formatting issues:      ║"
+          echo "║                                                                           ║"
+          echo "║    pip install pre-commit       # Install pre-commit (if not installed)  ║"
+          echo "║    pre-commit install           # Set up git hooks (recommended)         ║"
+          echo "║    pre-commit run --all-files   # Fix all formatting issues              ║"
+          echo "║                                                                           ║"
+          echo "║  Then commit and push the changes.                                        ║"
+          echo "║                                                                           ║"
+          echo "║  💡 Tip: After running 'pre-commit install', hooks will run              ║"
+          echo "║     automatically on every commit!                                        ║"
+          echo "╚═══════════════════════════════════════════════════════════════════════════╝"
+          echo ""
+          exit 1

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """
 Question Generation Agent - responsible for creating and refining questions.
+Uses unified PromptManager for prompt loading.
 """
 
 import json
@@ -8,14 +9,13 @@ from pathlib import Path
 import sys
 from typing import Any
 
-import yaml
-
 # Add project root to sys.path
-project_root = Path(__file__).parent.parent.parent.parent.parent  # DeepTutor root
+project_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.core.core import load_config_with_main
 from src.core.logging import get_logger
+from src.core.prompt_manager import get_prompt_manager
 from src.tools.rag_tool import rag_search
 
 from .base_agent import Action, BaseAgent, Message, Observation
@@ -24,29 +24,18 @@ from .base_agent import Action, BaseAgent, Message, Observation
 _logger = get_logger("QuestionGenerationAgent")
 
 
-def _load_prompts(language: str = "en") -> dict:
-    """Load prompts from YAML file based on language"""
-    prompts_dir = Path(__file__).parent.parent / "prompts" / language
-    prompt_file = prompts_dir / "generation_agent.yaml"
-    if prompt_file.exists():
-        with open(prompt_file, encoding="utf-8") as f:
-            return yaml.safe_load(f)
-    # Fallback to English if language file not found
-    fallback_file = Path(__file__).parent.parent / "prompts" / "en" / "generation_agent.yaml"
-    if fallback_file.exists():
-        with open(fallback_file, encoding="utf-8") as f:
-            return yaml.safe_load(f)
-    return {}
-
-
 class QuestionGenerationAgent(BaseAgent):
     """Question generation agent"""
 
     def __init__(self, language: str = "en", **kwargs):
         super().__init__(agent_name="QuestionGenerationAgent", language=language, **kwargs)
 
-        # Load prompts
-        self._prompts = _load_prompts(language)
+        # Load prompts using unified PromptManager
+        self._prompts = get_prompt_manager().load_prompts(
+            module_name="question",
+            agent_name="generation_agent",
+            language=language,
+        )
 
         # Load config for RAG settings
         self._config = load_config_with_main("question_config.yaml", project_root)

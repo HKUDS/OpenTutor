@@ -281,10 +281,14 @@ class KnowledgeBaseInitializer:
         embedding_cfg = self.embedding_cfg
         embedding_api_key = embedding_cfg["api_key"] or self.api_key
         embedding_base_url = embedding_cfg["base_url"] or self.base_url
+
+        # CRITICAL: Use openai_embed.func to avoid double decoration
+        # openai_embed is already decorated with @wrap_embedding_func_with_attrs
+        # We need to access the unwrapped function to prevent dimension mismatch
         embedding_func = EmbeddingFunc(
             embedding_dim=embedding_cfg["dim"],
             max_token_size=embedding_cfg["max_tokens"],
-            func=lambda texts: openai_embed(
+            func=lambda texts: openai_embed.func(
                 texts,
                 model=embedding_cfg["model"],
                 api_key=embedding_api_key,

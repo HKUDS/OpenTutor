@@ -6,11 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from src.api.routers import (
+    agent_config,
     co_writer,
     dashboard,
     guide,
     ideagen,
     knowledge,
+    llm_provider,
     notebook,
     question,
     research,
@@ -78,6 +80,8 @@ app.include_router(guide.router, prefix="/api/v1/guide", tags=["guide"])
 app.include_router(ideagen.router, prefix="/api/v1/ideagen", tags=["ideagen"])
 app.include_router(settings.router, prefix="/api/v1/settings", tags=["settings"])
 app.include_router(system.router, prefix="/api/v1/system", tags=["system"])
+app.include_router(llm_provider.router, prefix="/api/v1/config/llm", tags=["config"])
+app.include_router(agent_config.router, prefix="/api/v1/config", tags=["config"])
 
 
 @app.get("/")
@@ -104,25 +108,26 @@ if __name__ == "__main__":
 
     backend_port = get_backend_port(project_root)
 
-    # Configure uvicorn, exclude run_code_workspace directory to avoid file monitoring triggering reload
-    # When code execution tool creates temporary files, it should not trigger service reload
-    # Note: Use relative path patterns to avoid Windows path issues
+    # Configure reload_excludes with absolute paths to properly exclude directories
+    venv_dir = project_root / "venv"
+    data_dir = project_root / "data"
+    reload_excludes = [
+        str(d)
+        for d in [
+            venv_dir,
+            project_root / ".venv",
+            data_dir,
+            project_root / "web" / "node_modules",
+            project_root / "web" / ".next",
+            project_root / ".git",
+        ]
+        if d.exists()
+    ]
+
     uvicorn.run(
         "api.main:app",
         host="0.0.0.0",
         port=backend_port,
         reload=True,
-        reload_excludes=[
-            # Code execution workspace - most important, must exclude
-            # Use glob patterns, relative to project root directory
-            "**/run_code_workspace/**",
-            "**/tmp*/**",
-            "**/__pycache__/**",
-            "**/*.pyc",
-            "**/user/solve/**",
-            "**/user/question/**",
-            "**/user/research/**",
-            "**/user/co-writer/**",
-            "**/logs/**",
-        ],
+        reload_excludes=reload_excludes,
     )

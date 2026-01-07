@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import { GlobalProvider } from "@/context/GlobalContext";
+import ThemeScript from "@/components/ThemeScript";
 
 // Use Inter font with swap display for better loading
 const font = Inter({
@@ -23,6 +24,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
       <body className={font.className}>
         <GlobalProvider>
           <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden transition-colors duration-200">

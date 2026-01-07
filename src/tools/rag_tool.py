@@ -199,10 +199,13 @@ async def rag_search(
         return llm_model_func(prompt, system_prompt, history_messages, **kwargs)
 
     # Define embedding function
+    # CRITICAL: Use openai_embed.func to avoid double decoration
+    # openai_embed is already decorated with @wrap_embedding_func_with_attrs
+    # We need to access the unwrapped function to prevent dimension mismatch
     embedding_func = EmbeddingFunc(
         embedding_dim=embedding_dim,
         max_token_size=embedding_max_tokens,
-        func=lambda texts: openai_embed(
+        func=lambda texts: openai_embed.func(
             texts,
             model=embedding_model,
             api_key=embedding_api_key,

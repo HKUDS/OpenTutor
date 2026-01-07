@@ -8,11 +8,9 @@ import sys
 from typing import Any
 
 try:
-    from rich import box
     from rich.console import Console
     from rich.layout import Layout
     from rich.live import Live
-    from rich.logging import RichHandler
     from rich.panel import Panel
     from rich.table import Table
     from rich.text import Text

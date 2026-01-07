@@ -1,4 +1,3 @@
-import pytest
 from src.agents.solve.utils.json_utils import extract_json_from_text
 
 
@@ -24,7 +23,6 @@ def foo():
     assert "tool_calls" in parsed
     assert parsed["tool_calls"][0]["type"] == "code_execution"
     assert "def foo" in parsed["tool_calls"][0]["query"]
-
 
 
 # How to run the test

@@ -1,3 +1,8 @@
+"""
+EditAgent - Co-writer editing agent.
+Uses unified PromptManager for prompt loading.
+"""
+
 from datetime import datetime
 import json
 import logging
@@ -6,36 +11,18 @@ import sys
 from typing import Any, Literal
 import uuid
 
-from lightrag.llm.openai import openai_complete_if_cache
-import yaml
-
-from src.core.core import get_agent_params, get_llm_config
-from src.tools.rag_tool import rag_search
-from src.tools.web_search import web_search
-
-
-def _load_prompts(language: str = "en") -> dict:
-    """Load prompts from YAML file based on language"""
-    prompts_dir = Path(__file__).parent / "prompts" / language
-    prompt_file = prompts_dir / "edit_agent.yaml"
-    if prompt_file.exists():
-        with open(prompt_file, encoding="utf-8") as f:
-            return yaml.safe_load(f)
-    # Fallback to English if language file not found
-    fallback_file = Path(__file__).parent / "prompts" / "en" / "edit_agent.yaml"
-    if fallback_file.exists():
-        with open(fallback_file, encoding="utf-8") as f:
-            return yaml.safe_load(f)
-    return {}
-
-
-# Add project root for logs import
+# Add project root for imports
 _project_root = Path(__file__).parent.parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from src.core.core import load_config_with_main
+from lightrag.llm.openai import openai_complete_if_cache
+
+from src.core.core import get_agent_params, get_llm_config, load_config_with_main
 from src.core.logging import LLMStats, get_logger
+from src.core.prompt_manager import get_prompt_manager
+from src.tools.rag_tool import rag_search
+from src.tools.web_search import web_search
 
 # Initialize logger with config
 try:
@@ -121,7 +108,13 @@ class EditAgent:
         # Load agent parameters from unified config (agents.yaml)
         self._agent_params = get_agent_params("co_writer")
         self.language = language
-        self._prompts = _load_prompts(language)
+
+        # Load prompts using unified PromptManager
+        self._prompts = get_prompt_manager().load_prompts(
+            module_name="co_writer",
+            agent_name="edit_agent",
+            language=language,
+        )
 
         try:
             self.llm_config = get_llm_config()

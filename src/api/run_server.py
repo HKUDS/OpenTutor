@@ -34,19 +34,20 @@ if __name__ == "__main__":
 
     backend_port = get_backend_port(project_root)
 
-    # Configure reload_excludes to skip temporary files and output directories
+    # Configure reload_excludes to skip directories that shouldn't trigger reloads
+    # Use absolute paths to ensure they're properly resolved
     reload_excludes = [
-        "**/run_code_workspace/**",  # Code execution workspace
-        "**/tmp*/**",  # All temp directories
-        "**/__pycache__/**",  # Python cache
-        "**/*.pyc",  # Python compiled files
-        "**/user/solve/**",  # Solve output directory
-        "**/user/question/**",  # Question output directory
-        "**/user/research/**",  # Research output directory
-        "**/user/co-writer/**",  # Co-Writer output directory
-        "**/logs/**",  # Logs directory
-        "**/user/logs/**",  # User logs directory
+        str(project_root / "venv"),  # Virtual environment
+        str(project_root / ".venv"),  # Virtual environment (alternative name)
+        str(project_root / "data"),  # Data directory (includes knowledge_bases, user data, logs)
+        str(project_root / "node_modules"),  # Node modules (if any at root)
+        str(project_root / "web" / "node_modules"),  # Web node modules
+        str(project_root / "web" / ".next"),  # Next.js build
+        str(project_root / ".git"),  # Git directory
     ]
+
+    # Filter out non-existent directories to avoid warnings
+    reload_excludes = [d for d in reload_excludes if Path(d).exists()]
 
     # Start uvicorn server with reload enabled
     uvicorn.run(

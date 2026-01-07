@@ -32,9 +32,38 @@ class ToolAgent(BaseAgent):
             api_key=api_key,
             base_url=base_url,
             agent_name="tool_agent",
-            use_prompt_loader=True,
             token_tracker=token_tracker,
         )
+
+    async def _generate_code_from_intent(self, intent: str) -> str:
+        system_prompt = """
+You are a Python code generator.
+Generate ONLY executable Python code.
+Do NOT include explanations.
+Do NOT include markdown fences.
+Do NOT include comments unless necessary.
+The code must be self-contained and runnable.
+"""
+        user_prompt = f"""
+Task:
+{intent}
+
+Rules:
+- Output only Python code
+- No ``` fences
+- No natural language
+"""
+        code = await self.call_llm(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            verbose=False,
+        )
+        if "```" in code:
+            raise ValueError("LLM returned markdown code fences, which is forbidden")
+        if len(code) > 8000:
+            raise ValueError("Generated code too large")
+
+        return code.strip()
 
     async def process(
         self,
@@ -233,9 +262,11 @@ class ToolAgent(BaseAgent):
                 }
                 return raw_answer, metadata
 
+            code = await self._generate_code_from_intent(query)
+
             exec_result = await run_code(
                 language="python",
-                code=query,
+                code=code,
                 timeout=self.agent_config.get("code_timeout", 20),
                 assets_dir=artifacts_dir,
             )

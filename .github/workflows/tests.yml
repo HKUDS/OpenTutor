@@ -1,0 +1,91 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "requirements.txt"
+      - "pyproject.toml"
+      - ".github/workflows/tests.yml"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "requirements.txt"
+      - "pyproject.toml"
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=term-missing
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.10'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true
+        continue-on-error: true
+
+  # Quick import check to ensure modules load correctly
+  import-check:
+    name: Import Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check core module imports
+        run: |
+          python -c "from src.core.core import get_llm_config, load_config_with_main; print('✅ Core imports OK')"
+          python -c "from src.knowledge.kb import KnowledgeBase; print('✅ Knowledge imports OK')"
+          python -c "from src.tools.rag_tool import rag_search; print('✅ Tools imports OK')"
+        env:
+          PYTHONPATH: ${{ github.workspace }}
