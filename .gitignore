@@ -87,6 +87,7 @@ cache/
 
 # Log files
 *.log
+test-results/
 
 # ============================================
 # IDE and Editors
