@@ -19,9 +19,14 @@ test.describe('Accessibility :: Home Page', () => {
 
     for (const element of interactiveElements) {
       await expect(element).toBeEnabled()
-      const accessibleName = await element.evaluate(
-        node => (node as any).ariaLabel || node.textContent.trim()
-      )
+      const accessibleName = await element.evaluate(node => {
+        const ariaLabel = node.getAttribute('aria-label')
+        if (ariaLabel && ariaLabel.trim() !== '') {
+          return ariaLabel.trim()
+        }
+        const text = node.textContent ?? ''
+        return text.trim()
+      })
       expect(accessibleName).not.toBe('')
     }
   })

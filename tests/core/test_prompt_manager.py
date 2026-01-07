@@ -6,31 +6,51 @@ Unit tests for the unified PromptManager.
 
 import pytest
 
-# Mock or import PromptManager and get_prompt_manager for test context
 try:
-    from deep.core.prompt_manager import PromptManager, get_prompt_manager
+    from core.prompt_manager import PromptManager, get_prompt_manager
 except ImportError:
     # Minimal mocks for test syntax validation
+    from typing import Any, Dict, Optional
+
     class PromptManager:
-        _instance = None
-        _cache = {}
-        def __new__(cls):
+        """Minimal mock PromptManager for test syntax validation."""
+
+        _instance: Optional["PromptManager"] = None
+        _cache: Dict[str, Any] = {}
+
+        def __new__(cls) -> "PromptManager":
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
             return cls._instance
-        def load_prompts(self, *args, **kwargs):
+
+        def load_prompts(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+            """Mock load_prompts method."""
             return {"system": {}}
-        def clear_cache(self, *args, **kwargs):
+
+        def clear_cache(self, *args: Any, **kwargs: Any) -> None:
+            """Mock clear_cache method."""
             self._cache.clear()
-        def reload_prompts(self, *args, **kwargs):
+
+        def reload_prompts(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+            """Mock reload_prompts method."""
             return {"system": {}}
-        def get_prompt(self, prompts, key, field=None, fallback=None):
+
+        def get_prompt(
+            self,
+            prompts: Dict[str, Any],
+            key: str,
+            field: Optional[str] = None,
+            fallback: Optional[Any] = None,
+        ) -> Any:
+            """Mock get_prompt method."""
             if key in prompts:
                 if field and isinstance(prompts[key], dict):
                     return prompts[key].get(field, fallback)
                 return prompts[key]
             return fallback
-    def get_prompt_manager():
+
+    def get_prompt_manager() -> PromptManager:
+        """Mock get_prompt_manager function."""
         return PromptManager()
 
 
@@ -183,7 +203,6 @@ class TestPromptManager:
         # They should be equal but not the same object
         assert prompts1 == prompts2
         # After reload, cache should have fresh entry
-        cache_key = "research_research_agent_en"
         assert isinstance(pm._cache, dict)
 
 
