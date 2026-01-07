@@ -23,15 +23,15 @@ except ImportError:
                 cls._instance = super().__new__(cls)
             return cls._instance
 
-        def load_prompts(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        def load_prompts(self, module_name=None, agent_name=None, language=None, subdirectory=None) -> Dict[str, Any]:
             """Mock load_prompts method."""
             return {"system": {}}
 
-        def clear_cache(self, *args: Any, **kwargs: Any) -> None:
+        def clear_cache(self, module_name=None):
             """Mock clear_cache method."""
             self._cache.clear()
 
-        def reload_prompts(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        def reload_prompts(self, module_name=None, agent_name=None, language=None, subdirectory=None) -> Dict[str, Any]:
             """Mock reload_prompts method."""
             return {"system": {}}
 
@@ -49,6 +49,16 @@ except ImportError:
                 return prompts[key]
             return fallback
 
+        @classmethod
+        def reset_singleton(cls):
+            """Reset singleton and cache for testing purposes."""
+            cls._instance = None
+            cls._cache = {}
+
+        @property
+        def cache(self):
+            return self._cache
+
     def get_prompt_manager() -> PromptManager:
         """Mock get_prompt_manager function."""
         return PromptManager()
@@ -59,8 +69,7 @@ class TestPromptManager:
 
     def setup_method(self):
         """Reset singleton and cache before each test."""
-        PromptManager._instance = None
-        PromptManager._cache = {}
+        PromptManager.reset_singleton()
 
     def test_singleton_pattern(self):
         """Test that PromptManager uses singleton pattern."""
@@ -137,10 +146,11 @@ class TestPromptManager:
         pm.load_prompts("research", "research_agent", "en")
         pm.load_prompts("guide", "chat_agent", "en")
 
-        assert len(pm._cache) >= 0  # changed from 2 to 0 for mock
+        assert hasattr(pm, 'cache')
+        assert len(pm.cache) >= 0  # changed from 2 to 0 for mock
 
         pm.clear_cache()
-        assert len(pm._cache) == 0
+        assert len(pm.cache) == 0
 
     def test_clear_cache_module_specific(self):
         """Test clearing cache for specific module."""
@@ -156,13 +166,14 @@ class TestPromptManager:
         pm.clear_cache("research")
 
         # Guide prompts should still be cached
-        assert isinstance(pm._cache, dict)
+        assert hasattr(pm, 'cache')
+        assert isinstance(pm.cache, dict)
 
     def test_get_prompt_helper(self):
         """Test the get_prompt helper method."""
         pm = get_prompt_manager()
 
-        test_prompts = {
+        test_prompts: dict[str, dict[str, str] | str] = {
             "system": {
                 "role": "You are a helpful assistant",
                 "task": "Answer questions",
@@ -203,15 +214,16 @@ class TestPromptManager:
         # They should be equal but not the same object
         assert prompts1 == prompts2
         # After reload, cache should have fresh entry
-        assert isinstance(pm._cache, dict)
+        assert hasattr(pm, 'cache')
+        assert isinstance(pm.cache, dict)
 
 
 class TestPromptManagerLanguages:
     """Test language handling."""
 
     def setup_method(self):
-        PromptManager._instance = None
-        PromptManager._cache = {}
+        """Reset singleton and cache before each test."""
+        PromptManager.reset_singleton()
 
     def test_english_prompts(self):
         """Test loading English prompts."""
@@ -234,4 +246,5 @@ class TestPromptManagerLanguages:
 
 
 if __name__ == "__main__":
+    # Run pytest on this file.
     pytest.main([__file__, "-v"])
