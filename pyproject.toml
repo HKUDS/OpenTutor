@@ -156,3 +156,18 @@ split-on-trailing-comma = true
 # ============================================
 [tool.ruff.lint.mccabe]
 max-complexity = 10
+
+# ============================================
+# Pytest configuration
+# ============================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+python_classes = ["Test*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning:pydantic.*:",
+]

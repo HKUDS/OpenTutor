@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # Define storage path
 USER_DATA_DIR = Path("./data/user")
@@ -28,8 +28,7 @@ class LLMProvider(BaseModel):
     model: str = Field(..., description="Model name to use")
     is_active: bool = Field(default=False, description="Whether this provider is currently active")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class LLMProviderManager:
