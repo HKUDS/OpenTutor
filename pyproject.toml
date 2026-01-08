@@ -9,9 +9,37 @@ build-backend = "setuptools.build_meta"
 name = "ai-tutor"
 version = "0.1.0"
 description = "An intelligent learning companion with multi-agent collaboration and RAG"
-requires-python = ">=3.10"
+requires-python = ">=3.10, <3.14"
 readme = "README.md"
 license = {text = "Apache-2.0"}
+dependencies = [
+    "python-dotenv>=1.2.1,<2.0.0",
+    "PyYAML>=6.0.3,<7.0.0",
+    "tiktoken>=0.12.0,<1.0.0",
+    "requests>=2.32.5,<3.0.0",
+    "openai>=2.14.0,<3.0.0",
+    "perplexityai>=0.22.2,<1.0.0",
+    "dashscope>=1.25.5,<2.0.0",
+    "aiohttp>=3.13.3,<4.0.0",
+    "httpx>=0.28.1,<0.29.0",
+    "urllib3>=2.6.2,<3.0.0",
+    "nest-asyncio>=1.6.0,<2.0.0",
+    "fastapi>=0.128.0,<0.129.0",
+    "uvicorn[standard]>=0.40.0,<0.41.0",
+    "websockets>=15.0.1,<16.0.0",
+    "python-multipart>=0.0.21,<0.0.22",
+    "pydantic>=2.0.0,<2.12.4",
+    "lightrag-hku>=1.4.9.10,<2.0.0",
+    "arxiv>=2.4.0,<3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9.0",
+]
+
+[tool.poetry]
+package-mode = false
 
 # ============================================
 # Black code formatter configuration

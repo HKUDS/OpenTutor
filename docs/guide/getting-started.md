@@ -35,6 +35,11 @@ python scripts/install_all.py
 # Or Install Dependencies Manually
 pip install -r requirements.txt
 npm install
+
+# Verify Python environment
+pip install -e .[dev]
+pip check
+pytest -q
 ```
 
 ## Step 3: Set Up Environment Variables

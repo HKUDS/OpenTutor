@@ -386,7 +386,7 @@ docker pull ghcr.io/hkuds/deeptutor:latest  # Update image
 
 ---
 
-**Prerequisites**: Python 3.10+, Node.js 18+
+**Prerequisites**: Python 3.10 ≤ version < 3.14, Node.js 18+
 
 **Set Up Environment**:
 
@@ -403,10 +403,13 @@ source venv/bin/activate
 **Install Dependencies**:
 
 ```bash
-bash scripts/install_all.sh
+# Install core backend dependencies (no project package install)
+poetry install --no-root
 
-# Or manually:
-pip install -r requirements.txt
+# (Optional) Install development extras, e.g., pytest
+poetry install --no-root --extras dev
+
+# Install frontend dependencies
 npm install --prefix web
 ```
 
@@ -421,6 +424,15 @@ python scripts/start.py
 
 # Stop: Ctrl+C
 ```
+
+> ℹ️ **Optional PDF/OCR ingestion (RagAnything)**
+>
+> The knowledge ingestion scripts now load the RagAnything dependency lazily.
+> To enable advanced ingestion locally, clone or install the
+> [`raganything`](https://github.com/cfahlgren1/RAGanything) package alongside
+> this repository so it is available on the Python path. When RagAnything is
+> unavailable the scripts log a clear message and continue with basic
+> ingestion capabilities.
 
 </td>
 </tr>
@@ -942,6 +954,9 @@ data/user/research/
   "counters": {
     "plan_counter": 2,
     "block_counters": {"1": 3, "2": 2}
+  ```
+
+  **Install Dependencies**:
   }
 }
 ```

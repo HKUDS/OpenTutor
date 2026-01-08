@@ -1,0 +1,27 @@
+- id: 1
+  title: "Refactor PromptManager to use Dependency Injection"
+  description: "Refactor the PromptManager to remove the singleton pattern and use dependency injection. This will improve testability and allow for parallel test execution. See DEBT-001 for details."
+  status: "not-started"
+  area: "backend"
+  owner: "unassigned"
+
+- id: 2
+  title: "Separate PromptManager Unit and Integration Tests"
+  description: "Create a separate integration test suite for prompt files and mock the file system in the PromptManager unit tests. This will improve test robustness and clarity. See testing strategy for details."
+  status: "not-started"
+  area: "backend"
+  owner: "unassigned"
+
+- id: 3
+  title: "Integrate Axe-Core for Accessibility Testing"
+  description: "Fully integrate @axe-core/playwright into the test suite to replace the manual accessibility checks. Resolve any issues with the Playwright project configuration."
+  status: "not-started"
+  area: "frontend"
+  owner: "unassigned"
+
+- id: 4
+  title: "Update CI/CD for New Test Configurations"
+  description: "Update the CI/CD pipeline to run the Python tests as a module and to execute the new accessibility test suite."
+  status: "not-started"
+  area: "devops"
+  owner: "unassigned"

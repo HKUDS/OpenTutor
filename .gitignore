@@ -51,6 +51,7 @@ ENV/
 .venv/
 env.bak/
 venv.bak/
+.hypothesis
 
 # ============================================
 # Node.js and Frontend Build

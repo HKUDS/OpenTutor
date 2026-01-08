@@ -25,23 +25,21 @@ raganything_path = project_root.parent / "raganything" / "RAG-Anything"
 if raganything_path.exists():
     sys.path.insert(0, str(raganything_path))
 
+from typing import Any
+
 from dotenv import load_dotenv
 from lightrag.llm.openai import openai_complete_if_cache, openai_embed
 from lightrag.utils import EmbeddingFunc
-from raganything import RAGAnything, RAGAnythingConfig
 
 from src.core.core import get_embedding_config, get_llm_config
+from src.core.logging import LightRAGLogContext, get_logger
+from src.knowledge.extract_numbered_items import process_content_list
+from src.knowledge.progress_tracker import ProgressStage, ProgressTracker
+from src.knowledge.raganything_loader import load_raganything
 
 load_dotenv(dotenv_path=".env", override=False)
 
-# Use unified logging system
-from src.core.logging import LightRAGLogContext, get_logger
-
 logger = get_logger("KnowledgeInit")
-
-# Import numbered items extraction functionality
-from src.knowledge.extract_numbered_items import process_content_list
-from src.knowledge.progress_tracker import ProgressStage, ProgressTracker
 
 
 class KnowledgeBaseInitializer:
@@ -187,8 +185,25 @@ class KnowledgeBaseInitializer:
             total=len(doc_files),
         )
 
+        raganything_cls, raganything_config_cls, import_error = load_raganything()
+        if raganything_cls is None or raganything_config_cls is None:
+            message = (
+                "Advanced document ingestion is disabled because the optional 'raganything' "
+                "package is not installed or failed to load. Install RagAnything alongside this "
+                "project to re-enable PDF/OCR ingestion."
+            )
+            if import_error:
+                message = f"{message}\nDetails: {import_error}"
+            logger.error(message)
+            self.progress_tracker.update(
+                ProgressStage.ERROR,
+                message,
+                error="raganything-missing",
+            )
+            return
+
         # Create RAGAnything configuration
-        config = RAGAnythingConfig(
+        config = raganything_config_cls(
             working_dir=str(self.rag_storage_dir),
             enable_image_processing=True,
             enable_table_processing=True,
@@ -298,7 +313,7 @@ class KnowledgeBaseInitializer:
 
         # Initialize RAGAnything with log forwarding
         with LightRAGLogContext(scene="knowledge_init"):
-            rag = RAGAnything(
+            rag = raganything_cls(
                 config=config,
                 llm_model_func=llm_model_func,
                 vision_model_func=vision_model_func,
@@ -526,7 +541,7 @@ class KnowledgeBaseInitializer:
                 ProgressStage.ERROR, "Numbered items extraction failed", error=error_msg
             )
 
-    async def display_statistics(self, rag: RAGAnything):
+    async def display_statistics(self, rag: Any):
         """Display knowledge base statistics"""
         logger.info("\n" + "=" * 50)
         logger.info("Knowledge Base Statistics")

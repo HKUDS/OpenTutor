@@ -1,0 +1,23 @@
+- id: DEBT-001
+  title: "Refactor PromptManager Singleton"
+  description: "The PromptManager is a singleton with global state, causing test fragility and preventing parallel execution. Refactor to use dependency injection, removing the singleton pattern and updating consumers to accept a PromptManager instance. This will improve testability and state isolation."
+  status: "not-started"
+  tags: ["tech-debt", "refactoring", "testing", "core"]
+  effort: "medium"
+  assignee: "unassigned"
+
+- id: TEST-001
+  title: "Separate PromptManager Unit and Integration Tests"
+  description: "The test suite for PromptManager mixes unit and integration tests by reading from the live filesystem. This makes tests brittle. Split the tests into two suites: 1) Unit tests that mock filesystem I/O (`pathlib.Path.read_text`) to test the manager's logic in isolation. 2) Integration tests in `tests/integration/prompts/` that validate the schema and content of the actual `.yaml` prompt files."
+  status: "not-started"
+  tags: ["testing", "refactoring", "ci"]
+  effort: "medium"
+  assignee: "unassigned"
+
+- id: A11Y-001
+  title: "Fix Playwright Project Configuration for Accessibility Tests"
+  description: "The new 'accessibility' project in `playwright.config.ts` is not being recognized by the Playwright runner, blocking the execution of axe-core tests. Investigate the configuration to resolve the project discovery issue and enable the accessibility test suite to run."
+  status: "blocked"
+  tags: ["testing", "accessibility", "ci", "bug"]
+  effort: "low"
+  assignee: "unassigned"

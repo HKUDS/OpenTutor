@@ -17,11 +17,11 @@ if raganything_path.exists():
 from dotenv import load_dotenv
 from lightrag.llm.openai import openai_complete_if_cache, openai_embed
 from lightrag.utils import EmbeddingFunc
-from raganything import RAGAnything, RAGAnythingConfig
 
 from src.core.core import get_embedding_config, get_llm_config
 from src.core.logging import LightRAGLogContext
 from src.knowledge.manager import KnowledgeBaseManager
+from src.knowledge.raganything_loader import load_raganything
 
 # Load environment variables
 load_dotenv(project_root / "DeepTutor.env", override=False)
@@ -57,6 +57,16 @@ async def rag_search(
                 "mode": str
             }
     """
+    raganything_cls, raganything_config_cls, import_error = load_raganything()
+    if raganything_cls is None or raganything_config_cls is None:
+        message = (
+            "Advanced knowledge ingestion is disabled because RagAnything is not installed. "
+            "Install the optional RagAnything package to enable PDF/OCR document processing."
+        )
+        if import_error:
+            message = f"{message}\nDetails: {import_error}"
+        return {"query": query, "answer": message, "mode": mode, "error": message}
+
     # Get LLM configuration
     try:
         llm_config = get_llm_config()
@@ -214,7 +224,7 @@ async def rag_search(
     )
 
     # Create RAG instance
-    config = RAGAnythingConfig(
+    config = raganything_config_cls(
         working_dir=working_dir,
         enable_image_processing=True,
         enable_table_processing=True,
@@ -223,7 +233,7 @@ async def rag_search(
 
     # Use log forwarding context manager
     with LightRAGLogContext(scene="rag_tool"):
-        rag = RAGAnything(
+        rag = raganything_cls(
             config=config,
             llm_model_func=llm_model_func,
             # vision_model_func=vision_model_func,

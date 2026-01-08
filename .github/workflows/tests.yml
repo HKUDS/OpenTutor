@@ -44,8 +44,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio pytest-cov
+          pip install -e .[dev]
+          pip install pytest-asyncio pytest-cov
+
+      - name: Verify dependencies
+        run: |
+          pip check
 
       - name: Run tests with coverage
         run: |
@@ -80,7 +84,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -e .[dev]
+
+      - name: Verify dependencies
+        run: |
+          pip check
 
       - name: Check core module imports
         run: |

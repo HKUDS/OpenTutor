@@ -7,45 +7,48 @@
 # ============================================
 # Core dependencies
 # ============================================
-python-dotenv>=1.0.0
-PyYAML>=6.0
-tiktoken>=0.5.0
+python-dotenv>=1.2.1,<2.0.0
+PyYAML>=6.0.3,<7.0.0
+tiktoken>=0.12.0,<1.0.0
 
 # ============================================
 # HTTP and API clients
 # ============================================
-requests>=2.32.2
-openai>=1.30.0
-perplexityai>=0.1.0
-dashscope>=1.14.0
-aiohttp>=3.9.4
-httpx>=0.27.0
-urllib3>=2.2.1
+requests>=2.32.5,<3.0.0
+openai>=2.14.0,<3.0.0
+perplexityai>=0.22.2,<1.0.0
+dashscope>=1.25.5,<2.0.0
+aiohttp>=3.13.3,<4.0.0
+httpx>=0.28.1,<0.29.0
+urllib3>=2.6.2,<3.0.0
 
 # ============================================
 # Async support
 # ============================================
-nest_asyncio>=1.5.8
+nest_asyncio>=1.6.0,<2.0.0
 
 # ============================================
 # Web framework and server
 # ============================================
-fastapi>=0.100.0
-uvicorn[standard]>=0.24.0
-websockets>=12.0
-python-multipart>=0.0.6
-pydantic>=2.0.0
+fastapi>=0.128.0,<0.129.0
+uvicorn[standard]>=0.40.0,<0.41.0
+websockets>=15.0.1,<16.0.0
+python-multipart>=0.0.21,<0.0.22
+pydantic>=2.0.0,<2.12.4
 
 # ============================================
 # RAG and knowledge base
 # ============================================
-lightrag-hku>=1.0.0
-raganything>=0.1.0
+lightrag-hku>=1.4.9.10,<2.0.0
+# RagAnything is optional. Install it if you plan to use RagAnything-based
+# advanced ingestion pipelines (e.g., custom document loaders or ingestion
+# workflows); see the RagAnything documentation for feature details.
+# raganything>=0.1.0
 
 # ============================================
 # Academic and research tools
 # ============================================
-arxiv>=2.0.0
+arxiv>=2.4.0,<3.0.0
 
 # ============================================
 # Scientific computing (optional, for code execution)

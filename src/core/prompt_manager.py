@@ -32,6 +32,20 @@ class PromptManager:
             cls._instance = super().__new__(cls)
         return cls._instance
 
+    @classmethod
+    def reset_singleton(cls) -> None:
+        """Testing helper: reset singleton instance and clear cache."""
+        cls._instance = None
+        cls._cache.clear()
+        # Also reset module-level singleton
+        global _prompt_manager
+        _prompt_manager = None
+
+    @property
+    def cache(self) -> dict[str, dict[str, Any]]:
+        """Expose internal cache for testing and introspection."""
+        return self._cache
+
     def load_prompts(
         self,
         module_name: str,
