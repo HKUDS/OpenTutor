@@ -58,6 +58,7 @@ class BaseAgent(ABC):
         api_key: str | None = None,
         base_url: str | None = None,
         model: str | None = None,
+        api_version: str | None = None,
         language: str = "zh",
         config: dict[str, Any] | None = None,
         token_tracker: Any | None = None,
@@ -99,11 +100,13 @@ class BaseAgent(ABC):
             self.api_key = api_key or env_llm.api_key
             self.base_url = base_url or env_llm.base_url
             self.model = model or env_llm.model
+            self.api_version = api_version or getattr(env_llm, "api_version", None)
         except ValueError:
             # Fallback if env config not available
             self.api_key = api_key or os.getenv("LLM_API_KEY")
             self.base_url = base_url or os.getenv("LLM_HOST")
             self.model = model or os.getenv("LLM_MODEL", "gpt-4o")
+            self.api_version = api_version or os.getenv("LLM_API_VERSION")
 
         # Get Agent-specific configuration (if config provided)
         self.agent_config = self.config.get("agents", {}).get(agent_name, {})
@@ -373,6 +376,7 @@ class BaseAgent(ABC):
                 model=model,
                 api_key=self.api_key,
                 base_url=self.base_url,
+                api_version=self.api_version,
                 **kwargs,
             )
         except Exception as e:
@@ -470,6 +474,7 @@ class BaseAgent(ABC):
                 model=model,
                 api_key=self.api_key,
                 base_url=self.base_url,
+                api_version=self.api_version,
                 messages=messages,
                 **kwargs,
             ):

@@ -12,7 +12,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from openai import AsyncOpenAI
+from openai import AsyncAzureOpenAI, AsyncOpenAI
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent.parent
@@ -34,6 +34,7 @@ class QuestionValidationWorkflow:
         self,
         api_key: str | None = None,
         base_url: str | None = None,
+        api_version: str | None = None,
         model: str | None = None,
         kb_name: str | None = None,
         token_stats_callback: Callable | None = None,
@@ -45,6 +46,7 @@ class QuestionValidationWorkflow:
         Args:
             api_key: API key
             base_url: API endpoint
+            api_version: API version (for Azure OpenAI)
             model: Model name
             kb_name: Knowledge base name
             token_stats_callback: Callback function to update token statistics
@@ -55,14 +57,27 @@ class QuestionValidationWorkflow:
             api_key = os.getenv("LLM_API_KEY")
         if not base_url:
             base_url = os.getenv("LLM_HOST")
+        if not api_version:
+            api_version = os.getenv("LLM_API_VERSION")
         if model is None:
             model = os.getenv("LLM_MODEL", "gpt-4o")
 
         # For local LLM servers, use placeholder key if none provided
         client_api_key = api_key or "sk-no-key-required"
-        self.client = AsyncOpenAI(api_key=client_api_key, base_url=base_url)
+
+        binding = os.getenv("LLM_BINDING", "openai")
+        if binding == "azure_openai" or api_version:
+            self.client = AsyncAzureOpenAI(
+                api_key=client_api_key,
+                azure_endpoint=base_url,
+                api_version=api_version,
+            )
+        else:
+            self.client = AsyncOpenAI(api_key=client_api_key, base_url=base_url)
+
         self.api_key = api_key
         self.base_url = base_url
+        self.api_version = api_version
         self.model = model
         self.kb_name = kb_name
         self.token_stats_callback = token_stats_callback

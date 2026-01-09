@@ -61,6 +61,13 @@ ENV_VAR_DEFINITIONS = {
         "default": "",
         "sensitive": True,
     },
+    "LLM_API_VERSION": {
+        "description": "API version for Azure OpenAI (e.g., 2024-02-15-preview)",
+        "category": "llm",
+        "required": False,
+        "default": "",
+        "sensitive": False,
+    },
     # Embedding Configuration (supports both cloud and local)
     "EMBEDDING_BINDING": {
         "description": "Embedding provider: openai, ollama, lm_studio, azure_openai, jina, cohere, huggingface",
@@ -98,6 +105,13 @@ ENV_VAR_DEFINITIONS = {
         "sensitive": True,
         "conditional": "Required for cloud providers (OpenAI, Jina, Cohere, etc.). Not needed for Ollama or local models.",
     },
+    "EMBEDDING_API_VERSION": {
+        "description": "API version for Azure OpenAI (e.g., 2024-02-15-preview)",
+        "category": "embedding",
+        "required": False,
+        "default": "",
+        "sensitive": False,
+    },
     # TTS Configuration (OpenAI compatible API)
     "TTS_MODEL": {
         "description": "OpenAI TTS model (tts-1 for speed, tts-1-hd for quality)",
@@ -119,6 +133,20 @@ ENV_VAR_DEFINITIONS = {
         "required": False,
         "default": "",
         "sensitive": True,
+    },
+    "TTS_BINDING": {
+        "description": "TTS service provider type (openai, azure_openai)",
+        "category": "tts",
+        "required": False,
+        "default": "openai",
+        "sensitive": False,
+    },
+    "TTS_BINDING_API_VERSION": {
+        "description": "API version for Azure OpenAI TTS (e.g., 2024-02-15-preview)",
+        "category": "tts",
+        "required": False,
+        "default": "",
+        "sensitive": False,
     },
     "TTS_VOICE": {
         "description": "Default voice: alloy, echo, fable, onyx, nova, shimmer",

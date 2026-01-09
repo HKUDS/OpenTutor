@@ -91,6 +91,7 @@ def get_effective_config() -> LLMConfig:
                 model=active_provider.model,
                 api_key=active_provider.api_key,
                 base_url=active_provider.base_url,
+                api_version=getattr(active_provider, "api_version", None),
                 binding=active_provider.binding,
             )
 
@@ -169,6 +170,7 @@ async def complete(
     model: Optional[str] = None,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
+    api_version: Optional[str] = None,
     binding: Optional[str] = None,
     messages: Optional[List[Dict[str, str]]] = None,
     **kwargs,
@@ -184,6 +186,7 @@ async def complete(
         model: Model name (optional, uses effective config if not provided)
         api_key: API key (optional)
         base_url: Base URL for the API (optional)
+        api_version: API version for Azure OpenAI (optional)
         binding: Provider binding type (optional)
         messages: Pre-built messages array (optional)
         **kwargs: Additional parameters (temperature, max_tokens, etc.)
@@ -197,6 +200,7 @@ async def complete(
         model = model or config.model
         api_key = api_key if api_key is not None else config.api_key
         base_url = base_url or config.base_url
+        api_version = api_version or config.api_version
         binding = binding or config.binding or "openai"
 
     # Route to appropriate provider
@@ -217,6 +221,7 @@ async def complete(
             model=model,
             api_key=api_key,
             base_url=base_url,
+            api_version=api_version,
             binding=binding or "openai",
             **kwargs,
         )
@@ -228,6 +233,7 @@ async def stream(
     model: Optional[str] = None,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
+    api_version: Optional[str] = None,
     binding: Optional[str] = None,
     messages: Optional[List[Dict[str, str]]] = None,
     **kwargs,
@@ -243,6 +249,7 @@ async def stream(
         model: Model name (optional, uses effective config if not provided)
         api_key: API key (optional)
         base_url: Base URL for the API (optional)
+        api_version: API version for Azure OpenAI (optional)
         binding: Provider binding type (optional)
         messages: Pre-built messages array (optional)
         **kwargs: Additional parameters (temperature, max_tokens, etc.)
@@ -256,6 +263,7 @@ async def stream(
         model = model or config.model
         api_key = api_key if api_key is not None else config.api_key
         base_url = base_url or config.base_url
+        api_version = api_version or config.api_version
         binding = binding or config.binding or "openai"
 
     # Route to appropriate provider
@@ -277,6 +285,7 @@ async def stream(
             model=model,
             api_key=api_key,
             base_url=base_url,
+            api_version=api_version,
             binding=binding or "openai",
             messages=messages,
             **kwargs,

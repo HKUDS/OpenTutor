@@ -20,6 +20,7 @@ sys.path.insert(0, str(project_root))
 
 from src.logging import get_logger
 from src.services.config import load_config_with_main
+from src.services.llm.config import get_llm_config
 
 # Setup module logger with unified logging system (from config)
 project_root = Path(__file__).parent.parent.parent.parent
@@ -299,7 +300,24 @@ async def websocket_question_generate(websocket: WebSocket):
         root_dir = Path(__file__).parent.parent.parent.parent
         output_base = root_dir / "data" / "user" / "question"
 
-        coordinator = AgentCoordinator(kb_name=kb_name, max_rounds=10, output_dir=str(output_base))
+        try:
+            llm_config = get_llm_config()
+            api_key = llm_config.api_key
+            base_url = llm_config.base_url
+            api_version = getattr(llm_config, "api_version", None)
+        except Exception:
+            api_key = None
+            base_url = None
+            api_version = None
+
+        coordinator = AgentCoordinator(
+            api_key=api_key,
+            base_url=base_url,
+            api_version=api_version,
+            kb_name=kb_name,
+            max_rounds=10,
+            output_dir=str(output_base),
+        )
 
         # 3. Setup Log Queue for WebSocket streaming
         log_queue = asyncio.Queue()

@@ -50,6 +50,7 @@ class GuideManager:
         self,
         api_key: str,
         base_url: str,
+        api_version: str | None = None,
         language: str | None = None,
         output_dir: str | None = None,
         config_path: str | None = None,
@@ -61,6 +62,7 @@ class GuideManager:
         Args:
             api_key: API key
             base_url: API endpoint
+            api_version: API version (for Azure OpenAI)
             language: Language setting (if None, read from config file)
             output_dir: Output directory
             config_path: Configuration file path (if None, use default path)
@@ -68,6 +70,7 @@ class GuideManager:
         """
         self.api_key = api_key
         self.base_url = base_url
+        self.api_version = api_version
         self.binding = binding
 
         if config_path is None:
@@ -113,12 +116,34 @@ class GuideManager:
                 self.output_dir = project_root / "data" / "user" / "guide"
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        self.locate_agent = LocateAgent(api_key, base_url, self.language, binding=self.binding)
-        self.interactive_agent = InteractiveAgent(
-            api_key, base_url, self.language, binding=self.binding
+        self.locate_agent = LocateAgent(
+            api_key,
+            base_url,
+            language=self.language,
+            api_version=self.api_version,
+            binding=self.binding,
         )
-        self.chat_agent = ChatAgent(api_key, base_url, self.language, binding=self.binding)
-        self.summary_agent = SummaryAgent(api_key, base_url, self.language, binding=self.binding)
+        self.interactive_agent = InteractiveAgent(
+            api_key,
+            base_url,
+            language=self.language,
+            api_version=self.api_version,
+            binding=self.binding,
+        )
+        self.chat_agent = ChatAgent(
+            api_key,
+            base_url,
+            language=self.language,
+            api_version=self.api_version,
+            binding=self.binding,
+        )
+        self.summary_agent = SummaryAgent(
+            api_key,
+            base_url,
+            language=self.language,
+            api_version=self.api_version,
+            binding=self.binding,
+        )
 
         self._sessions: dict[str, GuidedSession] = {}
 

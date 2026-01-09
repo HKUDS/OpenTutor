@@ -17,7 +17,7 @@ from typing import Any
 project_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from openai import OpenAI
+from openai import AzureOpenAI, OpenAI
 
 from src.services.config import get_agent_params
 from src.services.llm import get_llm_config
@@ -75,6 +75,7 @@ def extract_questions_with_llm(
     api_key: str,
     base_url: str,
     model: str,
+    api_version: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     Use LLM to analyze markdown content and extract questions
@@ -86,6 +87,7 @@ def extract_questions_with_llm(
         api_key: OpenAI API key
         base_url: API endpoint URL
         model: Model name
+        api_version: API version for Azure OpenAI (optional)
 
         Returns:
         Question list, each question contains:
@@ -95,7 +97,17 @@ def extract_questions_with_llm(
             "images": [List of relative paths to related images]
         }
     """
-    client = OpenAI(api_key=api_key, base_url=base_url)
+    import os
+
+    binding = os.getenv("LLM_BINDING", "openai")
+    if binding == "azure_openai" or api_version:
+        client = AzureOpenAI(
+            api_key=api_key,
+            azure_endpoint=base_url,
+            api_version=api_version,
+        )
+    else:
+        client = OpenAI(api_key=api_key, base_url=base_url)
 
     image_list = []
     if images_dir.exists():
@@ -268,6 +280,7 @@ def extract_questions_from_paper(paper_dir: str, output_dir: str | None = None) 
         api_key=llm_config.api_key,
         base_url=llm_config.base_url,
         model=llm_config.model,
+        api_version=getattr(llm_config, "api_version", None),
     )
 
     if not questions:

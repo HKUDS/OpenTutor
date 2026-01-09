@@ -196,6 +196,7 @@ async def websocket_ideagen(websocket: WebSocket):
             organizer = MaterialOrganizerAgent(
                 api_key=llm_config.api_key,
                 base_url=llm_config.base_url,
+                api_version=getattr(llm_config, "api_version", None),
                 model=llm_config.model,
             )
 
@@ -254,6 +255,7 @@ async def websocket_ideagen(websocket: WebSocket):
         workflow = IdeaGenerationWorkflow(
             api_key=llm_config.api_key,
             base_url=llm_config.base_url,
+            api_version=getattr(llm_config, "api_version", None),
             model=llm_config.model,
             progress_callback=None,  # We manually manage status here
         )

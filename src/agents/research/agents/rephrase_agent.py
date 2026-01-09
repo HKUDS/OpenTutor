@@ -20,13 +20,20 @@ from ..utils.json_utils import extract_json_from_text
 class RephraseAgent(BaseAgent):
     """Topic rephrasing Agent"""
 
-    def __init__(self, config: dict[str, Any], api_key: str = None, base_url: str = None):
+    def __init__(
+        self,
+        config: dict[str, Any],
+        api_key: str = None,
+        base_url: str = None,
+        api_version: str = None,
+    ):
         language = config.get("system", {}).get("language", "zh")
         super().__init__(
             module_name="research",
             agent_name="rephrase_agent",
             api_key=api_key,
             base_url=base_url,
+            api_version=api_version,
             language=language,
             config=config,
         )

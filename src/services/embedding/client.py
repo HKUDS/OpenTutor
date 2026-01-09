@@ -41,6 +41,7 @@ class EmbeddingClient:
                 {
                     "api_key": self.config.api_key,
                     "base_url": self.config.base_url,
+                    "api_version": getattr(self.config, "api_version", None),
                     "model": self.config.model,
                     "dimensions": self.config.dim,
                     "request_timeout": self.config.request_timeout,

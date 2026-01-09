@@ -7,6 +7,7 @@ Provides both complete() and stream() methods.
 """
 
 import os
+import re
 from typing import AsyncGenerator, Dict, List, Optional
 
 import aiohttp
@@ -21,6 +22,7 @@ async def complete(
     model: Optional[str] = None,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
+    api_version: Optional[str] = None,
     binding: str = "openai",
     **kwargs,
 ) -> str:
@@ -35,6 +37,7 @@ async def complete(
         model: Model name
         api_key: API key
         base_url: Base URL for the API
+        api_version: API version for Azure OpenAI
         binding: Provider binding type (openai, anthropic)
         **kwargs: Additional parameters (temperature, max_tokens, etc.)
 
@@ -60,6 +63,7 @@ async def complete(
         system_prompt=system_prompt,
         api_key=api_key,
         base_url=base_url,
+        api_version=api_version,
         **kwargs,
     )
 
@@ -70,6 +74,7 @@ async def stream(
     model: Optional[str] = None,
     api_key: Optional[str] = None,
     base_url: Optional[str] = None,
+    api_version: Optional[str] = None,
     binding: str = "openai",
     messages: Optional[List[Dict[str, str]]] = None,
     **kwargs,
@@ -83,6 +88,7 @@ async def stream(
         model: Model name
         api_key: API key
         base_url: Base URL for the API
+        api_version: API version for Azure OpenAI
         binding: Provider binding type (openai, anthropic)
         messages: Pre-built messages array (optional, overrides prompt/system_prompt)
         **kwargs: Additional parameters (temperature, max_tokens, etc.)
@@ -110,6 +116,7 @@ async def stream(
             system_prompt=system_prompt,
             api_key=api_key,
             base_url=base_url,
+            api_version=api_version,
             messages=messages,
             **kwargs,
         ):
@@ -122,6 +129,7 @@ async def _openai_complete(
     system_prompt: str,
     api_key: Optional[str],
     base_url: Optional[str],
+    api_version: Optional[str] = None,
     **kwargs,
 ) -> str:
     """OpenAI-compatible completion."""
@@ -129,30 +137,45 @@ async def _openai_complete(
     if base_url:
         base_url = sanitize_url(base_url, model)
 
+    # 1. MODEL-SPECIFIC: Handle API Parameter Compatibility
+    # Only remove response_format for DeepSeek because they don't support the strict schema yet.
+    # We WANT to keep it for OpenAI/Azure because it improves reliability.
+    if model and "deepseek" in model.lower():
+        kwargs.pop("response_format", None)
+
+    content = None
     try:
         # Try using lightrag's openai_complete_if_cache first (has caching)
-        response = await openai_complete_if_cache(
+        content = await openai_complete_if_cache(
             model=model,
             prompt=prompt,
             system_prompt=system_prompt,
             api_key=api_key,
             base_url=base_url,
+            api_version=api_version,
             **kwargs,
         )
-        if response:
-            return response
     except Exception:
         pass  # Fall through to direct call
 
     # Fallback: Direct aiohttp call
-    if base_url:
+    if not content and base_url:
         url = base_url.rstrip("/")
         if not url.endswith("/chat/completions"):
             url += "/chat/completions"
 
+        if api_version:
+            if "?" not in url:
+                url += f"?api-version={api_version}"
+            else:
+                url += f"&api-version={api_version}"
+
         headers = {"Content-Type": "application/json"}
         if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
+            if api_version:
+                headers["api-key"] = api_key
+            else:
+                headers["Authorization"] = f"Bearer {api_key}"
 
         data = {
             "model": model,
@@ -163,6 +186,10 @@ async def _openai_complete(
             "temperature": kwargs.get("temperature", 0.7),
             "max_tokens": kwargs.get("max_tokens", 4096),
         }
+
+        # Include response_format if present in kwargs (for non-DeepSeek models)
+        if "response_format" in kwargs:
+            data["response_format"] = kwargs["response_format"]
 
         timeout = aiohttp.ClientTimeout(total=120)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -179,10 +206,17 @@ async def _openai_complete(
                                 or msg.get("thought")
                                 or ""
                             )
-                        return content
                 else:
                     error_text = await resp.text()
                     raise Exception(f"OpenAI API error: {resp.status} - {error_text}")
+
+    if content is not None:
+        # 2. CONTENT-SPECIFIC: Handle Reasoning Tags (Generic/Safe)
+        # We apply this to ANY model output. If the tag isn't there,
+        # this block is skipped instantly (safe for OpenAI).
+        if content and "<think>" in content:
+            content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+        return content
 
     raise Exception("Cloud completion failed: no valid configuration")
 
@@ -193,6 +227,7 @@ async def _openai_stream(
     system_prompt: str,
     api_key: Optional[str],
     base_url: Optional[str],
+    api_version: Optional[str] = None,
     messages: Optional[List[Dict[str, str]]] = None,
     **kwargs,
 ) -> AsyncGenerator[str, None]:
@@ -203,13 +238,28 @@ async def _openai_stream(
     if base_url:
         base_url = sanitize_url(base_url, model)
 
+    # 1. MODEL-SPECIFIC: Handle API Parameter Compatibility
+    if model and "deepseek" in model.lower():
+        kwargs.pop("response_format", None)
+
     url = (base_url or "https://api.openai.com/v1").rstrip("/")
-    if not url.endswith("/chat/completions"):
+    if api_version:
+        if not url.endswith("/chat/completions"):
+            url += "/chat/completions"
+
+        if "?" not in url:
+            url += f"?api-version={api_version}"
+        else:
+            url += f"&api-version={api_version}"
+    elif not url.endswith("/chat/completions"):
         url += "/chat/completions"
 
     headers = {"Content-Type": "application/json"}
     if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+        if api_version:
+            headers["api-key"] = api_key
+        else:
+            headers["Authorization"] = f"Bearer {api_key}"
 
     # Build messages
     if messages:
@@ -228,6 +278,10 @@ async def _openai_stream(
     }
     if kwargs.get("max_tokens"):
         data["max_tokens"] = kwargs["max_tokens"]
+
+    # Include response_format if present in kwargs (for non-DeepSeek models)
+    if "response_format" in kwargs:
+        data["response_format"] = kwargs["response_format"]
 
     timeout = aiohttp.ClientTimeout(total=300)
     async with aiohttp.ClientSession(timeout=timeout) as session:

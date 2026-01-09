@@ -57,6 +57,7 @@ class LLMClient:
             history_messages=history or [],
             api_key=self.config.api_key,
             base_url=self.config.base_url,
+            api_version=getattr(self.config, "api_version", None),
             **kwargs,
         )
 
@@ -114,6 +115,7 @@ class LLMClient:
                 history_messages=history_messages or [],
                 api_key=self.config.api_key,
                 base_url=self.config.base_url,
+                api_version=getattr(self.config, "api_version", None),
                 **kwargs,
             )
 
@@ -149,6 +151,7 @@ class LLMClient:
                     messages=messages,
                     api_key=self.config.api_key,
                     base_url=self.config.base_url,
+                    api_version=getattr(self.config, "api_version", None),
                     **clean_kwargs,
                 )
 
@@ -171,6 +174,7 @@ class LLMClient:
                     messages=[image_message],
                     api_key=self.config.api_key,
                     base_url=self.config.base_url,
+                    api_version=getattr(self.config, "api_version", None),
                     **kwargs,
                 )
 
@@ -182,6 +186,7 @@ class LLMClient:
                 history_messages=history_messages or [],
                 api_key=self.config.api_key,
                 base_url=self.config.base_url,
+                api_version=getattr(self.config, "api_version", None),
                 **kwargs,
             )
 

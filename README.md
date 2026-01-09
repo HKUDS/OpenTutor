@@ -267,9 +267,11 @@ cp .env.example .env
 | Variable | Required | Description |
 |:---|:---:|:---|
 | `LLM_MODEL` | **Yes** | Model name (e.g., `gpt-4o`) |
+| `LLM_API_VERSION` | No | API version for Azure OpenAI (e.g., `2024-02-15-preview`) |
 | `LLM_API_KEY` | **Yes** | Your LLM API key |
 | `LLM_HOST` | **Yes** | API endpoint URL |
 | `EMBEDDING_MODEL` | **Yes** | Embedding model name |
+| `EMBEDDING_API_VERSION` | No | API version for Azure OpenAI Embeddings |
 | `EMBEDDING_API_KEY` | **Yes** | Embedding API key |
 | `EMBEDDING_HOST` | **Yes** | Embedding API endpoint |
 | `BACKEND_PORT` | No | Backend port (default: `8001`) |

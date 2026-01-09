@@ -38,6 +38,7 @@ class LLMConfig:
     api_key: str
     base_url: Optional[str] = None
     binding: str = "openai"
+    api_version: Optional[str] = None
     max_tokens: int = 4096
     temperature: float = 0.7
     provider_type: Literal["api", "local"] = "api"  # Track if this is API or local config
@@ -105,6 +106,7 @@ def get_llm_config() -> LLMConfig:
                     model=active_provider.model,
                     api_key=active_provider.api_key,
                     base_url=active_provider.base_url,
+                    api_version=getattr(active_provider, "api_version", None),
                     provider_type=getattr(active_provider, "provider_type", "local"),
                 )
     except Exception as e:
@@ -115,6 +117,7 @@ def get_llm_config() -> LLMConfig:
     model = _strip_value(os.getenv("LLM_MODEL"))
     api_key = _strip_value(os.getenv("LLM_API_KEY"))
     base_url = _strip_value(os.getenv("LLM_HOST"))
+    api_version = _strip_value(os.getenv("LLM_API_VERSION"))
 
     # Validate required configuration
     if not model:
@@ -146,6 +149,7 @@ def get_llm_config() -> LLMConfig:
         model=model,
         api_key=api_key or "",
         base_url=base_url,
+        api_version=api_version,
         provider_type=provider_type,
     )
 

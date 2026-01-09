@@ -267,10 +267,22 @@ async def websocket_research_run(websocket: WebSocket):
             except Exception as e:
                 logger.error(f"Progress callback error: {e}")
 
+        try:
+            llm_config = get_llm_config()
+            api_key = llm_config.api_key
+            base_url = llm_config.base_url
+            api_version = getattr(llm_config, "api_version", None)
+        except Exception:
+            api_key = None
+            base_url = None
+            api_version = None
+
         pipeline = ResearchPipeline(
             config=config,
             api_key=api_key,
             base_url=base_url,
+            api_version=api_version,
+            research_id=task_id,
             kb_name=kb_name,
             progress_callback=progress_callback,
         )

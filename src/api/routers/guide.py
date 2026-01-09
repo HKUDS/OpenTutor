@@ -71,12 +71,17 @@ def get_guide_manager():
         llm_config = get_llm_config()
         api_key = llm_config.api_key
         base_url = llm_config.base_url
+        api_version = getattr(llm_config, "api_version", None)
         binding = llm_config.binding
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM config error: {e!s}")
 
     return GuideManager(
-        api_key=api_key, base_url=base_url, language=None, binding=binding
+        api_key=api_key,
+        base_url=base_url,
+        api_version=api_version,
+        language=None,
+        binding=binding,
     )  # Read from config file
 
 

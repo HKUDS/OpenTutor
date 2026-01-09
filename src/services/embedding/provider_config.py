@@ -25,6 +25,9 @@ class EmbeddingProvider(BaseModel):
     binding: str = Field(..., description="Provider type (openai, jina, cohere, ollama, etc.)")
     base_url: str = Field(..., description="API endpoint URL")
     api_key: str = Field(default="", description="API Key (optional for local providers)")
+    api_version: Optional[str] = Field(
+        default=None, description="API Version (required for Azure OpenAI)"
+    )
     model: str = Field(..., description="Model name to use")
     dimensions: int = Field(..., description="Embedding vector dimensions")
     is_active: bool = Field(default=False, description="Whether this provider is currently active")

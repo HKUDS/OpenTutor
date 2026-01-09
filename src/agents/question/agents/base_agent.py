@@ -13,7 +13,7 @@ import sys
 from typing import Any
 
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
+from openai import AsyncAzureOpenAI, AsyncOpenAI
 
 # Load environment variables
 load_dotenv(override=False)
@@ -81,6 +81,7 @@ class BaseAgent(ABC):
         agent_name: str,
         api_key: str | None = None,
         base_url: str | None = None,
+        api_version: str | None = None,
         model: str | None = None,
         max_iterations: int = 10,
         kb_name: str | None = None,
@@ -100,6 +101,8 @@ class BaseAgent(ABC):
             api_key = os.getenv("LLM_API_KEY")
         if not base_url:
             base_url = os.getenv("LLM_HOST")
+        if not api_version:
+            api_version = os.getenv("LLM_API_VERSION")
 
         if model is None:
             model = os.getenv("LLM_MODEL", "gpt-4o")
@@ -107,9 +110,20 @@ class BaseAgent(ABC):
 
         # For local LLM servers, use placeholder key if none provided
         client_api_key = api_key or "sk-no-key-required"
-        self.client = AsyncOpenAI(api_key=client_api_key, base_url=base_url)
+
+        binding = os.getenv("LLM_BINDING", "openai")
+        if binding == "azure_openai" or api_version:
+            self.client = AsyncAzureOpenAI(
+                api_key=client_api_key,
+                azure_endpoint=base_url,
+                api_version=api_version,
+            )
+        else:
+            self.client = AsyncOpenAI(api_key=client_api_key, base_url=base_url)
+
         self.api_key = api_key
         self.base_url = base_url
+        self.api_version = api_version
 
         self.thought_history: list[str] = []
         self.action_history: list[Action] = []

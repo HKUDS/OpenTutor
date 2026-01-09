@@ -71,6 +71,7 @@ class ResearchPipeline:
         config: dict[str, Any],
         api_key: str,
         base_url: str,
+        api_version: str | None = None,
         research_id: str | None = None,
         kb_name: str | None = None,
         progress_callback: Callable | None = None,
@@ -82,6 +83,7 @@ class ResearchPipeline:
             config: Configuration dictionary
             api_key: API key
             base_url: API endpoint
+            api_version: API version (for Azure OpenAI)
             research_id: Research task ID (optional)
             kb_name: Knowledge base name (optional, if provided overrides config file setting)
             progress_callback: Progress callback function (optional), signature: callback(event: Dict[str, Any])
@@ -96,6 +98,7 @@ class ResearchPipeline:
             self.config["rag"]["kb_name"] = kb_name
         self.api_key = api_key
         self.base_url = base_url
+        self.api_version = api_version or config.get("llm", {}).get("api_version")
         self.input_topic: str | None = None
         self.optimized_topic: str | None = None
 
@@ -164,12 +167,24 @@ class ResearchPipeline:
             self.logger.info("Initializing Agents...")
 
         self.agents = {
-            "rephrase": RephraseAgent(self.config, self.api_key, self.base_url),
-            "decompose": DecomposeAgent(self.config, self.api_key, self.base_url),
-            "manager": ManagerAgent(self.config, self.api_key, self.base_url),
-            "research": ResearchAgent(self.config, self.api_key, self.base_url),
-            "note": NoteAgent(self.config, self.api_key, self.base_url),
-            "reporting": ReportingAgent(self.config, self.api_key, self.base_url),
+            "rephrase": RephraseAgent(
+                self.config, self.api_key, self.base_url, api_version=self.api_version
+            ),
+            "decompose": DecomposeAgent(
+                self.config, self.api_key, self.base_url, api_version=self.api_version
+            ),
+            "manager": ManagerAgent(
+                self.config, self.api_key, self.base_url, api_version=self.api_version
+            ),
+            "research": ResearchAgent(
+                self.config, self.api_key, self.base_url, api_version=self.api_version
+            ),
+            "note": NoteAgent(
+                self.config, self.api_key, self.base_url, api_version=self.api_version
+            ),
+            "reporting": ReportingAgent(
+                self.config, self.api_key, self.base_url, api_version=self.api_version
+            ),
         }
 
         # Set Manager's queue
