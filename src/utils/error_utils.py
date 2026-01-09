@@ -14,10 +14,11 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
 def format_exception_message(exc: Exception) -> str:
     """
     Build a human-friendly error message, preserving API details when available.
-    
+
     Extracts detailed error messages from OpenAI/API exceptions, including
     JSON bodies and rate limit hints.
     """

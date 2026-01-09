@@ -8,15 +8,15 @@ and architectural improvements for data integrity and vision support.
 
 import argparse
 import asyncio
+from datetime import datetime
+from functools import partial
 import hashlib
 import json
 import os
+from pathlib import Path
 import shutil
 import sys
-from datetime import datetime
-from functools import partial
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Set, TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from dotenv import load_dotenv
 
@@ -32,7 +32,8 @@ except ImportError:
 # Type hinting support for dynamic imports
 if TYPE_CHECKING:
     try:
-        from raganything import RAGAnything, RAGAnythingConfig as RAGAnythingConfigType
+        from raganything import RAGAnything
+        from raganything import RAGAnythingConfig as RAGAnythingConfigType
     except ImportError:
         RAGAnything = Any
         RAGAnythingConfigType = Any
@@ -44,29 +45,38 @@ else:
 raganything_cls = None
 RAGAnythingConfig = None
 
+
 def load_dynamic_imports(project_root: Path):
     """Handle the path injections and dynamic imports safely."""
     global raganything_cls, RAGAnythingConfig
-    
+
     sys.path.insert(0, str(project_root))
     raganything_path = project_root.parent / "raganything" / "RAG-Anything"
     if raganything_path.exists():
         sys.path.insert(0, str(raganything_path))
-    
+
     try:
-        from raganything import RAGAnything as RA, RAGAnythingConfig as RAC
+        from raganything import RAGAnything as RA
+        from raganything import RAGAnythingConfig as RAC
+
         raganything_cls = RA
         RAGAnythingConfig = RAC
     except ImportError:
         pass
 
-from src.services.embedding import get_embedding_client, get_embedding_config, reset_embedding_client
-from src.services.llm import get_llm_config
-from src.utils.error_utils import format_exception_message
+
 from src.knowledge.extract_numbered_items import process_content_list
 from src.logging import LightRAGLogContext, get_logger
+from src.services.embedding import (
+    get_embedding_client,
+    get_embedding_config,
+    reset_embedding_client,
+)
+from src.services.llm import get_llm_config
+from src.utils.error_utils import format_exception_message
 
 logger = get_logger("KnowledgeInit")
+
 
 class DocumentAdder:
     """Add documents to existing knowledge base with Hash-validation"""
@@ -137,9 +147,9 @@ class DocumentAdder:
         Treats 'raw/' as a Write-Ahead Log: files exist there before being canonized in metadata.
         """
         logger.info(f"Validating documents for '{self.kb_name}'...")
-        
+
         ingested_hashes = self.get_ingested_hashes()
-        
+
         files_to_process = []
         for source in source_files:
             source_path = Path(source)
@@ -148,7 +158,7 @@ class DocumentAdder:
                 continue
 
             current_hash = self._get_file_hash(source_path)
-            
+
             # 1. Check if content is already fully ingested (Canon Check)
             # We look for value matches in the metadata hash map
             if current_hash in ingested_hashes.values() and not allow_duplicates:
@@ -157,7 +167,7 @@ class DocumentAdder:
 
             # 2. Prepare file in raw/ (Write-Ahead Log)
             dest_path = self.raw_dir / source_path.name
-            
+
             should_copy = True
             if dest_path.exists():
                 # If file exists in raw, check if it's the same content
@@ -168,7 +178,9 @@ class DocumentAdder:
                 else:
                     if not allow_duplicates:
                         # Name collision with different content
-                        logger.info(f"  → Skipped (filename collision with different content): {source_path.name}")
+                        logger.info(
+                            f"  → Skipped (filename collision with different content): {source_path.name}"
+                        )
                         continue
                     else:
                         logger.info(f"  → Overwriting existing raw file: {source_path.name}")
@@ -176,7 +188,7 @@ class DocumentAdder:
             if should_copy:
                 shutil.copy2(source_path, dest_path)
                 logger.info(f"  ✓ Staged to raw: {source_path.name}")
-            
+
             files_to_process.append(dest_path)
 
         return files_to_process
@@ -202,29 +214,49 @@ class DocumentAdder:
         # LLM Function Wrapper
         def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
             return openai_complete_if_cache(
-                model, prompt, system_prompt=system_prompt,
-                history_messages=history_messages, api_key=api_key, base_url=base_url, **kwargs
+                model,
+                prompt,
+                system_prompt=system_prompt,
+                history_messages=history_messages,
+                api_key=api_key,
+                base_url=base_url,
+                **kwargs,
             )
 
         # Vision Function Wrapper - Robust history handling
-        def vision_model_func(prompt, system_prompt=None, history_messages=[], image_data=None, messages=None, **kwargs):
+        def vision_model_func(
+            prompt,
+            system_prompt=None,
+            history_messages=[],
+            image_data=None,
+            messages=None,
+            **kwargs,
+        ):
             # If pre-formatted messages are provided, sanitize them
             if messages:
                 safe_messages = self._filter_valid_messages(messages)
-                return openai_complete_if_cache(model, prompt="", messages=safe_messages, api_key=api_key, base_url=base_url, **kwargs)
+                return openai_complete_if_cache(
+                    model,
+                    prompt="",
+                    messages=safe_messages,
+                    api_key=api_key,
+                    base_url=base_url,
+                    **kwargs,
+                )
 
             # --- Construct Message History ---
             current_messages = []
-            
+
             # 1. Add System Prompt (if provided)
             if system_prompt:
                 current_messages.append({"role": "system", "content": system_prompt})
-            
+
             # 2. Add History (Filtering out conflicting system prompts)
             if history_messages:
                 # Filter out system messages from history to avoid duplicates/conflicts with the new system_prompt
                 filtered_history = [
-                    msg for msg in history_messages 
+                    msg
+                    for msg in history_messages
                     if isinstance(msg, dict) and msg.get("role") != "system"
                 ]
                 current_messages.extend(filtered_history)
@@ -232,18 +264,20 @@ class DocumentAdder:
             # 3. Construct New User Message
             user_content: List[Dict[str, Any]] = [{"type": "text", "text": prompt}]
             if image_data:
-                user_content.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}
-                })
-            
+                user_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{image_data}"},
+                    }
+                )
+
             # 4. Merge Logic: Avoid back-to-back user messages
             if current_messages and current_messages[-1].get("role") == "user":
                 last_msg = current_messages[-1]
                 # If last content is string, convert to list format first
                 if isinstance(last_msg["content"], str):
                     last_msg["content"] = [{"type": "text", "text": last_msg["content"]}]
-                
+
                 # Append new content blocks
                 if isinstance(last_msg["content"], list):
                     last_msg["content"].extend(user_content)
@@ -253,7 +287,14 @@ class DocumentAdder:
             else:
                 current_messages.append({"role": "user", "content": user_content})
 
-            return openai_complete_if_cache(model, prompt="", messages=current_messages, api_key=api_key, base_url=base_url, **kwargs)
+            return openai_complete_if_cache(
+                model,
+                prompt="",
+                messages=current_messages,
+                api_key=api_key,
+                base_url=base_url,
+                **kwargs,
+            )
 
         # Embedding Setup
         reset_embedding_client()
@@ -291,8 +332,13 @@ class DocumentAdder:
         for idx, doc_file in enumerate(new_files, 1):
             try:
                 if self.progress_tracker and ProgressStage:
-                    self.progress_tracker.update(ProgressStage.PROCESSING_FILE, f"Ingesting {doc_file.name}", current=idx, total=len(new_files))
-                
+                    self.progress_tracker.update(
+                        ProgressStage.PROCESSING_FILE,
+                        f"Ingesting {doc_file.name}",
+                        current=idx,
+                        total=len(new_files),
+                    )
+
                 # Verify file still exists in raw/ (it should, as we staged it)
                 if not doc_file.exists():
                     logger.error(f"  ✗ Failed: Staged file missing {doc_file.name}")
@@ -302,9 +348,9 @@ class DocumentAdder:
                     rag.process_document_complete(
                         file_path=str(doc_file),
                         output_dir=str(self.content_list_dir),
-                        parse_method="auto"
+                        parse_method="auto",
                     ),
-                    timeout=600.0
+                    timeout=600.0,
                 )
                 processed_files.append(doc_file)
                 # Store hash on success - "Canonizing" the file
@@ -325,10 +371,10 @@ class DocumentAdder:
             if self.metadata_file.exists():
                 with open(self.metadata_file, "r", encoding="utf-8") as f:
                     metadata = json.load(f)
-            
+
             if "file_hashes" not in metadata:
                 metadata["file_hashes"] = {}
-            
+
             metadata["file_hashes"][file_path.name] = file_hash
             with open(self.metadata_file, "w", encoding="utf-8") as f:
                 json.dump(metadata, f, indent=2, ensure_ascii=False)
@@ -337,22 +383,27 @@ class DocumentAdder:
 
     @staticmethod
     def _filter_valid_messages(messages):
-        return [m for m in messages if isinstance(m, dict) and m.get("role") is not None and m.get("content") is not None]
+        return [
+            m
+            for m in messages
+            if isinstance(m, dict) and m.get("role") is not None and m.get("content") is not None
+        ]
 
     async def fix_structure(self):
         """Robustly moves nested outputs and cleans up."""
         logger.info("Organizing storage structure...")
-        
+
         # 1. Identify moves
         moves = []
         for doc_dir in self.content_list_dir.glob("*"):
-            if not doc_dir.is_dir(): continue
-            
+            if not doc_dir.is_dir():
+                continue
+
             # Content List
             json_src = next(doc_dir.glob("auto/*_content_list.json"), None)
             if json_src:
                 moves.append((json_src, self.content_list_dir / f"{doc_dir.name}.json"))
-            
+
             # Images
             for img in doc_dir.glob("auto/images/*"):
                 moves.append((img, self.images_dir / img.name))
@@ -371,8 +422,9 @@ class DocumentAdder:
                     await self._run_in_executor(shutil.rmtree, doc_dir, ignore_errors=True)
 
     def extract_numbered_items_for_new_docs(self, processed_files, batch_size=20):
-        if not processed_files: return
-        
+        if not processed_files:
+            return
+
         api_key = self.api_key or self.llm_cfg.api_key
         base_url = self.base_url or self.llm_cfg.base_url
         output_file = self.kb_dir / "numbered_items.json"
@@ -386,28 +438,32 @@ class DocumentAdder:
                     api_key=api_key,
                     base_url=base_url,
                     batch_size=batch_size,
-                    merge=output_file.exists()
+                    merge=output_file.exists(),
                 )
 
     def update_metadata(self, added_count: int):
-        if not self.metadata_file.exists(): return
+        if not self.metadata_file.exists():
+            return
         try:
             with open(self.metadata_file, "r", encoding="utf-8") as f:
                 metadata = json.load(f)
-            
+
             metadata["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             history = metadata.get("update_history", [])
-            history.append({
-                "timestamp": metadata["last_updated"],
-                "action": "incremental_add",
-                "count": added_count
-            })
+            history.append(
+                {
+                    "timestamp": metadata["last_updated"],
+                    "action": "incremental_add",
+                    "count": added_count,
+                }
+            )
             metadata["update_history"] = history
-            
+
             with open(self.metadata_file, "w", encoding="utf-8") as f:
                 json.dump(metadata, f, indent=2, ensure_ascii=False)
         except Exception as e:
             logger.warning(f"Metadata update failed: {e}")
+
 
 async def main():
     parser = argparse.ArgumentParser(description="Incrementally add documents to RAG KB")
@@ -418,17 +474,18 @@ async def main():
     parser.add_argument("--api-key", default=os.getenv("LLM_API_KEY"))
     parser.add_argument("--base-url", default=os.getenv("LLM_HOST"))
     parser.add_argument("--allow-duplicates", action="store_true")
-    
+
     args = parser.parse_args()
-    
+
     # Initialize dynamic paths
     project_root = Path(__file__).parent.parent.parent
     load_dynamic_imports(project_root)
 
     load_dotenv()
-    
+
     doc_files = []
-    if args.docs: doc_files.extend(args.docs)
+    if args.docs:
+        doc_files.extend(args.docs)
     if args.docs_dir:
         p = Path(args.docs_dir)
         for ext in ["*.pdf", "*.docx", "*.txt", "*.md"]:
@@ -439,10 +496,10 @@ async def main():
         return
 
     adder = DocumentAdder(args.kb_name, args.base_dir, args.api_key, args.base_url)
-    
+
     # 1. Sync Phase (Validate and Stage)
     new_files = adder.add_documents(doc_files, allow_duplicates=args.allow_duplicates)
-    
+
     # 2. Async Ingestion (Process and Canonize)
     if new_files:
         processed = await adder.process_new_documents(new_files)
@@ -452,6 +509,7 @@ async def main():
             logger.info(f"Done! Successfully added {len(processed)} documents.")
     else:
         logger.info("No new unique documents to add.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
