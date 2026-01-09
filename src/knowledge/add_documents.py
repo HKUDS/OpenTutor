@@ -29,6 +29,11 @@ from lightrag.llm.openai import openai_complete_if_cache
 from lightrag.utils import EmbeddingFunc
 from raganything import RAGAnything, RAGAnythingConfig
 
+try:
+    from openai import APIError, APIStatusError, RateLimitError
+except ImportError:  # pragma: no cover - openai is an optional dependency at runtime
+    APIError = APIStatusError = RateLimitError = None
+
 from src.services.embedding import get_embedding_client, get_embedding_config
 from src.services.llm import get_llm_config
 
@@ -201,12 +206,9 @@ class DocumentAdder:
                     for k, v in kwargs.items()
                     if k not in ["messages", "prompt", "system_prompt", "history_messages"]
                 }
-                return openai_complete_if_cache(
-                    model,
-                    prompt="",
-                    system_prompt=None,
-                    history_messages=[],
-                    messages=[
+                messages = [
+                    msg
+                    for msg in [
                         {"role": "system", "content": system_prompt} if system_prompt else None,
                         (
                             {
@@ -224,7 +226,15 @@ class DocumentAdder:
                             if image_data
                             else {"role": "user", "content": prompt}
                         ),
-                    ],
+                    ]
+                    if msg is not None
+                ]
+                return openai_complete_if_cache(
+                    model,
+                    prompt="",
+                    system_prompt=None,
+                    history_messages=[],
+                    messages=messages,
                     api_key=api_key,
                     base_url=base_url,
                     **clean_kwargs,
@@ -329,20 +339,22 @@ class DocumentAdder:
                         error="Processing timeout (>10 minutes)",
                     )
             except Exception as e:
-                logger.error(f"  ✗ Processing failed {doc_file.name}: {e!s}")
-                import traceback
-
-                logger.error(traceback.format_exc())
+                error_message = self._format_exception_message(e)
+                logger.error(f"  ✗ Processing failed {doc_file.name}: {error_message}")
                 if self.progress_tracker:
                     from src.knowledge.progress_tracker import ProgressStage
 
                     self.progress_tracker.update(
                         ProgressStage.ERROR,
-                        f"Error processing: {doc_file.name}",
+                        f"Processing failed: {doc_file.name}",
                         current=idx,
                         total=total_files,
-                        error=str(e),
+                        file_name=doc_file.name,
+                        error=error_message,
                     )
+                import traceback
+
+                logger.error(traceback.format_exc())
 
         # Copy extracted images
         rag_images_dir = self.rag_storage_dir / "images"
@@ -429,13 +441,13 @@ class DocumentAdder:
                     logger.info(f"  ✓ Moved {image_count} images from {doc_dir.name}/auto/images/")
 
         # Clean up nested directories
+        def cleanup_onerror(func, path, excinfo):
+            logger.warning(f"Failed to remove {path} during cleanup: {excinfo[1]}")
+
         for doc_dir in self.content_list_dir.glob("*"):
             if doc_dir.is_dir():
-                try:
-                    shutil.rmtree(doc_dir)
-                    logger.info(f"  ✓ Cleaned: {doc_dir.name}/")
-                except Exception as e:
-                    logger.error(f"  ✗ Cleanup failed {doc_dir.name}: {e!s}")
+                shutil.rmtree(doc_dir, onerror=cleanup_onerror)
+                logger.info(f"  ✓ Cleaned: {doc_dir.name}/")
 
         logger.info("✓ Directory structure fixed!")
 
@@ -494,10 +506,21 @@ class DocumentAdder:
             logger.info(f"{'=' * 60}\n")
 
         except Exception as e:
-            logger.error(f"\n✗ Numbered items extraction failed: {e}")
+            error_message = self._format_exception_message(e)
+            logger.error(f"\n✗ Numbered items extraction failed: {error_message}")
+            if self.progress_tracker:
+                from src.knowledge.progress_tracker import ProgressStage
+
+                self.progress_tracker.update(
+                    ProgressStage.ERROR,
+                    "Numbered items extraction failed",
+                    current=len(processed_files),
+                    total=len(processed_files),
+                    error=error_message,
+                )
             import traceback
 
-            traceback.print_exc()
+            logger.error(traceback.format_exc())
 
     def update_metadata(self, added_count: int):
         """Update knowledge base metadata"""
@@ -532,6 +555,72 @@ class DocumentAdder:
 
         except Exception as e:
             logger.warning(f"Failed to update metadata: {e!s}")
+
+    def _format_exception_message(self, exc: Exception) -> str:
+        """Build a human friendly error message, preserving API details when available."""
+
+        def append_unique_message(target: list[str], value: object):
+            if not value:
+                return
+            text = str(value).strip()
+            if not text:
+                return
+            if text not in target:
+                target.append(text)
+
+        messages: list[str] = []
+
+        append_unique_message(messages, str(exc))
+        # Some exceptions keep a separate message attribute
+        message_attr = getattr(exc, "message", None)
+        if message_attr is not None:
+            append_unique_message(messages, message_attr)
+
+        # OpenAI errors expose structured bodies with detailed messages
+        body = getattr(exc, "body", None)
+        if isinstance(body, dict):
+            error_payload = body.get("error") or body
+            if isinstance(error_payload, dict):
+                for key in ("message", "detail", "error", "description"):
+                    if key in error_payload:
+                        append_unique_message(messages, error_payload[key])
+
+        if RateLimitError is not None and isinstance(exc, RateLimitError):
+            # Provide a consistent hint for rate limit scenarios
+            append_unique_message(messages, "OpenAI API rate limit reached")
+
+        # APIStatusError / APIError may provide response payloads
+        if APIStatusError is not None and isinstance(exc, APIStatusError):
+            response = getattr(exc, "response", None)
+            if response is not None:
+                json_loader = getattr(response, "json", None)
+                if callable(json_loader):
+                    try:
+                        data = json_loader()
+                    except (json.JSONDecodeError, ValueError) as e:  # best effort only: ignore JSON decoding issues
+                        logger.debug(f"Failed to parse JSON from response: {e}")
+                        data = None
+                else:
+                    data = None
+
+                if isinstance(data, dict):
+                    error_payload = data.get("error") or data
+                    if isinstance(error_payload, dict):
+                        for key in ("message", "detail", "error", "description"):
+                            if key in error_payload:
+                                append_unique_message(messages, error_payload[key])
+                else:
+                    text = getattr(response, "text", None)
+                    if text:
+                        append_unique_message(messages, text)
+
+        if APIError is not None and isinstance(exc, APIError):
+            append_unique_message(messages, f"OpenAI API error ({exc.__class__.__name__})")
+
+        if not messages:
+            append_unique_message(messages, exc.__class__.__name__)
+
+        return " | ".join(messages)
 
 
 async def main():
