@@ -30,6 +30,8 @@ from src.knowledge.add_documents import DocumentAdder
 from src.knowledge.initializer import KnowledgeBaseInitializer
 from src.knowledge.manager import KnowledgeBaseManager
 from src.knowledge.progress_tracker import ProgressStage, ProgressTracker
+from src.utils.document_validator import DocumentValidator
+from src.utils.error_utils import format_exception_message
 
 _project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(_project_root))
@@ -287,6 +289,20 @@ async def upload_files(
 ):
     """Upload files to a knowledge base and process them in background."""
     try:
+        # 1. Validate immediately upon receipt using DocumentValidator
+        validator = DocumentValidator()
+        for file in files:
+            try:
+                await validator.validate(file)
+            except Exception as e:
+                error_message = (
+                    f"Validation failed for file '{file.filename}': {format_exception_message(e)}"
+                )
+                # Log the full exception with traceback for server-side diagnostics
+                logger.error(error_message, exc_info=True)
+                # Return a client error with file-specific validation details
+                raise HTTPException(status_code=400, detail=error_message)
+
         manager = get_kb_manager()
         kb_path = manager.get_knowledge_base_path(kb_name)
         raw_dir = kb_path / "raw"
@@ -326,7 +342,9 @@ async def upload_files(
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Knowledge base '{kb_name}' not found")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Unexpected failure (Server error)
+        formatted_error = format_exception_message(e)
+        raise HTTPException(status_code=500, detail=formatted_error)
 
 
 @router.post("/create")

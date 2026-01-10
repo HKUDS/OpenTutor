@@ -27,6 +27,92 @@ from src.logging import get_logger
 logger = get_logger("API")
 
 
+def validate_tool_consistency():
+    """
+    Validate that the tools configured for agents are consistent with the main application
+    configuration.
+
+    This function loads the main configuration (``main.yaml``) and the agents configuration
+    (``agents.yaml``) from the project root and compares:
+
+    * ``solve.valid_tools`` in ``main.yaml``
+    * ``investigate.valid_tools`` in ``agents.yaml``
+
+    All tools referenced by agents must be present in the main configuration. If any tools are
+    defined for agents that are not listed in the main configuration, a ``RuntimeError`` is
+    raised describing the drift. The error is logged and re-raised, which causes the FastAPI
+    application startup to fail when this function is called from the ``lifespan`` handler.
+
+    Impact on startup
+    ------------------
+    This validation runs during application startup. Any configuration drift will:
+
+    * Be logged as an error with details about the unknown tools.
+    * Prevent the API from starting until the configuration is corrected.
+
+    How to resolve configuration drift
+    ----------------------------------
+    If startup fails with a configuration drift error:
+
+    1. Inspect the set of tools reported in the error message.
+    2. Either:
+       * Add the missing tools to ``solve.valid_tools`` in ``main.yaml``, **or**
+       * Remove or rename the offending tools from ``investigate.valid_tools`` in ``agents.yaml``.
+    3. Restart the application after updating the configuration files.
+
+    Example of aligned configuration
+    --------------------------------
+    ``main.yaml``::
+
+        solve:
+          valid_tools:
+            - web_search
+            - code_execution
+
+    ``agents.yaml``::
+
+        investigate:
+          valid_tools:
+            - web_search
+
+    In this case, validation passes because ``investigate.valid_tools`` is a subset of
+    ``solve.valid_tools``.
+
+    Example of configuration drift
+    ------------------------------
+    ``agents.yaml``::
+
+        investigate:
+          valid_tools:
+            - web_search
+            - unknown_tool
+
+    Here, ``unknown_tool`` is not present in ``solve.valid_tools`` in ``main.yaml``, so
+    validation will fail and prevent the application from starting until the configurations
+    are aligned.
+    """
+    try:
+        from src.services.config import load_config_with_main
+
+        project_root = Path(__file__).parent.parent.parent
+        main_config = load_config_with_main("main.yaml", project_root)
+        agent_config = load_config_with_main("agents.yaml", project_root)
+
+        main_tools = set(main_config.get("solve", {}).get("valid_tools", []))
+        agent_tools = set(agent_config.get("investigate", {}).get("valid_tools", []))
+
+        if not agent_tools.issubset(main_tools):
+            drift = agent_tools - main_tools
+            raise RuntimeError(
+                "Configuration Drift Detected: Tools "
+                f"{drift} found in agents.yaml investigate.valid_tools but missing from main.yaml solve.valid_tools. "
+                "Add these tools to main.yaml solve.valid_tools or remove them from agents.yaml investigate.valid_tools."
+            )
+    except Exception as e:
+        logger.error(f"Configuration validation failed: {e}")
+        raise
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -35,6 +121,10 @@ async def lifespan(app: FastAPI):
     """
     # Execute on startup
     logger.info("Application startup")
+
+    # Validate configuration consistency
+    validate_tool_consistency()
+
     yield
     # Execute on shutdown
     logger.info("Application shutdown")

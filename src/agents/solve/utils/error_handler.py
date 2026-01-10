@@ -8,8 +8,8 @@ import asyncio
 from collections.abc import Callable
 import functools
 import logging
-import threading
 from typing import Any
+import warnings
 
 logger = logging.getLogger("Solver.error_handler")
 
@@ -28,17 +28,19 @@ class _LazyValidTools:
     def __init__(self, default_tools: list[str]):
         self._default_tools = list(default_tools)  # Create a copy to prevent mutation
         self._tools: list[str] | None = None
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
 
-    def _load(self) -> list[str]:
+    async def get_tools(self) -> list[str]:
+        # Double-check locking pattern for async
         if self._tools is not None:
             return self._tools
 
-        with self._lock:
-            # Double-check pattern for thread safety
+        async with self._lock:
+            # Check again in case another task initialized it while we waited
             if self._tools is not None:
                 return self._tools
 
+            # Perform initialization
             try:
                 from src.services.config import (
                     PROJECT_ROOT,
@@ -55,25 +57,56 @@ class _LazyValidTools:
                     exc,
                 )
                 self._tools = self._default_tools
-        return self._tools
+            return self._tools
+
+    def _load(self) -> list[str]:
+        # DEPRECATED: This method is deprecated and may cause thread-safety issues.
+        # It no longer attempts to load from config to avoid race conditions.
+        # Use get_tools() instead for async-safe access.
+        warnings.warn(
+            "_load() is deprecated and no longer loads from config. "
+            "Use get_tools() instead for async-safe access.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        # Return already loaded tools or defaults - no config loading to avoid race conditions
+        return self._tools if self._tools is not None else self._default_tools
 
     def __iter__(self):
-        return iter(self._load())
+        # Avoid calling _load() to prevent race conditions with async get_tools()
+        # If tools haven't been loaded yet, return defaults
+        tools = self._tools if self._tools is not None else self._default_tools
+        return iter(tools)
 
     def __contains__(self, item: object) -> bool:
-        return item in self._load()
+        # Avoid calling _load() to prevent race conditions with async get_tools()
+        # If tools haven't been loaded yet, check defaults
+        tools = self._tools if self._tools is not None else self._default_tools
+        return item in tools
 
     def __len__(self) -> int:
-        return len(self._load())
+        # Avoid calling _load() to prevent race conditions with async get_tools()
+        # If tools haven't been loaded yet, return length of defaults
+        tools = self._tools if self._tools is not None else self._default_tools
+        return len(tools)
 
     def __getitem__(self, index):
-        return self._load()[index]
+        # Avoid calling _load() to prevent race conditions with async get_tools()
+        # If tools haven't been loaded yet, index into defaults
+        tools = self._tools if self._tools is not None else self._default_tools
+        return tools[index]
 
     def __bool__(self) -> bool:
-        return bool(self._load())
+        # Avoid calling _load() to prevent race conditions with async get_tools()
+        # If tools haven't been loaded yet, evaluate truthiness of defaults
+        tools = self._tools if self._tools is not None else self._default_tools
+        return bool(tools)
 
     def __repr__(self) -> str:
-        return repr(self._load())
+        # Avoid calling _load() to prevent race conditions with async get_tools()
+        # If tools haven't been loaded yet, represent defaults
+        tools = self._tools if self._tools is not None else self._default_tools
+        return repr(tools)
 
 
 _VALID_TOOLS_CONFIG = _LazyValidTools(_DEFAULT_VALID_TOOLS)
@@ -182,7 +215,7 @@ def safe_parse(
         return default
 
 
-def validate_investigate_output(
+async def validate_investigate_output(
     output: dict[str, Any],
     valid_tools: list[str] | None = None,
     config: dict[str, Any] | None = None,
@@ -194,7 +227,7 @@ def validate_investigate_output(
             valid_tools = config.get("solve", {}).get("valid_tools", _DEFAULT_VALID_TOOLS)
         else:
             # Fallback to lazy loading
-            valid_tools = _VALID_TOOLS_CONFIG
+            valid_tools = await _VALID_TOOLS_CONFIG.get_tools()
 
     required_fields = ["reasoning", "tools"]
     field_types = {"reasoning": str, "tools": list}
@@ -298,7 +331,7 @@ def validate_none_tool_constraint(
         raise ParseError("When 'none' tool exists, no other tool intents should be provided")
 
 
-def validate_solve_output(
+async def validate_solve_output(
     output: dict[str, Any],
     valid_tools: list[str] | None = None,
     config: dict[str, Any] | None = None,
@@ -310,7 +343,7 @@ def validate_solve_output(
             valid_tools = config.get("solve", {}).get("valid_tools", _DEFAULT_VALID_TOOLS)
         else:
             # Fallback to lazy loading
-            valid_tools = _VALID_TOOLS_CONFIG
+            valid_tools = await _VALID_TOOLS_CONFIG.get_tools()
 
     required_fields = ["tool_calls"]
     field_types = {"tool_calls": list}

@@ -25,6 +25,7 @@ _project_root = Path(__file__).parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
+from src.config.settings import settings
 from src.logging import LLMStats, get_logger
 from src.services.config import get_agent_params
 from src.services.llm import complete as llm_complete
@@ -202,7 +203,7 @@ class BaseAgent(ABC):
         Returns:
             Retry count
         """
-        return self.agent_config.get("max_retries", self.llm_config.get("max_retries", 3))
+        return self.agent_config.get("max_retries", settings.llm_retry.max_retries)
 
     # -------------------------------------------------------------------------
     # Token Tracking
