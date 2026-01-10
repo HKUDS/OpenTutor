@@ -12,6 +12,12 @@ from typing import AsyncGenerator, Dict, List, Optional
 import aiohttp
 from lightrag.llm.openai import openai_complete_if_cache
 
+from .exceptions import (
+    LLMAPIError,
+    LLMAuthenticationError,
+    LLMRateLimitError,
+    LLMTimeoutError,
+)
 from .utils import sanitize_url
 
 
@@ -165,26 +171,51 @@ async def _openai_complete(
         }
 
         timeout = aiohttp.ClientTimeout(total=120)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(url, headers=headers, json=data) as resp:
-                if resp.status == 200:
-                    result = await resp.json()
-                    if "choices" in result and result["choices"]:
-                        msg = result["choices"][0].get("message", {})
-                        content = msg.get("content", "")
-                        if not content:
-                            content = (
-                                msg.get("reasoning_content")
-                                or msg.get("reasoning")
-                                or msg.get("thought")
-                                or ""
-                            )
-                        return content
-                else:
-                    error_text = await resp.text()
-                    raise Exception(f"OpenAI API error: {resp.status} - {error_text}")
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(url, headers=headers, json=data) as resp:
+                    if resp.status == 200:
+                        result = await resp.json()
+                        if "choices" in result and result["choices"]:
+                            msg = result["choices"][0].get("message", {})
+                            content = msg.get("content", "")
+                            if not content:
+                                content = (
+                                    msg.get("reasoning_content")
+                                    or msg.get("reasoning")
+                                    or msg.get("thought")
+                                    or ""
+                                )
+                            return content
+                    else:
+                        error_text = await resp.text()
 
-    raise Exception("Cloud completion failed: no valid configuration")
+                        # Map HTTP status codes to specific exceptions
+                        if resp.status == 401:
+                            raise LLMAuthenticationError(
+                                f"OpenAI authentication failed: {error_text}"
+                            )
+                        elif resp.status == 429:
+                            raise LLMRateLimitError(
+                                f"OpenAI rate limit exceeded: {error_text}", provider="openai"
+                            )
+                        elif resp.status >= 500:
+                            raise LLMAPIError(
+                                f"OpenAI server error: {error_text}",
+                                status_code=resp.status,
+                                provider="openai",
+                            )
+                        else:
+                            raise LLMAPIError(
+                                f"OpenAI API error: {resp.status} - {error_text}",
+                                status_code=resp.status,
+                                provider="openai",
+                            )
+        except aiohttp.ClientError as e:
+            # Catch network/timeout errors and wrap them
+            raise LLMTimeoutError(f"Connection failed: {str(e)}")
+
+    raise LLMAPIError("Cloud completion failed: no valid configuration")
 
 
 async def _openai_stream(
@@ -234,7 +265,28 @@ async def _openai_stream(
         async with session.post(url, headers=headers, json=data) as resp:
             if resp.status != 200:
                 error_text = await resp.text()
-                raise Exception(f"OpenAI stream error: {resp.status} - {error_text}")
+
+                # Map HTTP status codes to specific exceptions
+                if resp.status == 401:
+                    raise LLMAuthenticationError(
+                        f"OpenAI stream authentication failed: {error_text}"
+                    )
+                elif resp.status == 429:
+                    raise LLMRateLimitError(
+                        f"OpenAI stream rate limit exceeded: {error_text}", provider="openai"
+                    )
+                elif resp.status >= 500:
+                    raise LLMAPIError(
+                        f"OpenAI stream server error: {error_text}",
+                        status_code=resp.status,
+                        provider="openai",
+                    )
+                else:
+                    raise LLMAPIError(
+                        f"OpenAI stream error: {resp.status} - {error_text}",
+                        status_code=resp.status,
+                        provider="openai",
+                    )
 
             async for line in resp.content:
                 line_str = line.decode("utf-8").strip()
@@ -295,7 +347,26 @@ async def _anthropic_complete(
         async with session.post(url, headers=headers, json=data) as response:
             if response.status != 200:
                 error_text = await response.text()
-                raise Exception(f"Anthropic API error: {response.status} - {error_text}")
+
+                # Map HTTP status codes to specific exceptions
+                if response.status == 401:
+                    raise LLMAuthenticationError(f"Anthropic authentication failed: {error_text}")
+                elif response.status == 429:
+                    raise LLMRateLimitError(
+                        f"Anthropic rate limit exceeded: {error_text}", provider="anthropic"
+                    )
+                elif response.status >= 500:
+                    raise LLMAPIError(
+                        f"Anthropic server error: {error_text}",
+                        status_code=response.status,
+                        provider="anthropic",
+                    )
+                else:
+                    raise LLMAPIError(
+                        f"Anthropic API error: {response.status} - {error_text}",
+                        status_code=response.status,
+                        provider="anthropic",
+                    )
 
             result = await response.json()
             return result["content"][0]["text"]
@@ -356,7 +427,28 @@ async def _anthropic_stream(
         async with session.post(url, headers=headers, json=data) as response:
             if response.status != 200:
                 error_text = await response.text()
-                raise Exception(f"Anthropic stream error: {response.status} - {error_text}")
+
+                # Map HTTP status codes to specific exceptions
+                if response.status == 401:
+                    raise LLMAuthenticationError(
+                        f"Anthropic stream authentication failed: {error_text}"
+                    )
+                elif response.status == 429:
+                    raise LLMRateLimitError(
+                        f"Anthropic stream rate limit exceeded: {error_text}", provider="anthropic"
+                    )
+                elif response.status >= 500:
+                    raise LLMAPIError(
+                        f"Anthropic stream server error: {error_text}",
+                        status_code=response.status,
+                        provider="anthropic",
+                    )
+                else:
+                    raise LLMAPIError(
+                        f"Anthropic stream error: {response.status} - {error_text}",
+                        status_code=response.status,
+                        provider="anthropic",
+                    )
 
             async for line in response.content:
                 line_str = line.decode("utf-8").strip()

@@ -17,6 +17,12 @@ from typing import AsyncGenerator, Dict, List, Optional
 
 import aiohttp
 
+from .exceptions import (
+    LLMAPIError,
+    LLMAuthenticationError,
+    LLMRateLimitError,
+    LLMTimeoutError,
+)
 from .utils import sanitize_url
 
 # Extended timeout for local servers (may be slower than cloud)
@@ -114,7 +120,26 @@ async def complete(
         async with session.post(url, json=data, headers=headers) as response:
             if response.status != 200:
                 error_text = await response.text()
-                raise Exception(f"Local LLM error: {response.status} - {error_text}")
+
+                # Map HTTP status codes to specific exceptions for local providers
+                if response.status == 401:
+                    raise LLMAuthenticationError(f"Local LLM authentication failed: {error_text}")
+                elif response.status == 429:
+                    raise LLMRateLimitError(
+                        f"Local LLM rate limit exceeded: {error_text}", provider="local"
+                    )
+                elif response.status >= 500:
+                    raise LLMAPIError(
+                        f"Local LLM server error: {error_text}",
+                        status_code=response.status,
+                        provider="local",
+                    )
+                else:
+                    raise LLMAPIError(
+                        f"Local LLM error: {response.status} - {error_text}",
+                        status_code=response.status,
+                        provider="local",
+                    )
 
             result = await response.json()
 
@@ -208,7 +233,28 @@ async def stream(
                 if response.status != 200:
                     # Streaming failed, fall back to non-streaming
                     error_text = await response.text()
-                    raise Exception(f"Streaming error: {response.status} - {error_text}")
+
+                    # Map HTTP status codes to specific exceptions
+                    if response.status == 401:
+                        raise LLMAuthenticationError(
+                            f"Local LLM stream authentication failed: {error_text}"
+                        )
+                    elif response.status == 429:
+                        raise LLMRateLimitError(
+                            f"Local LLM stream rate limit exceeded: {error_text}", provider="local"
+                        )
+                    elif response.status >= 500:
+                        raise LLMAPIError(
+                            f"Local LLM stream server error: {error_text}",
+                            status_code=response.status,
+                            provider="local",
+                        )
+                    else:
+                        raise LLMAPIError(
+                            f"Local LLM stream error: {response.status} - {error_text}",
+                            status_code=response.status,
+                            provider="local",
+                        )
 
                 # Track if we're inside a thinking block
                 in_thinking_block = False
@@ -288,7 +334,7 @@ async def stream(
             if content:
                 yield content
         except Exception as e2:
-            raise Exception(f"Local LLM failed: streaming={e}, non-streaming={e2}")
+            raise LLMTimeoutError(f"Local LLM failed: streaming={e}, non-streaming={e2}")
 
 
 async def fetch_models(

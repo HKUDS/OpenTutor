@@ -32,8 +32,64 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from . import cloud_provider, local_provider
 from .config import LLMConfig, get_llm_config
+from .exceptions import (
+    LLMAPIError,
+    LLMAuthenticationError,
+    LLMRateLimitError,
+    LLMTimeoutError,
+)
 from .provider import provider_manager
 from .utils import is_local_llm_server
+
+# --- RETRY CONFIGURATION ---
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_DELAY = 1.0
+DEFAULT_EXPONENTIAL_BACKOFF = True
+
+
+def _is_retriable_error(error: Exception) -> bool:
+    """Determine if we should retry based on the exception type."""
+    if isinstance(error, (LLMTimeoutError, LLMRateLimitError)):
+        return True
+    if isinstance(error, LLMAuthenticationError):
+        return False  # Never retry auth errors
+    if isinstance(error, LLMAPIError):
+        # Retry server errors (5xx)
+        if error.status_code and error.status_code >= 500:
+            return True
+        return False
+    # Retry generic IO/Network errors
+    return True
+
+
+async def _execute_with_retry(func, max_retries=DEFAULT_MAX_RETRIES, **kwargs):
+    """Executes a function with exponential backoff retry logic."""
+    import asyncio
+    import logging
+
+    logger = logging.getLogger(__name__)
+    delay = DEFAULT_RETRY_DELAY
+    last_exception = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            return await func(**kwargs)
+        except Exception as e:
+            last_exception = e
+            # Don't retry if it's not a retriable error or if it's the last attempt
+            if attempt >= max_retries or not _is_retriable_error(e):
+                raise
+
+            logger.warning(
+                f"LLM call failed (attempt {attempt + 1}/{max_retries + 1}): {e}. "
+                f"Retrying in {delay}s..."
+            )
+            await asyncio.sleep(delay)
+
+            if DEFAULT_EXPONENTIAL_BACKOFF:
+                delay *= 2
+
+    raise last_exception
 
 
 class LLMMode(str, Enum):
@@ -199,27 +255,25 @@ async def complete(
         base_url = base_url or config.base_url
         binding = binding or config.binding or "openai"
 
-    # Route to appropriate provider
-    if _should_use_local(base_url):
-        return await local_provider.complete(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-            messages=messages,
-            **kwargs,
-        )
-    else:
-        return await cloud_provider.complete(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-            binding=binding or "openai",
-            **kwargs,
-        )
+    # Define the work function
+    async def _do_complete(**call_kwargs):
+        if _should_use_local(base_url):
+            return await local_provider.complete(**call_kwargs)
+        else:
+            return await cloud_provider.complete(**call_kwargs)
+
+    # Execute with retry
+    return await _execute_with_retry(
+        _do_complete,
+        prompt=prompt,
+        system_prompt=system_prompt,
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+        binding=binding or "openai",
+        messages=messages,
+        **kwargs,
+    )
 
 
 async def stream(
