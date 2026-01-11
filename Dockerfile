@@ -134,8 +134,14 @@ COPY --from=frontend-builder /app/web/node_modules ./web/node_modules
 
 # Copy web source files (needed for next start to work)
 COPY web/app ./web/app
+COPY web/components ./web/components
+COPY web/context ./web/context
+COPY web/hooks ./web/hooks
+COPY web/lib ./web/lib
+COPY web/types ./web/types
 COPY web/public ./web/public
 COPY web/tsconfig.json ./web/
+COPY web/next-env.d.ts ./web/
 
 # Copy application source code
 COPY src/ ./src/
