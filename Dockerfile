@@ -132,6 +132,11 @@ COPY --from=frontend-builder /app/web/package-lock.json ./web/package-lock.json
 COPY --from=frontend-builder /app/web/next.config.js ./web/next.config.js
 COPY --from=frontend-builder /app/web/node_modules ./web/node_modules
 
+# Copy web source files (needed for next start to work)
+COPY web/app ./web/app
+COPY web/public ./web/public
+COPY web/tsconfig.json ./web/
+
 # Copy application source code
 COPY src/ ./src/
 COPY config/ ./config/
