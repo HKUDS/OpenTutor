@@ -259,6 +259,31 @@ async def validate_solve_output(output: dict[str, Any]) -> bool:
     return True
 
 
+def validate_none_tool_constraint(
+    tools: list[dict[str, Any]], tool_type_key: str = "tool_type"
+) -> None:
+    """
+    Validate that 'none' tool does not coexist with other tools.
+
+    Args:
+        tools: List of tool dictionaries
+        tool_type_key: Key to access tool type in each dict (default: "tool_type")
+
+    Raises:
+        ParseError: If none tool constraint is violated
+    """
+    has_none = any(
+        isinstance(tool_type := tool.get(tool_type_key), str) and tool_type.lower() == "none"
+        for tool in tools
+    )
+
+    if has_none and len(tools) > 1:
+        raise ParseError(
+            f"When 'none' tool exists, no other tool intents should be provided. "
+            f"Found {len(tools)} tools with types: {[tool.get(tool_type_key) for tool in tools]}"
+        )
+
+
 # Example usage
 if __name__ == "__main__":
     # Test validation functions
