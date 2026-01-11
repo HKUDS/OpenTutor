@@ -244,8 +244,10 @@ find /app/web/.next -type f \( -name "*.js" -o -name "*.json" \) -exec \
 echo "NEXT_PUBLIC_API_BASE=${API_BASE}" > /app/web/.env.local
 
 # Start Next.js using standalone server
-# With output: "standalone", Next.js builds a self-contained server that doesn't need node_modules
-cd /app/web/.next/standalone && exec node server.js
+# With output: "standalone", Next.js builds a self-contained server
+# Must set PORT and run from the web directory to keep public files accessible
+export PORT=${FRONTEND_PORT}
+cd /app/web && exec node .next/standalone/server.js
 EOF
 
 RUN chmod +x /app/start-frontend.sh
