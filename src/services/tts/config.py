@@ -33,6 +33,7 @@ def get_tts_config() -> dict:
             - model: TTS model name
             - api_key: TTS API key
             - base_url: TTS API endpoint URL
+            - api_version: TTS API version (for Azure OpenAI)
             - voice: Default voice character
 
     Raises:
@@ -41,6 +42,7 @@ def get_tts_config() -> dict:
     model = _strip_value(os.getenv("TTS_MODEL"))
     api_key = _strip_value(os.getenv("TTS_API_KEY"))
     base_url = _strip_value(os.getenv("TTS_URL"))
+    api_version = _strip_value(os.getenv("TTS_BINDING_API_VERSION"))
     voice = _strip_value(os.getenv("TTS_VOICE", "alloy"))
 
     # Validate required configuration
@@ -59,6 +61,7 @@ def get_tts_config() -> dict:
         "model": model,
         "api_key": api_key,
         "base_url": base_url,
+        "api_version": api_version,
         "voice": voice,
     }
 

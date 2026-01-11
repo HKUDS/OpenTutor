@@ -2,7 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 Question Validation Workflow: retrieve -> validate -> return.
-Uses unified PromptManager for prompt loading.
+
+Uses unified LLM Factory for all LLM calls, supporting:
+- Cloud providers (OpenAI, Anthropic, DeepSeek, etc.)
+- Local providers (Ollama, LM Studio, vLLM, etc.)
+- Automatic retry with exponential backoff
 """
 
 from collections.abc import Callable
@@ -12,14 +16,15 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from openai import AsyncOpenAI
-
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.logging import get_logger
 from src.services.config import get_agent_params, load_config_with_main
+from src.services.llm import complete as llm_complete
+from src.services.llm.capabilities import supports_response_format
+from src.services.llm.config import get_llm_config
 from src.services.prompt import get_prompt_manager
 from src.tools.rag_tool import rag_search
 
@@ -34,6 +39,7 @@ class QuestionValidationWorkflow:
         self,
         api_key: str | None = None,
         base_url: str | None = None,
+        api_version: str | None = None,
         model: str | None = None,
         kb_name: str | None = None,
         token_stats_callback: Callable | None = None,
@@ -45,25 +51,34 @@ class QuestionValidationWorkflow:
         Args:
             api_key: API key
             base_url: API endpoint
+            api_version: API version (for Azure OpenAI)
             model: Model name
             kb_name: Knowledge base name
             token_stats_callback: Callback function to update token statistics
             language: Language for prompts ("en" or "zh")
         """
-        # API configuration
-        if not api_key:
-            api_key = os.getenv("LLM_API_KEY")
-        if not base_url:
-            base_url = os.getenv("LLM_HOST")
-        if model is None:
-            model = os.getenv("LLM_MODEL", "gpt-4o")
+        # Load LLM configuration via unified config system
+        try:
+            llm_config = get_llm_config()
+            self.api_key = api_key or llm_config.api_key
+            self.base_url = base_url or llm_config.base_url
+            self.api_version = api_version or llm_config.api_version
+            self.binding = llm_config.binding or "openai"
+            self.model = model or llm_config.model
+        except Exception:
+            # Fallback to environment variables
+            self.api_key = api_key or os.getenv("LLM_API_KEY")
+            self.base_url = base_url or os.getenv("LLM_HOST")
+            self.api_version = api_version or os.getenv("LLM_API_VERSION")
+            self.binding = os.getenv("LLM_BINDING", "openai")
+            self.model = model or os.getenv("LLM_MODEL")
 
-        # For local LLM servers, use placeholder key if none provided
-        client_api_key = api_key or "sk-no-key-required"
-        self.client = AsyncOpenAI(api_key=client_api_key, base_url=base_url)
-        self.api_key = api_key
-        self.base_url = base_url
-        self.model = model
+        if not self.model:
+            from src.services.llm.exceptions import LLMConfigError
+            raise LLMConfigError(
+                "LLM_MODEL not configured. Please set it in .env or activate a provider."
+            )
+
         self.kb_name = kb_name
         self.token_stats_callback = token_stats_callback
         self.language = language
@@ -136,6 +151,8 @@ class QuestionValidationWorkflow:
         options = question.get("options", {})
         correct_answer = question.get("correct_answer", "")
 
+        system_prompt = "You are a professional knowledge retrieval expert."
+
         prompt = f"""Analyze the following question and generate a concise retrieval query to retrieve relevant knowledge from the knowledge base to validate this question.
 
 Question information:
@@ -160,42 +177,40 @@ Requirements:
 Output the retrieval query directly, no additional content.
 """
 
-        response = await self.client.chat.completions.create(
+        # Call LLM via unified Factory (supports all providers with retry)
+        response_content = await llm_complete(
+            prompt=prompt,
+            system_prompt=system_prompt,
             model=self.model,
-            messages=[
-                {"role": "system", "content": "You are a professional knowledge retrieval expert."},
-                {"role": "user", "content": prompt},
-            ],
+            api_key=self.api_key,
+            base_url=self.base_url,
+            api_version=self.api_version,
+            binding=self.binding,
             temperature=0.3,
         )
 
-        # Extract response content
-        response_content = response.choices[0].message.content.strip()
+        response_content = response_content.strip()
 
         # Update token statistics if callback is available
-        input_tokens = 0
-        output_tokens = 0
-        cost = 0.0
-        if hasattr(response, "usage") and response.usage:
-            input_tokens = response.usage.prompt_tokens
-            output_tokens = response.usage.completion_tokens
-            cost = input_tokens * 0.00000015 + output_tokens * 0.0000006
-            if self.token_stats_callback:
-                self.token_stats_callback(
-                    input_tokens=input_tokens, output_tokens=output_tokens, model=self.model
-                )
+        if self.token_stats_callback:
+            # Rough estimation: ~4 chars per token
+            input_tokens = (len(system_prompt) + len(prompt)) // 4
+            output_tokens = len(response_content) // 4
+            self.token_stats_callback(
+                input_tokens=input_tokens, output_tokens=output_tokens, model=self.model
+            )
 
         # Log LLM call with detailed information
         logger.log_llm_call(
             model=self.model,
             stage="generate_query",
-            system_prompt="You are a professional knowledge retrieval expert.",
+            system_prompt=system_prompt,
             user_prompt=prompt,
             response=response_content,
             agent_name="QuestionValidationWorkflow",
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cost=cost,
+            input_tokens=0,
+            output_tokens=0,
+            cost=0.0,
             level="DEBUG",
         )
 
@@ -264,48 +279,51 @@ Output the retrieval query directly, no additional content.
             validation_knowledge=knowledge_str,
         )
 
+        system_prompt = "You are a professional question validation expert who strictly validates questions based on knowledge base content."
+
         try:
-            response = await self.client.chat.completions.create(
+            # Build kwargs for LLM Factory
+            llm_kwargs = {
+                "temperature": self._agent_params["temperature"],
+                "max_tokens": self._agent_params["max_tokens"],
+            }
+
+            # Only add response_format if the provider supports it
+            if supports_response_format(self.binding, self.model):
+                llm_kwargs["response_format"] = {"type": "json_object"}
+
+            # Call LLM via unified Factory (supports all providers with retry)
+            response_content = await llm_complete(
+                prompt=prompt,
+                system_prompt=system_prompt,
                 model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a professional question validation expert who strictly validates questions based on knowledge base content.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=self._agent_params["temperature"],
-                max_tokens=self._agent_params["max_tokens"],
-                response_format={"type": "json_object"},
+                api_key=self.api_key,
+                base_url=self.base_url,
+                api_version=self.api_version,
+                binding=self.binding,
+                **llm_kwargs,
             )
 
-            # Extract response content
-            response_content = response.choices[0].message.content
-
             # Update token statistics if callback is available
-            input_tokens = 0
-            output_tokens = 0
-            cost = 0.0
-            if hasattr(response, "usage") and response.usage:
-                input_tokens = response.usage.prompt_tokens
-                output_tokens = response.usage.completion_tokens
-                cost = input_tokens * 0.00000015 + output_tokens * 0.0000006
-                if self.token_stats_callback:
-                    self.token_stats_callback(
-                        input_tokens=input_tokens, output_tokens=output_tokens, model=self.model
-                    )
+            if self.token_stats_callback:
+                # Rough estimation: ~4 chars per token
+                input_tokens = (len(system_prompt) + len(prompt)) // 4
+                output_tokens = len(response_content) // 4
+                self.token_stats_callback(
+                    input_tokens=input_tokens, output_tokens=output_tokens, model=self.model
+                )
 
             # Log LLM call with detailed information
             logger.log_llm_call(
                 model=self.model,
                 stage="validate",
-                system_prompt="You are a professional question validation expert who strictly validates questions based on knowledge base content.",
+                system_prompt=system_prompt,
                 user_prompt=prompt,
                 response=response_content,
                 agent_name="QuestionValidationWorkflow",
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                cost=cost,
+                input_tokens=0,
+                output_tokens=0,
+                cost=0.0,
                 level="DEBUG",
             )
 
@@ -392,6 +410,8 @@ Output the retrieval query directly, no additional content.
         if len(context_str) > 4000:
             context_str = context_str[:4000] + "...[truncated]"
 
+        system_prompt = "You are an educational content analyst specializing in identifying knowledge connections and learning extensions."
+
         prompt = f"""Analyze how the following question relates to and extends from the knowledge base content.
 
 Question:
@@ -416,30 +436,32 @@ Guidelines:
 Output only the JSON, no additional text."""
 
         try:
-            response = await self.client.chat.completions.create(
+            # Build kwargs for LLM Factory
+            llm_kwargs = {"temperature": 0.3}
+
+            # Only add response_format if the provider supports it
+            if supports_response_format(self.binding, self.model):
+                llm_kwargs["response_format"] = {"type": "json_object"}
+
+            # Call LLM via unified Factory (supports all providers with retry)
+            response_content = await llm_complete(
+                prompt=prompt,
+                system_prompt=system_prompt,
                 model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an educational content analyst specializing in identifying knowledge connections and learning extensions.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.3,
-                response_format={"type": "json_object"},
+                api_key=self.api_key,
+                base_url=self.base_url,
+                api_version=self.api_version,
+                binding=self.binding,
+                **llm_kwargs,
             )
 
-            response_content = response.choices[0].message.content
-
             # Update token statistics
-            if hasattr(response, "usage") and response.usage:
-                input_tokens = response.usage.prompt_tokens
-                output_tokens = response.usage.completion_tokens
-                cost = input_tokens * 0.00000015 + output_tokens * 0.0000006
-                if self.token_stats_callback:
-                    self.token_stats_callback(
-                        input_tokens=input_tokens, output_tokens=output_tokens, model=self.model
-                    )
+            if self.token_stats_callback:
+                input_tokens = (len(system_prompt) + len(prompt)) // 4
+                output_tokens = len(response_content) // 4
+                self.token_stats_callback(
+                    input_tokens=input_tokens, output_tokens=output_tokens, model=self.model
+                )
 
             result = json.loads(response_content)
 
@@ -489,6 +511,8 @@ Output only the JSON, no additional text."""
         if len(context_str) > 4000:
             context_str = context_str[:4000] + "...[truncated]"
 
+        system_prompt = "You are an educational content analyst specializing in analyzing the relationship between exam questions and knowledge base content."
+
         prompt = f"""Analyze the relevance between the following exam question and the knowledge base content.
 
 Question:
@@ -521,44 +545,44 @@ For extension_points (only when relevance is "partial"):
 Output only the JSON, no additional text."""
 
         try:
-            response = await self.client.chat.completions.create(
+            # Build kwargs for LLM Factory
+            llm_kwargs = {"temperature": 0.3}
+
+            # Only add response_format if the provider supports it
+            if supports_response_format(self.binding, self.model):
+                llm_kwargs["response_format"] = {"type": "json_object"}
+
+            # Call LLM via unified Factory (supports all providers with retry)
+            response_content = await llm_complete(
+                prompt=prompt,
+                system_prompt=system_prompt,
                 model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an educational content analyst specializing in analyzing the relationship between exam questions and knowledge base content.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.3,
-                response_format={"type": "json_object"},
+                api_key=self.api_key,
+                base_url=self.base_url,
+                api_version=self.api_version,
+                binding=self.binding,
+                **llm_kwargs,
             )
 
-            response_content = response.choices[0].message.content
-
             # Update token statistics
-            input_tokens = 0
-            output_tokens = 0
-            if hasattr(response, "usage") and response.usage:
-                input_tokens = response.usage.prompt_tokens
-                output_tokens = response.usage.completion_tokens
-                cost = input_tokens * 0.00000015 + output_tokens * 0.0000006
-                if self.token_stats_callback:
-                    self.token_stats_callback(
-                        input_tokens=input_tokens, output_tokens=output_tokens, model=self.model
-                    )
+            if self.token_stats_callback:
+                input_tokens = (len(system_prompt) + len(prompt)) // 4
+                output_tokens = len(response_content) // 4
+                self.token_stats_callback(
+                    input_tokens=input_tokens, output_tokens=output_tokens, model=self.model
+                )
 
             # Log LLM call
             logger.log_llm_call(
                 model=self.model,
                 stage="analyze_relevance",
-                system_prompt="Educational content analyst for relevance analysis",
+                system_prompt=system_prompt,
                 user_prompt=prompt,
                 response=response_content,
                 agent_name="QuestionValidationWorkflow",
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                cost=input_tokens * 0.00000015 + output_tokens * 0.0000006,
+                input_tokens=0,
+                output_tokens=0,
+                cost=0.0,
                 level="DEBUG",
             )
 

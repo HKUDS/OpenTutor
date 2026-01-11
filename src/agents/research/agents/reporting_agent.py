@@ -60,7 +60,11 @@ class ReportingAgent(BaseAgent):
         return Template(converted).safe_substitute(**kwargs)
 
     def __init__(
-        self, config: dict[str, Any], api_key: str | None = None, base_url: str | None = None
+        self,
+        config: dict[str, Any],
+        api_key: str | None = None,
+        base_url: str | None = None,
+        api_version: str | None = None,
     ):
         language = config.get("system", {}).get("language", "zh")
         super().__init__(
@@ -68,6 +72,7 @@ class ReportingAgent(BaseAgent):
             agent_name="reporting_agent",
             api_key=api_key,
             base_url=base_url,
+            api_version=api_version,
             language=language,
             config=config,
         )
@@ -1291,6 +1296,7 @@ class ReportingAgent(BaseAgent):
             citation_output_hint=citation_output_hint,
         )
 
+        # TODO Implement retry logic for LLM calls when JSON parsing or post-processing fails (e.g., malformed output, schema violations).
         resp = await self.call_llm(
             filled,
             system_prompt,

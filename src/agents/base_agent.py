@@ -29,7 +29,7 @@ from src.config.settings import settings
 from src.logging import LLMStats, get_logger
 from src.services.config import get_agent_params
 from src.services.llm import complete as llm_complete
-from src.services.llm import get_llm_config, get_token_limit_kwargs
+from src.services.llm import get_llm_config, get_token_limit_kwargs, supports_response_format
 from src.services.llm import stream as llm_stream
 from src.services.prompt import get_prompt_manager
 
@@ -59,6 +59,7 @@ class BaseAgent(ABC):
         api_key: str | None = None,
         base_url: str | None = None,
         model: str | None = None,
+        api_version: str | None = None,
         language: str = "zh",
         config: dict[str, Any] | None = None,
         token_tracker: Any | None = None,
@@ -100,11 +101,13 @@ class BaseAgent(ABC):
             self.api_key = api_key or env_llm.api_key
             self.base_url = base_url or env_llm.base_url
             self.model = model or env_llm.model
+            self.api_version = api_version or getattr(env_llm, "api_version", None)
         except ValueError:
             # Fallback if env config not available
             self.api_key = api_key or os.getenv("LLM_API_KEY")
             self.base_url = base_url or os.getenv("LLM_HOST")
-            self.model = model or os.getenv("LLM_MODEL", "gpt-4o")
+            self.model = model or os.getenv("LLM_MODEL")
+            self.api_version = api_version or os.getenv("LLM_API_VERSION")
 
         # Get Agent-specific configuration (if config provided)
         self.agent_config = self.config.get("agents", {}).get(agent_name, {})
@@ -309,6 +312,7 @@ class BaseAgent(ABC):
         self,
         user_prompt: str,
         system_prompt: str,
+        messages: list[dict[str, str]] | None = None,
         response_format: dict[str, str] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
@@ -323,8 +327,9 @@ class BaseAgent(ABC):
         (cloud or local) based on configuration.
 
         Args:
-            user_prompt: User prompt
-            system_prompt: System prompt
+            user_prompt: User prompt (ignored if messages provided)
+            system_prompt: System prompt (ignored if messages provided)
+            messages: Pre-built messages array (optional, overrides prompt/system_prompt)
             response_format: Response format (e.g., {"type": "json_object"})
             temperature: Temperature parameter (optional, uses config by default)
             max_tokens: Maximum tokens (optional, uses config by default)
@@ -351,8 +356,21 @@ class BaseAgent(ABC):
         if max_tokens:
             kwargs.update(get_token_limit_kwargs(model, max_tokens))
 
+        # Handle response_format with capability check
         if response_format:
-            kwargs["response_format"] = response_format
+            try:
+                config = get_llm_config()
+                binding = getattr(config, "binding", None) or "openai"
+            except Exception:
+                binding = "openai"
+
+            if supports_response_format(binding, model):
+                kwargs["response_format"] = response_format
+            else:
+                self.logger.debug(f"response_format not supported for {binding}/{model}, skipping")
+
+        if messages:
+            kwargs["messages"] = messages
 
         # Log input
         stage_label = stage or self.agent_name
@@ -374,6 +392,7 @@ class BaseAgent(ABC):
                 model=model,
                 api_key=self.api_key,
                 base_url=self.base_url,
+                api_version=self.api_version,
                 **kwargs,
             )
         except Exception as e:
@@ -471,6 +490,7 @@ class BaseAgent(ABC):
                 model=model,
                 api_key=self.api_key,
                 base_url=self.base_url,
+                api_version=self.api_version,
                 messages=messages,
                 **kwargs,
             ):

@@ -30,11 +30,15 @@ class TexChunker:
         """
         # Read model configuration from environment variables
         if model is None:
-            model = os.getenv("LLM_MODEL", "gpt-4o")
+            model = os.getenv("LLM_MODEL")
 
         try:
-            self.encoder = tiktoken.encoding_for_model(model)
-        except:
+            if model:
+                self.encoder = tiktoken.encoding_for_model(model)
+            else:
+                # Use cl100k_base as default encoding if no model specified
+                self.encoder = tiktoken.get_encoding("cl100k_base")
+        except Exception:
             # If model not supported, use cl100k_base (GPT-4 encoding)
             self.encoder = tiktoken.get_encoding("cl100k_base")
 

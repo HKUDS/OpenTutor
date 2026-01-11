@@ -27,6 +27,7 @@ class IdeaGenerationWorkflow(BaseAgent):
         self,
         api_key: str | None = None,
         base_url: str | None = None,
+        api_version: str | None = None,
         model: str | None = None,
         progress_callback: Callable[[str, Any], None | Awaitable[None]] | None = None,
         output_dir: Path | None = None,
@@ -38,6 +39,7 @@ class IdeaGenerationWorkflow(BaseAgent):
         Args:
             api_key: API key
             base_url: API endpoint
+            api_version: API version (for Azure OpenAI)
             model: Model name
             progress_callback: Progress callback function for streaming output
             output_dir: Output directory for saving intermediate results
@@ -48,6 +50,7 @@ class IdeaGenerationWorkflow(BaseAgent):
             agent_name="idea_generation",
             api_key=api_key,
             base_url=base_url,
+            api_version=api_version,
             model=model,
             language=language,
         )

@@ -36,6 +36,9 @@ class LLMProvider(BaseModel):
     binding: str = Field(..., description="Provider type (e.g., openai, azure_openai, ollama)")
     base_url: str = Field(..., description="API endpoint URL")
     api_key: str = Field(default="", description="API Key (optional for local providers)")
+    api_version: Optional[str] = Field(
+        default=None, description="API Version (required for Azure OpenAI)"
+    )
     model: str = Field(..., description="Model name to use")
     is_active: bool = Field(default=False, description="Whether this provider is currently active")
     provider_type: Literal["api", "local"] = Field(

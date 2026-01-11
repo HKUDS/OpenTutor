@@ -1,9 +1,19 @@
-# 🚀 Quick Start
+# Quick Start
 
-## Step 1: Clone Repository and Set Up Environment
+Get DeepTutor running in under 5 minutes.
 
-```bash
-# Clone the repository
+## Prerequisites
+
+- Python 3.10+
+- Node.js 18+
+- An LLM API key (OpenAI, Anthropic, DeepSeek, etc.)
+
+## Installation
+
+::: code-group
+
+```bash [Quick Install]
+# Clone and setup
 git clone https://github.com/HKUDS/DeepTutor.git
 cd DeepTutor
 
@@ -134,6 +144,6 @@ Create custom knowledge bases through the web interface with support for multipl
 
 ## Next Steps
 
-- [Configuration](/guide/configuration) — Customize your setup
-- [Features Overview](/features/overview) — Explore all features
-- [Troubleshooting](/guide/troubleshooting) — Common issues and solutions
+- [Configuration →](/guide/configuration)
+- [Troubleshooting →](/guide/troubleshooting)
+- [Full Installation Guide →](https://github.com/HKUDS/DeepTutor#-getting-started)

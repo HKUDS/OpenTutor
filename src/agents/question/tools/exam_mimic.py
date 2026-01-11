@@ -29,6 +29,7 @@ sys.path.insert(0, str(project_root))
 # Note: AgentCoordinator is imported inside functions to avoid circular import
 from src.agents.question.tools.pdf_parser import parse_pdf_with_mineru
 from src.agents.question.tools.question_extractor import extract_questions_from_paper
+from src.services.llm.config import get_llm_config
 
 # Type alias for WebSocket callback
 WsCallback = Callable[[str, dict[str, Any]], Any]
@@ -385,7 +386,14 @@ async def mimic_exam_questions(
             print(f"   Preview: {ref_question['question_text'][:80]}...")
 
             # Create a fresh coordinator for each question
-            coordinator = AgentCoordinator(max_rounds=10, kb_name=kb_name)
+            llm_config = get_llm_config()
+            coordinator = AgentCoordinator(
+                api_key=llm_config.api_key,
+                base_url=llm_config.base_url,
+                api_version=getattr(llm_config, "api_version", None),
+                max_rounds=10,
+                kb_name=kb_name,
+            )
 
             try:
                 result = await generate_question_from_reference(

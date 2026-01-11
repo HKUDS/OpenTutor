@@ -69,7 +69,10 @@ interface ConfigData {
     };
     web_search?: {
       enabled?: boolean;
+      provider?: string;
       max_results?: number;
+      consolidation?: "none" | "template" | "llm";
+      consolidation_template?: string;
       [key: string]: any;
     };
     [key: string]: any;
@@ -90,6 +93,26 @@ interface FullSettingsResponse {
   ui: UISettings;
   config: ConfigData;
   env: EnvInfo;
+}
+
+// Web search config types (fetched from backend)
+interface WebSearchProvider {
+  id: string;
+  name: string;
+  description: string;
+  keyEnv: string;
+  supports_answer: boolean;
+  requires_api_key: boolean;
+}
+
+interface WebSearchConfigResponse {
+  enabled: boolean;
+  provider: string;
+  consolidation: string | null;
+  providers: WebSearchProvider[];
+  consolidation_types: string[]; // ["none", "template", "llm"]
+  template_providers: string[]; // Providers that support template consolidation (serper, jina, etc.)
+  config_source: "env" | "yaml" | "default";
 }
 
 // Environment variable types
@@ -335,11 +358,16 @@ export default function SettingsPage() {
     useState<string>("raganything");
   const [loadingRagProviders, setLoadingRagProviders] = useState(false);
 
+  // Web search config state (fetched from backend)
+  const [webSearchConfig, setWebSearchConfig] =
+    useState<WebSearchConfigResponse | null>(null);
+
   useEffect(() => {
     fetchSettings();
     fetchEnvConfig();
     fetchRagProviders();
     fetchLLMMode();
+    fetchWebSearchConfig();
     if (activeTab === "local_models") {
       fetchProviders();
     }
@@ -385,6 +413,18 @@ export default function SettingsPage() {
       console.error("Failed to fetch RAG providers:", err);
     } finally {
       setLoadingRagProviders(false);
+    }
+  };
+
+  const fetchWebSearchConfig = async () => {
+    try {
+      const res = await fetch(apiUrl("/api/v1/settings/web-search/config"));
+      if (res.ok) {
+        const data: WebSearchConfigResponse = await res.json();
+        setWebSearchConfig(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch web search config:", err);
     }
   };
 
@@ -639,6 +679,18 @@ export default function SettingsPage() {
 
   const handleEnvVarChange = (key: string, value: string) => {
     setEditedEnvVars((prev) => ({ ...prev, [key]: value }));
+
+    // Sync SEARCH_PROVIDER env var with config dropdown
+    if (key === "SEARCH_PROVIDER" && value) {
+      setEditedConfig((prev) => {
+        if (!prev) return null;
+        const newConfig = { ...prev };
+        if (!newConfig.tools) newConfig.tools = {};
+        if (!newConfig.tools.web_search) newConfig.tools.web_search = {};
+        newConfig.tools.web_search.provider = value;
+        return newConfig;
+      });
+    }
   };
 
   const toggleSensitiveVisibility = (key: string) => {
@@ -888,6 +940,15 @@ export default function SettingsPage() {
       }
       return newConfig;
     });
+
+    // Sync search provider selection with SEARCH_PROVIDER env var
+    if (
+      section === "tools" &&
+      subSection === "web_search" &&
+      key === "provider"
+    ) {
+      setEditedEnvVars((prev) => ({ ...prev, SEARCH_PROVIDER: value }));
+    }
   };
 
   const handleUIChange = (key: keyof UISettings, value: any) => {
@@ -1458,161 +1519,244 @@ export default function SettingsPage() {
 
             {/* Row 3: Research Tools (Web Search + Knowledge Base) + TTS */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Research Tools */}
+              {/* Research Tools - Web Search */}
               <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2">
-                  <Search className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+                  <Globe className="w-4 h-4 text-blue-500 dark:text-blue-400" />
                   <h2 className="font-semibold text-sm text-slate-900 dark:text-slate-100">
-                    {t("Research Tools")}
+                    {t("Web Search")}
                   </h2>
                 </div>
-                <div className="p-4 grid grid-cols-2 gap-3">
-                  {/* Web Search */}
-                  <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-100 dark:border-slate-600">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                        <Globe className="w-3.5 h-3.5 text-blue-500" />
-                        {t("Web Search")}
-                      </span>
-                      <div className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={
-                            editedConfig.tools?.web_search?.enabled ?? true
-                          }
-                          onChange={(e) =>
-                            handleConfigChange(
-                              "tools",
-                              "enabled",
-                              e.target.checked,
-                              "web_search",
-                            )
-                          }
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-slate-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 dark:after:border-slate-500 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-                        {t("Max Results")}
-                      </label>
+                <div className="p-4 space-y-4">
+                  {/* Enable/Disable Toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                      {t("Enable Web Search")}
+                    </span>
+                    <div className="relative inline-flex items-center cursor-pointer">
                       <input
-                        type="number"
-                        min="1"
-                        max="20"
-                        value={editedConfig.tools?.web_search?.max_results || 5}
+                        type="checkbox"
+                        checked={
+                          editedConfig.tools?.web_search?.enabled ?? true
+                        }
                         onChange={(e) =>
                           handleConfigChange(
                             "tools",
-                            "max_results",
-                            parseInt(e.target.value),
+                            "enabled",
+                            e.target.checked,
+                            "web_search",
+                          )
+                        }
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 dark:bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 dark:after:border-slate-500 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                    </div>
+                  </div>
+
+                  {/* Provider Selection */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                      {t("Search Provider")}
+                    </label>
+                    <select
+                      value={
+                        editedEnvVars["SEARCH_PROVIDER"] ||
+                        editedConfig.tools?.web_search?.provider ||
+                        "perplexity"
+                      }
+                      onChange={(e) =>
+                        handleConfigChange(
+                          "tools",
+                          "provider",
+                          e.target.value,
+                          "web_search",
+                        )
+                      }
+                      className="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs text-slate-900 dark:text-slate-100"
+                    >
+                      {(webSearchConfig?.providers || []).map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                      Also updates SEARCH_PROVIDER env variable
+                    </p>
+                  </div>
+
+                  {/* Max Results */}
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                      {t("Max Results")}
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={editedConfig.tools?.web_search?.max_results || 5}
+                      onChange={(e) =>
+                        handleConfigChange(
+                          "tools",
+                          "max_results",
+                          parseInt(e.target.value),
+                          "web_search",
+                        )
+                      }
+                      className="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs text-slate-900 dark:text-slate-100"
+                    />
+                  </div>
+
+                  {/* Consolidation Settings */}
+                  <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-100 dark:border-slate-600 space-y-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                        {t("Answer Consolidation")}
+                      </label>
+                      <select
+                        value={
+                          editedConfig.tools?.web_search?.consolidation ||
+                          "template"
+                        }
+                        onChange={(e) =>
+                          handleConfigChange(
+                            "tools",
+                            "consolidation",
+                            e.target.value,
                             "web_search",
                           )
                         }
                         className="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs text-slate-900 dark:text-slate-100"
-                      />
+                      >
+                        {(
+                          webSearchConfig?.consolidation_types || [
+                            "none",
+                            "template",
+                            "llm",
+                          ]
+                        ).map((type) => (
+                          <option key={type} value={type}>
+                            {type.charAt(0).toUpperCase() + type.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                        For SERP providers that return raw results.
+                      </p>
                     </div>
-                  </div>
 
-                  {/* Knowledge Base */}
-                  <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-100 dark:border-slate-600">
-                    <div className="flex items-center mb-3">
-                      <span className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                        <Database className="w-3.5 h-3.5 text-purple-500" />
-                        {t("Knowledge Base")}
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      <div>
-                        <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-                          {t("Default KB")}
-                        </label>
-                        <input
-                          type="text"
-                          value={editedConfig.tools?.rag_tool?.default_kb || ""}
-                          onChange={(e) =>
-                            handleConfigChange(
-                              "tools",
-                              "default_kb",
-                              e.target.value,
-                              "rag_tool",
-                            )
-                          }
-                          className="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs text-slate-900 dark:text-slate-100"
-                        />
+                    {(editedConfig.tools?.web_search?.consolidation ===
+                      "template" ||
+                      editedConfig.tools?.web_search?.consolidation ===
+                        "llm") && (
+                      <div className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded space-y-1">
+                        <div>
+                          Consolidation only works with:{" "}
+                          {webSearchConfig?.template_providers?.join(", ") ||
+                            "serper, jina, serper_scholar"}
+                        </div>
+                        {editedConfig.tools?.web_search?.consolidation ===
+                          "llm" && (
+                          <div className="text-amber-700 dark:text-amber-300 font-medium">
+                            ⚠️ LLM consolidation is an experimental feature.
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-                          {t("Base Directory")}
-                        </label>
-                        <input
-                          type="text"
-                          value={
-                            editedConfig.tools?.rag_tool?.kb_base_dir || ""
-                          }
-                          onChange={(e) =>
-                            handleConfigChange(
-                              "tools",
-                              "kb_base_dir",
-                              e.target.value,
-                              "rag_tool",
-                            )
-                          }
-                          className="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs font-mono text-slate-600 dark:text-slate-300"
-                        />
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </section>
 
-              {/* TTS Settings */}
+              {/* Knowledge Base */}
               <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2">
-                  <Volume2 className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+                  <Database className="w-4 h-4 text-purple-500 dark:text-purple-400" />
                   <h2 className="font-semibold text-sm text-slate-900 dark:text-slate-100">
-                    {t("Text-to-Speech")}
+                    {t("Knowledge Base")}
                   </h2>
                 </div>
-                <div className="p-4 grid grid-cols-2 gap-4">
+                <div className="p-4 space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-                      {t("Default Voice")}
+                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                      {t("Default KB")}
                     </label>
                     <input
                       type="text"
-                      value={editedConfig.tts?.default_voice || "Cherry"}
+                      value={editedConfig.tools?.rag_tool?.default_kb || ""}
                       onChange={(e) =>
                         handleConfigChange(
-                          "tts",
-                          "default_voice",
+                          "tools",
+                          "default_kb",
                           e.target.value,
+                          "rag_tool",
                         )
                       }
-                      className="w-full p-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-slate-100"
+                      className="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs text-slate-900 dark:text-slate-100"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-                      {t("Default Language")}
+                    <label className="block text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                      {t("Base Directory")}
                     </label>
                     <input
                       type="text"
-                      value={editedConfig.tts?.default_language || "English"}
+                      value={editedConfig.tools?.rag_tool?.kb_base_dir || ""}
                       onChange={(e) =>
                         handleConfigChange(
-                          "tts",
-                          "default_language",
+                          "tools",
+                          "kb_base_dir",
                           e.target.value,
+                          "rag_tool",
                         )
                       }
-                      className="w-full p-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-slate-100"
+                      className="w-full p-1.5 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-xs font-mono text-slate-600 dark:text-slate-300"
                     />
                   </div>
                 </div>
               </section>
             </div>
+
+            {/* TTS Settings */}
+            <section className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2">
+                <Volume2 className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+                <h2 className="font-semibold text-sm text-slate-900 dark:text-slate-100">
+                  {t("Text-to-Speech")}
+                </h2>
+              </div>
+              <div className="p-4 grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+                    {t("Default Voice")}
+                  </label>
+                  <input
+                    type="text"
+                    value={editedConfig.tts?.default_voice || "Cherry"}
+                    onChange={(e) =>
+                      handleConfigChange("tts", "default_voice", e.target.value)
+                    }
+                    className="w-full p-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+                    {t("Default Language")}
+                  </label>
+                  <input
+                    type="text"
+                    value={editedConfig.tts?.default_language || "English"}
+                    onChange={(e) =>
+                      handleConfigChange(
+                        "tts",
+                        "default_language",
+                        e.target.value,
+                      )
+                    }
+                    className="w-full p-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+              </div>
+            </section>
           </div>
         )}
 

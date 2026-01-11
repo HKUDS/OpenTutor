@@ -12,7 +12,9 @@ config/
 ```
 
 | File | Purpose |
-|------|---------|
+|:-----|:--------|
+| `.env` | API keys, ports, providers |
+| `config/agents.yaml` | LLM parameters (temperature, max_tokens) |
 | `config/main.yaml` | Paths, tools, module settings |
 | `config/agents.yaml` | LLM parameters for each agent module |
 | `.env` | API keys, server ports, and service configuration |
@@ -22,23 +24,48 @@ config/
 Server ports are configured in `.env` file:
 
 ```bash
-# Backend API port (default: 8001)
+# Server ports (defaults: 8001/3782)
 BACKEND_PORT=8001
-
-# Frontend web port (default: 3782)
 FRONTEND_PORT=3782
+
+# Remote access
+NEXT_PUBLIC_API_BASE=http://your-server-ip:8001
+
+# Web search
+SEARCH_PROVIDER=perplexity  # or: baidu
+PERPLEXITY_API_KEY=your_key
+
+# TTS
+TTS_MODEL=
+TTS_URL=
+TTS_API_KEY=
 ```
 
-System language is configured in `config/main.yaml`:
+### ☁️ Azure OpenAI Configuration
 
-```yaml
-system:
-  language: en  # "zh" or "en"
+When using Azure OpenAI, you must set the `LLM_API_VERSION` and provide the correct endpoint URL including the deployment name.
+
+```bash
+LLM_BINDING=azure_openai
+LLM_MODEL=gpt-4o  # Your Azure deployment name
+LLM_HOST=https://{your-resource}.openai.azure.com/openai/deployments/{deployment-id}
+LLM_API_KEY=your_azure_api_key
+LLM_API_VERSION=2024-02-15-preview  # Required for Azure
 ```
 
-## 🤖 Agent LLM Configuration
+Similarly for embeddings:
 
-Each module has unified LLM settings in `config/agents.yaml`:
+```bash
+EMBEDDING_BINDING=azure_openai
+EMBEDDING_MODEL=text-embedding-3-large  # Your Azure deployment name
+EMBEDDING_HOST=https://{your-resource}.openai.azure.com/openai/deployments/{deployment-id}
+EMBEDDING_API_KEY=your_azure_api_key
+EMBEDDING_API_VERSION=2024-02-15-preview
+```
+
+## Agent Parameters
+
+Edit `config/agents.yaml`:
 
 ```yaml
 # Solve Module - Problem solving agents

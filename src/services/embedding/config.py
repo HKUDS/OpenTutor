@@ -26,6 +26,7 @@ class EmbeddingConfig:
     api_key: str
     base_url: Optional[str] = None
     binding: str = "openai"
+    api_version: Optional[str] = None
     dim: int = 3072
     max_tokens: int = 8192
     request_timeout: int = 30
@@ -93,6 +94,7 @@ def get_embedding_config() -> EmbeddingConfig:
                 model=active_provider.model,
                 api_key=active_provider.api_key or "",  # Empty string for local providers
                 base_url=active_provider.base_url,
+                api_version=getattr(active_provider, "api_version", None),
                 dim=active_provider.dimensions,
                 input_type=active_provider.input_type,
                 normalized=active_provider.normalized,
@@ -129,6 +131,7 @@ def get_embedding_config() -> EmbeddingConfig:
     model = get_with_fallback("EMBEDDING_MODEL", "EMBEDDING_MODEL")
     api_key = get_with_fallback("EMBEDDING_API_KEY", "EMBEDDING_API_KEY")
     base_url = get_with_fallback("EMBEDDING_HOST", "EMBEDDING_HOST")
+    api_version = get_with_fallback("EMBEDDING_API_VERSION", "EMBEDDING_API_VERSION")
     dim_str = get_with_fallback("EMBEDDING_DIM", "EMBEDDING_DIM")
 
     # Strict mode: Model is required
@@ -171,6 +174,7 @@ def get_embedding_config() -> EmbeddingConfig:
         model=model,
         api_key=api_key,
         base_url=base_url,
+        api_version=api_version,
         dim=dim,
         max_tokens=max_tokens,
         request_timeout=request_timeout,

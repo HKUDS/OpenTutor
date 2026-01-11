@@ -21,6 +21,9 @@ tools:
     - ./src/tools
   web_search:
     enabled: true
+    consolidation: template
+    consolid  ation_template: ''
+    provider: jina
   query_item:
     enabled: true
     max_results: 5

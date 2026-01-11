@@ -1,67 +1,17 @@
 """
 EditAgent - Co-writer editing agent.
-Uses unified PromptManager for prompt loading.
+Inherits from unified BaseAgent.
 """
 
 from datetime import datetime
 import json
-import logging
 from pathlib import Path
-import sys
 from typing import Any, Literal
 import uuid
 
-# Add project root for imports
-_project_root = Path(__file__).parent.parent.parent.parent
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
-
-from src.logging import LLMStats, get_logger
-from src.services.config import get_agent_params, load_config_with_main
-from src.services.llm import complete as llm_complete
-from src.services.llm import get_llm_config
-from src.services.prompt import get_prompt_manager
+from src.agents.base_agent import BaseAgent
 from src.tools.rag_tool import rag_search
 from src.tools.web_search import web_search
-
-# Initialize logger with config
-try:
-    config = load_config_with_main(
-        "solve_config.yaml", _project_root
-    )  # Use any config to get main.yaml
-    log_dir = config.get("paths", {}).get("user_log_dir") or config.get("logging", {}).get(
-        "log_dir"
-    )
-    logger = get_logger("CoWriter", log_dir=log_dir)
-except Exception:
-    # Fallback to standard logging
-    logger = logging.getLogger(__name__)
-
-# Shared stats tracker for co_writer
-_co_writer_stats: LLMStats | None = None
-
-
-def get_stats() -> LLMStats:
-    """Get or create shared stats tracker."""
-    global _co_writer_stats
-    if _co_writer_stats is None:
-        _co_writer_stats = LLMStats(module_name="CoWriter")
-    return _co_writer_stats
-
-
-def reset_stats():
-    """Reset shared stats."""
-    global _co_writer_stats
-    if _co_writer_stats:
-        _co_writer_stats.reset()
-
-
-def print_stats():
-    """Print stats summary."""
-    global _co_writer_stats
-    if _co_writer_stats:
-        _co_writer_stats.print_summary()
-
 
 USER_DIR = Path(__file__).parent.parent.parent.parent / "data" / "user" / "co-writer"
 HISTORY_FILE = USER_DIR / "history.json"
@@ -81,7 +31,7 @@ def load_history() -> list:
         try:
             with open(HISTORY_FILE, encoding="utf-8") as f:
                 return json.load(f)
-        except:
+        except Exception:
             return []
     return []
 
@@ -103,24 +53,15 @@ def save_tool_call(call_id: str, tool_type: str, data: dict[str, Any]) -> str:
     return str(filepath)
 
 
-class EditAgent:
-    def __init__(self, language: str = "en"):
-        # Load agent parameters from unified config (agents.yaml)
-        self._agent_params = get_agent_params("co_writer")
-        self.language = language
+class EditAgent(BaseAgent):
+    """Co-writer editing agent using unified BaseAgent."""
 
-        # Load prompts using unified PromptManager
-        self._prompts = get_prompt_manager().load_prompts(
+    def __init__(self, language: str = "en"):
+        super().__init__(
             module_name="co_writer",
             agent_name="edit_agent",
             language=language,
         )
-
-        try:
-            self.llm_config = get_llm_config()
-        except Exception as e:
-            logger.error(f"Failed to load LLM config: {e}")
-            self.llm_config = None
 
     async def process(
         self,
@@ -138,15 +79,6 @@ class EditAgent:
                 - edited_text: Edited text
                 - operation_id: Operation ID
         """
-        # Always refresh LLM config before starting to avoid stale credentials
-        try:
-            self.llm_config = get_llm_config()
-        except Exception as e:
-            logger.error(f"Failed to refresh LLM config: {e}")
-
-        if not self.llm_config:
-            raise ValueError("LLM configuration not available")
-
         operation_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
 
         context = ""
@@ -155,16 +87,16 @@ class EditAgent:
 
         if source == "rag":
             if not kb_name:
-                logger.warning("RAG source selected but no kb_name provided, skipping RAG search")
+                self.logger.warning("RAG source selected but no kb_name provided, skipping RAG search")
                 source = None
             else:
-                logger.info(f"Searching RAG in KB: {kb_name} for: {instruction}")
+                self.logger.info(f"Searching RAG in KB: {kb_name} for: {instruction}")
                 try:
                     search_result = await rag_search(
                         query=instruction, kb_name=kb_name, mode="naive", only_need_context=True
                     )
                     context = search_result.get("answer", "")
-                    logger.info(f"RAG context found: {len(context)} chars")
+                    self.logger.info(f"RAG context found: {len(context)} chars")
 
                     tool_call_data = {
                         "type": "rag",
@@ -178,15 +110,15 @@ class EditAgent:
                     }
                     tool_call_file = save_tool_call(operation_id, "rag", tool_call_data)
                 except Exception as e:
-                    logger.error(f"RAG search failed: {e}, continuing without context")
+                    self.logger.error(f"RAG search failed: {e}, continuing without context")
                     source = None
 
         elif source == "web":
-            logger.info(f"Searching Web for: {instruction}")
+            self.logger.info(f"Searching Web for: {instruction}")
             try:
                 search_result = web_search(instruction)
                 context = search_result.get("answer", "")
-                logger.info(f"Web context found: {len(context)} chars")
+                self.logger.info(f"Web context found: {len(context)} chars")
 
                 tool_call_data = {
                     "type": "web_search",
@@ -200,56 +132,44 @@ class EditAgent:
                 }
                 tool_call_file = save_tool_call(operation_id, "web", tool_call_data)
             except Exception as e:
-                logger.error(f"Web search failed: {e}, continuing without context")
+                self.logger.error(f"Web search failed: {e}, continuing without context")
                 source = None
 
-        # 2. Construct Prompt
-        system_prompt = self._prompts.get(
+        # Build prompts
+        system_prompt = self.get_prompt(
             "system", "You are an expert editor and writing assistant."
         )
 
         action_verbs = {"rewrite": "Rewrite", "shorten": "Shorten", "expand": "Expand"}
         action_verb = action_verbs.get(action, "Rewrite")
 
-        action_template = self._prompts.get(
+        action_template = self.get_prompt(
             "action_template",
             "{action_verb} the following text based on the user's instruction.\n\nUser Instruction: {instruction}\n\n",
         )
         user_prompt = action_template.format(action_verb=action_verb, instruction=instruction)
 
         if context:
-            context_template = self._prompts.get(
+            context_template = self.get_prompt(
                 "context_template", "Reference Context:\n{context}\n\n"
             )
             user_prompt += context_template.format(context=context)
 
-        text_template = self._prompts.get(
+        text_template = self.get_prompt(
             "user_template",
             "Target Text to Edit:\n{text}\n\nOutput only the edited text, without quotes or explanations.",
         )
         user_prompt += text_template.format(text=text)
 
-        # 3. Call LLM
-        logger.info(f"Calling LLM for {action}...")
-        model = self.llm_config.model
-        response = await llm_complete(
-            binding=self.llm_config.binding,
-            model=model,
-            prompt=user_prompt,
+        # Call LLM using inherited method
+        self.logger.info(f"Calling LLM for {action}...")
+        response = await self.call_llm(
+            user_prompt=user_prompt,
             system_prompt=system_prompt,
-            api_key=self.llm_config.api_key,
-            base_url=self.llm_config.base_url,
-            temperature=self._agent_params["temperature"],
-            max_tokens=self._agent_params["max_tokens"],
+            stage=f"edit_{action}",
         )
 
-        # Track token usage
-        stats = get_stats()
-        stats.add_call(
-            model=model, system_prompt=system_prompt, user_prompt=user_prompt, response=response
-        )
-
-        # 4. Record operation history
+        # Record operation history
         history = load_history()
         operation_record = {
             "id": operation_id,
@@ -260,12 +180,12 @@ class EditAgent:
             "input": {"original_text": text, "instruction": instruction},
             "output": {"edited_text": response},
             "tool_call_file": tool_call_file,
-            "model": self.llm_config.model,
+            "model": self.get_model(),
         }
         history.append(operation_record)
         save_history(history)
 
-        logger.info(f"Operation {operation_id} recorded successfully")
+        self.logger.info(f"Operation {operation_id} recorded successfully")
 
         return {"edited_text": response, "operation_id": operation_id}
 
@@ -278,40 +198,19 @@ class EditAgent:
                 - marked_text: Text with annotations
                 - operation_id: Operation ID
         """
-        # Always refresh LLM config before starting to avoid stale credentials
-        try:
-            self.llm_config = get_llm_config()
-        except Exception as e:
-            logger.error(f"Failed to refresh LLM config: {e}")
-
-        if not self.llm_config:
-            raise ValueError("LLM configuration not available")
-
         operation_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
 
-        system_prompt = self._prompts.get("auto_mark_system", "")
-        user_template = self._prompts.get(
+        system_prompt = self.get_prompt("auto_mark_system", "")
+        user_template = self.get_prompt(
             "auto_mark_user_template", "Process the following text:\n{text}"
         )
         user_prompt = user_template.format(text=text)
 
-        logger.info("Calling LLM for auto-mark...")
-        model = self.llm_config.model
-        response = await llm_complete(
-            binding=self.llm_config.binding,
-            model=model,
-            prompt=user_prompt,
+        self.logger.info("Calling LLM for auto-mark...")
+        response = await self.call_llm(
+            user_prompt=user_prompt,
             system_prompt=system_prompt,
-            api_key=self.llm_config.api_key,
-            base_url=self.llm_config.base_url,
-            temperature=self._agent_params["temperature"],
-            max_tokens=self._agent_params["max_tokens"],
-        )
-
-        # Track token usage
-        stats = get_stats()
-        stats.add_call(
-            model=model, system_prompt=system_prompt, user_prompt=user_prompt, response=response
+            stage="auto_mark",
         )
 
         # Record operation history
@@ -325,11 +224,27 @@ class EditAgent:
             "input": {"original_text": text, "instruction": "AI Auto Mark"},
             "output": {"edited_text": response},
             "tool_call_file": None,
-            "model": self.llm_config.model,
+            "model": self.get_model(),
         }
         history.append(operation_record)
         save_history(history)
 
-        logger.info(f"Auto-mark operation {operation_id} recorded successfully")
+        self.logger.info(f"Auto-mark operation {operation_id} recorded successfully")
 
         return {"marked_text": response, "operation_id": operation_id}
+
+
+# Legacy compatibility - export get_stats pointing to BaseAgent's stats
+def get_stats():
+    """Get shared stats tracker for co_writer module."""
+    return BaseAgent.get_stats("co_writer")
+
+
+def reset_stats():
+    """Reset shared stats for co_writer module."""
+    BaseAgent.reset_stats("co_writer")
+
+
+def print_stats():
+    """Print stats summary for co_writer module."""
+    BaseAgent.print_stats("co_writer")

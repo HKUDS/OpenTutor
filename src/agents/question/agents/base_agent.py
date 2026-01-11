@@ -2,6 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 Base Agent class - Implements the ReAct (Reasoning + Acting) paradigm.
+
+Uses the unified LLM Factory for all LLM calls, supporting:
+- Cloud providers (OpenAI, Anthropic, DeepSeek, etc.)
+- Local providers (Ollama, LM Studio, vLLM, etc.)
+- Automatic retry with exponential backoff
 """
 
 from abc import ABC, abstractmethod
@@ -13,7 +18,7 @@ import sys
 from typing import Any
 
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
+from openai import AsyncAzureOpenAI, AsyncOpenAI
 
 # Load environment variables
 load_dotenv(override=False)
@@ -24,6 +29,9 @@ sys.path.insert(0, str(project_root))
 
 from src.logging import get_logger
 from src.services.config import get_agent_params
+from src.services.llm import complete as llm_complete
+from src.services.llm.capabilities import supports_response_format
+from src.services.llm.config import get_llm_config
 
 # Module logger
 _logger = get_logger("QuestionAgent")
@@ -81,6 +89,7 @@ class BaseAgent(ABC):
         agent_name: str,
         api_key: str | None = None,
         base_url: str | None = None,
+        api_version: str | None = None,
         model: str | None = None,
         max_iterations: int = 10,
         kb_name: str | None = None,
@@ -96,20 +105,40 @@ class BaseAgent(ABC):
         # Load agent parameters from unified config (agents.yaml)
         self._agent_params = get_agent_params("question")
 
-        if not api_key:
-            api_key = os.getenv("LLM_API_KEY")
-        if not base_url:
-            base_url = os.getenv("LLM_HOST")
+        # Load LLM configuration via unified config system
+        try:
+            llm_config = get_llm_config()
+            self.api_key = api_key or llm_config.api_key
+            self.base_url = base_url or llm_config.base_url
+            self.api_version = api_version or llm_config.api_version
+            self.binding = llm_config.binding or "openai"
+            self.model = model or llm_config.model
+        except Exception:
+            # Fallback to environment variables
+            self.api_key = api_key or os.getenv("LLM_API_KEY")
+            self.base_url = base_url or os.getenv("LLM_HOST")
+            self.api_version = api_version or os.getenv("LLM_API_VERSION")
+            self.binding = os.getenv("LLM_BINDING", "openai")
+            self.model = model or os.getenv("LLM_MODEL")
 
-        if model is None:
-            model = os.getenv("LLM_MODEL", "gpt-4o")
-        self.model = model
+        if not self.model:
+            from src.services.llm.exceptions import LLMConfigError
+            raise LLMConfigError(
+                "LLM_MODEL not configured. Please set it in .env or activate a provider."
+            )
 
-        # For local LLM servers, use placeholder key if none provided
-        client_api_key = api_key or "sk-no-key-required"
-        self.client = AsyncOpenAI(api_key=client_api_key, base_url=base_url)
-        self.api_key = api_key
-        self.base_url = base_url
+        # Initialize OpenAI client for direct API calls
+        if self.binding == "azure":
+            self.client = AsyncAzureOpenAI(
+                api_key=self.api_key,
+                azure_endpoint=self.base_url,
+                api_version=self.api_version or "2024-02-15-preview",
+            )
+        else:
+            self.client = AsyncOpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+            )
 
         self.thought_history: list[str] = []
         self.action_history: list[Action] = []
@@ -309,32 +338,37 @@ Output JSON format:
 5. History can be referenced, but if it's a new round, must re-execute key steps
 """
 
-        response = await self.client.chat.completions.create(
+        # Build kwargs for LLM Factory
+        llm_kwargs = {
+            "temperature": self._agent_params["temperature"],
+            "max_tokens": self._agent_params["max_tokens"],
+        }
+
+        # Only add response_format if the provider supports it
+        if supports_response_format(self.binding, self.model):
+            llm_kwargs["response_format"] = {"type": "json_object"}
+
+        # Call LLM via unified Factory (supports all providers with retry)
+        response_content = await llm_complete(
+            prompt=user_prompt,
+            system_prompt=system_prompt,
             model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=self._agent_params["temperature"],
-            max_tokens=self._agent_params["max_tokens"],
-            response_format={"type": "json_object"},
+            api_key=self.api_key,
+            base_url=self.base_url,
+            api_version=self.api_version,
+            binding=self.binding,
+            **llm_kwargs,
         )
 
-        # Extract response content
-        response_content = response.choices[0].message.content
-
         # Update token statistics if callback is available
-        input_tokens = 0
-        output_tokens = 0
-        cost = 0.0
-        if hasattr(response, "usage") and response.usage:
-            input_tokens = response.usage.prompt_tokens
-            output_tokens = response.usage.completion_tokens
-            cost = input_tokens * 0.00000015 + output_tokens * 0.0000006
-            if self.token_stats_callback:
-                self.token_stats_callback(
-                    input_tokens=input_tokens, output_tokens=output_tokens, model=self.model
-                )
+        # Note: Factory doesn't return token counts, estimate based on response
+        if self.token_stats_callback:
+            # Rough estimation: ~4 chars per token
+            input_tokens = (len(system_prompt) + len(user_prompt)) // 4
+            output_tokens = len(response_content) // 4
+            self.token_stats_callback(
+                input_tokens=input_tokens, output_tokens=output_tokens, model=self.model
+            )
 
         # Log LLM call with detailed information
         _logger.log_llm_call(
@@ -344,9 +378,9 @@ Output JSON format:
             user_prompt=user_prompt,
             response=response_content,
             agent_name=self.agent_name,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cost=cost,
+            input_tokens=0,  # Not available from factory
+            output_tokens=0,
+            cost=0.0,
             level="DEBUG",
         )
 

@@ -45,6 +45,7 @@ class MainSolver:
         config_path: str | None = None,
         api_key: str | None = None,
         base_url: str | None = None,
+        api_version: str | None = None,
         kb_name: str = "ai_textbook",
         output_base_dir: str | None = None,
     ):
@@ -55,6 +56,7 @@ class MainSolver:
             config_path: Config file path (default: config.yaml in current directory)
             api_key: API key (if not provided, read from environment)
             base_url: API URL (if not provided, read from environment)
+            api_version: API version (if not provided, read from environment)
             kb_name: Knowledge base name
             output_base_dir: Output base directory (optional, overrides config)
         """
@@ -124,6 +126,8 @@ class MainSolver:
                     api_key = llm_config.api_key
                 if base_url is None:
                     base_url = llm_config.base_url
+                if api_version is None:
+                    api_version = getattr(llm_config, "api_version", None)
 
                 # Ensure LLM config is populated in self.config for agents
                 if "llm" not in self.config:
@@ -150,6 +154,7 @@ class MainSolver:
 
         self.api_key = api_key
         self.base_url = base_url
+        self.api_version = api_version
         self.kb_name = kb_name
 
         # Initialize logging system
@@ -220,6 +225,7 @@ class MainSolver:
             config=self.config,
             api_key=self.api_key,
             base_url=self.base_url,
+            api_version=self.api_version,
             token_tracker=self.token_tracker,
         )
         self.logger.info("  InvestigateAgent initialized")
@@ -228,6 +234,7 @@ class MainSolver:
             config=self.config,
             api_key=self.api_key,
             base_url=self.base_url,
+            api_version=self.api_version,
             token_tracker=self.token_tracker,
         )
         self.logger.info("  NoteAgent initialized")
@@ -445,16 +452,32 @@ class MainSolver:
         if self.manager_agent is None:
             self.logger.progress("Initializing Solve Loop agents...")
             self.manager_agent = ManagerAgent(
-                self.config, self.api_key, self.base_url, token_tracker=self.token_tracker
+                self.config,
+                self.api_key,
+                self.base_url,
+                api_version=self.api_version,
+                token_tracker=self.token_tracker,
             )
             self.solve_agent = SolveAgent(
-                self.config, self.api_key, self.base_url, token_tracker=self.token_tracker
+                self.config,
+                self.api_key,
+                self.base_url,
+                api_version=self.api_version,
+                token_tracker=self.token_tracker,
             )
             self.tool_agent = ToolAgent(
-                self.config, self.api_key, self.base_url, token_tracker=self.token_tracker
+                self.config,
+                self.api_key,
+                self.base_url,
+                api_version=self.api_version,
+                token_tracker=self.token_tracker,
             )
             self.response_agent = ResponseAgent(
-                self.config, self.api_key, self.base_url, token_tracker=self.token_tracker
+                self.config,
+                self.api_key,
+                self.base_url,
+                api_version=self.api_version,
+                token_tracker=self.token_tracker,
             )
 
             precision_enabled = (
@@ -464,7 +487,11 @@ class MainSolver:
             )
             if precision_enabled:
                 self.precision_answer_agent = PrecisionAnswerAgent(
-                    self.config, self.api_key, self.base_url, token_tracker=self.token_tracker
+                    self.config,
+                    self.api_key,
+                    self.base_url,
+                    api_version=self.api_version,
+                    token_tracker=self.token_tracker,
                 )
 
         # 1. Plan: Generate solving plan

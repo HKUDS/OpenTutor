@@ -27,11 +27,10 @@ Ctrl+C sometimes only terminates the frontend process while the backend continue
 **Solution**
 
 ```bash
-# macOS/Linux: Find and kill the process
-lsof -i :8001
-kill -9 <PID>
+# macOS/Linux
+lsof -i :8001 && kill -9 <PID>
 
-# Windows: Find and kill the process
+# Windows
 netstat -ano | findstr :8001
 taskkill /PID <PID> /F
 ```

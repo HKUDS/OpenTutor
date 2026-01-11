@@ -3,13 +3,16 @@ LLM Client
 ==========
 
 Unified LLM client for all DeepTutor services.
+
+Note: This is a legacy interface. Prefer using the factory functions directly:
+    from src.services.llm import complete, stream
 """
 
-import asyncio
 from typing import Any, Dict, List, Optional
 
 from src.logging import get_logger
 
+from .capabilities import system_in_messages
 from .config import LLMConfig, get_llm_config
 
 
@@ -17,7 +20,8 @@ class LLMClient:
     """
     Unified LLM client for all services.
 
-    Wraps the underlying LLM API (OpenAI-compatible) with a consistent interface.
+    Wraps the LLM Factory with a class-based interface.
+    Prefer using factory functions (complete, stream) directly for new code.
     """
 
     def __init__(self, config: Optional[LLMConfig] = None):
@@ -38,7 +42,7 @@ class LLMClient:
         **kwargs: Any,
     ) -> str:
         """
-        Call LLM completion.
+        Call LLM completion via Factory.
 
         Args:
             prompt: User prompt
@@ -49,46 +53,19 @@ class LLMClient:
         Returns:
             LLM response text
         """
-        from lightrag.llm.openai import openai_complete_if_cache
+        from . import factory
 
-        # Import OpenAI exceptions for retry logic
-        try:
-            from openai import APITimeoutError, RateLimitError
-        except ImportError:
-            RateLimitError = APITimeoutError = None
-
-        max_retries = 3
-        base_delay = 1.0
-        for attempt in range(max_retries):
-            try:
-                return await openai_complete_if_cache(
-                    self.config.model,
-                    prompt,
-                    system_prompt=system_prompt,
-                    history_messages=history or [],
-                    api_key=self.config.api_key,
-                    base_url=self.config.base_url,
-                    **kwargs,
-                )
-            except Exception as e:
-                if RateLimitError and isinstance(e, RateLimitError):
-                    if attempt < max_retries - 1:
-                        delay = base_delay * (2**attempt)
-                        self.logger.warning(
-                            f"Rate limit hit, retrying in {delay}s (attempt {attempt + 1}/{max_retries})"
-                        )
-                        await asyncio.sleep(delay)
-                        continue
-                elif APITimeoutError and isinstance(e, APITimeoutError):
-                    if attempt < max_retries - 1:
-                        delay = base_delay * (2**attempt)
-                        self.logger.warning(
-                            f"API timeout, retrying in {delay}s (attempt {attempt + 1}/{max_retries})"
-                        )
-                        await asyncio.sleep(delay)
-                        continue
-                # Re-raise if not retryable or max retries reached
-                raise
+        # Delegate to factory for unified routing and retry handling
+        return await factory.complete(
+            prompt=prompt,
+            system_prompt=system_prompt or "You are a helpful assistant.",
+            model=self.config.model,
+            api_key=self.config.api_key,
+            base_url=self.config.base_url,
+            api_version=getattr(self.config, "api_version", None),
+            binding=getattr(self.config, "binding", "openai"),
+            **kwargs,
+        )
 
     def complete_sync(
         self,
@@ -129,15 +106,35 @@ class LLMClient:
         Returns:
             Callable that can be used as llm_model_func
         """
-        import time
+        binding = getattr(self.config, "binding", "openai")
 
+        # Use capabilities to determine if provider uses OpenAI-style messages
+        uses_openai_style = system_in_messages(binding, self.config.model)
+
+        # For non-OpenAI-compatible providers (e.g., Anthropic), use Factory
+        if not uses_openai_style:
+            from . import factory
+
+            def llm_model_func_via_factory(
+                prompt: str,
+                system_prompt: Optional[str] = None,
+                history_messages: Optional[List[Dict]] = None,
+                **kwargs: Any,
+            ):
+                return factory.complete(
+                    prompt=prompt,
+                    system_prompt=system_prompt or "You are a helpful assistant.",
+                    model=self.config.model,
+                    api_key=self.config.api_key,
+                    base_url=self.config.base_url,
+                    binding=binding,
+                    **kwargs,
+                )
+
+            return llm_model_func_via_factory
+
+        # OpenAI-compatible bindings use lightrag (has caching)
         from lightrag.llm.openai import openai_complete_if_cache
-
-        # Import OpenAI exceptions for retry logic
-        try:
-            from openai import APITimeoutError, RateLimitError
-        except ImportError:
-            RateLimitError = APITimeoutError = None
 
         def llm_model_func(
             prompt: str,
@@ -145,38 +142,22 @@ class LLMClient:
             history_messages: Optional[List[Dict]] = None,
             **kwargs: Any,
         ):
-            max_retries = 3
-            base_delay = 1.0
-            for attempt in range(max_retries):
-                try:
-                    return openai_complete_if_cache(
-                        self.config.model,
-                        prompt,
-                        system_prompt=system_prompt,
-                        history_messages=history_messages or [],
-                        api_key=self.config.api_key,
-                        base_url=self.config.base_url,
-                        **kwargs,
-                    )
-                except Exception as e:
-                    if RateLimitError and isinstance(e, RateLimitError):
-                        if attempt < max_retries - 1:
-                            delay = base_delay * (2**attempt)
-                            self.logger.warning(
-                                f"Rate limit hit, retrying in {delay}s (attempt {attempt + 1}/{max_retries})"
-                            )
-                            time.sleep(delay)
-                            continue
-                    elif APITimeoutError and isinstance(e, APITimeoutError):
-                        if attempt < max_retries - 1:
-                            delay = base_delay * (2**attempt)
-                            self.logger.warning(
-                                f"API timeout, retrying in {delay}s (attempt {attempt + 1}/{max_retries})"
-                            )
-                            time.sleep(delay)
-                            continue
-                    # Re-raise if not retryable or max retries reached
-                    raise
+            # Only pass api_version if set (for Azure OpenAI)
+            lightrag_kwargs = {
+                "system_prompt": system_prompt,
+                "history_messages": history_messages or [],
+                "api_key": self.config.api_key,
+                "base_url": self.config.base_url,
+                **kwargs,
+            }
+            api_version = getattr(self.config, "api_version", None)
+            if api_version:
+                lightrag_kwargs["api_version"] = api_version
+            return openai_complete_if_cache(
+                self.config.model,
+                prompt,
+                **lightrag_kwargs,
+            )
 
         return llm_model_func
 
@@ -187,15 +168,42 @@ class LLMClient:
         Returns:
             Callable that can be used as vision_model_func
         """
-        import time
+        binding = getattr(self.config, "binding", "openai")
 
+        # Use capabilities to determine if provider uses OpenAI-style messages
+        uses_openai_style = system_in_messages(binding, self.config.model)
+
+        # For non-OpenAI-compatible providers, use Factory
+        if not uses_openai_style:
+            from . import factory
+
+            def vision_model_func_via_factory(
+                prompt: str,
+                system_prompt: Optional[str] = None,
+                history_messages: Optional[List[Dict]] = None,
+                image_data: Optional[str] = None,
+                messages: Optional[List[Dict]] = None,
+                **kwargs: Any,
+            ):
+                # Use factory for unified handling
+                return factory.complete(
+                    prompt=prompt,
+                    system_prompt=system_prompt or "You are a helpful assistant.",
+                    model=self.config.model,
+                    api_key=self.config.api_key,
+                    base_url=self.config.base_url,
+                    binding=binding,
+                    messages=messages,
+                    **kwargs,
+                )
+
+            return vision_model_func_via_factory
+
+        # OpenAI-compatible bindings
         from lightrag.llm.openai import openai_complete_if_cache
 
-        # Import OpenAI exceptions for retry logic
-        try:
-            from openai import APITimeoutError, RateLimitError
-        except ImportError:
-            RateLimitError = APITimeoutError = None
+        # Get api_version once for reuse
+        api_version = getattr(self.config, "api_version", None)
 
         def vision_model_func(
             prompt: str,
@@ -205,77 +213,69 @@ class LLMClient:
             messages: Optional[List[Dict]] = None,
             **kwargs: Any,
         ):
-            max_retries = 3
-            base_delay = 1.0
-            for attempt in range(max_retries):
-                try:
-                    # Handle multimodal messages
-                    if messages:
-                        clean_kwargs = {
-                            k: v
-                            for k, v in kwargs.items()
-                            if k not in ["messages", "prompt", "system_prompt", "history_messages"]
-                        }
-                        return openai_complete_if_cache(
-                            self.config.model,
-                            prompt="",
-                            messages=messages,
-                            api_key=self.config.api_key,
-                            base_url=self.config.base_url,
-                            **clean_kwargs,
-                        )
+            # Handle multimodal messages
+            if messages:
+                clean_kwargs = {
+                    k: v
+                    for k, v in kwargs.items()
+                    if k not in ["messages", "prompt", "system_prompt", "history_messages"]
+                }
+                lightrag_kwargs = {
+                    "messages": messages,
+                    "api_key": self.config.api_key,
+                    "base_url": self.config.base_url,
+                    **clean_kwargs,
+                }
+                if api_version:
+                    lightrag_kwargs["api_version"] = api_version
+                return openai_complete_if_cache(
+                    self.config.model,
+                    prompt="",
+                    **lightrag_kwargs,
+                )
 
-                    # Handle image data
-                    if image_data:
-                        # Build image message
-                        image_message = {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {"url": f"data:image/jpeg;base64,{image_data}"},
-                                },
-                            ],
-                        }
-                        return openai_complete_if_cache(
-                            self.config.model,
-                            prompt="",
-                            messages=[image_message],
-                            api_key=self.config.api_key,
-                            base_url=self.config.base_url,
-                            **kwargs,
-                        )
+            # Handle image data
+            if image_data:
+                # Build image message
+                image_message = {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{image_data}"},
+                        },
+                    ],
+                }
+                lightrag_kwargs = {
+                    "messages": [image_message],
+                    "api_key": self.config.api_key,
+                    "base_url": self.config.base_url,
+                    **kwargs,
+                }
+                if api_version:
+                    lightrag_kwargs["api_version"] = api_version
+                return openai_complete_if_cache(
+                    self.config.model,
+                    prompt="",
+                    **lightrag_kwargs,
+                )
 
-                    # Fallback to regular completion
-                    return openai_complete_if_cache(
-                        self.config.model,
-                        prompt,
-                        system_prompt=system_prompt,
-                        history_messages=history_messages or [],
-                        api_key=self.config.api_key,
-                        base_url=self.config.base_url,
-                        **kwargs,
-                    )
-                except Exception as e:
-                    if RateLimitError and isinstance(e, RateLimitError):
-                        if attempt < max_retries - 1:
-                            delay = base_delay * (2**attempt)
-                            self.logger.warning(
-                                f"Rate limit hit, retrying in {delay}s (attempt {attempt + 1}/{max_retries})"
-                            )
-                            time.sleep(delay)
-                            continue
-                    elif APITimeoutError and isinstance(e, APITimeoutError):
-                        if attempt < max_retries - 1:
-                            delay = base_delay * (2**attempt)
-                            self.logger.warning(
-                                f"API timeout, retrying in {delay}s (attempt {attempt + 1}/{max_retries})"
-                            )
-                            time.sleep(delay)
-                            continue
-                    # Re-raise if not retryable or max retries reached
-                    raise
+            # Fallback to regular completion
+            lightrag_kwargs = {
+                "system_prompt": system_prompt,
+                "history_messages": history_messages or [],
+                "api_key": self.config.api_key,
+                "base_url": self.config.base_url,
+                **kwargs,
+            }
+            if api_version:
+                lightrag_kwargs["api_version"] = api_version
+            return openai_complete_if_cache(
+                self.config.model,
+                prompt,
+                **lightrag_kwargs,
+            )
 
         return vision_model_func
 

@@ -19,6 +19,8 @@ from typing import Literal, Optional
 
 from dotenv import load_dotenv
 
+from .exceptions import LLMConfigError
+
 # Load environment variables
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 load_dotenv(PROJECT_ROOT / "DeepTutor.env", override=False)
@@ -38,6 +40,7 @@ class LLMConfig:
     api_key: str
     base_url: Optional[str] = None
     binding: str = "openai"
+    api_version: Optional[str] = None
     max_tokens: int = 4096
     temperature: float = 0.7
     provider_type: Literal["api", "local"] = "api"  # Track if this is API or local config
@@ -50,9 +53,11 @@ def _strip_value(value: Optional[str]) -> Optional[str]:
     return value.strip().strip("\"'")
 
 
-def get_llm_mode() -> str:
+def _get_llm_mode_str() -> str:
     """
-    Get the current LLM deployment mode from environment.
+    Get the current LLM deployment mode from environment (internal use).
+
+    For external use, import get_llm_mode from factory.py which returns LLMMode enum.
 
     Returns:
         str: 'api', 'local', or 'hybrid' (default)
@@ -79,7 +84,7 @@ def get_llm_config() -> LLMConfig:
     Raises:
         ValueError: If required configuration is missing
     """
-    mode = get_llm_mode()
+    mode = _get_llm_mode_str()
 
     # 1. Try to get active provider from provider manager
     try:
@@ -105,6 +110,7 @@ def get_llm_config() -> LLMConfig:
                     model=active_provider.model,
                     api_key=active_provider.api_key,
                     base_url=active_provider.base_url,
+                    api_version=getattr(active_provider, "api_version", None),
                     provider_type=getattr(active_provider, "provider_type", "local"),
                 )
     except Exception as e:
@@ -115,11 +121,12 @@ def get_llm_config() -> LLMConfig:
     model = _strip_value(os.getenv("LLM_MODEL"))
     api_key = _strip_value(os.getenv("LLM_API_KEY"))
     base_url = _strip_value(os.getenv("LLM_HOST"))
+    api_version = _strip_value(os.getenv("LLM_API_VERSION"))
 
     # Validate required configuration
     if not model:
-        raise ValueError(
-            "Error: LLM_MODEL not set, please configure it in .env file or activate a provider"
+        raise LLMConfigError(
+            "LLM_MODEL not set, please configure it in .env file or activate a provider"
         )
 
     # Determine provider type from base_url
@@ -133,12 +140,12 @@ def get_llm_config() -> LLMConfig:
     )
 
     if requires_key and not api_key:
-        raise ValueError(
-            "Error: LLM_API_KEY not set, please configure it in .env file or activate a provider"
+        raise LLMConfigError(
+            "LLM_API_KEY not set, please configure it in .env file or activate a provider"
         )
     if not base_url:
-        raise ValueError(
-            "Error: LLM_HOST not set, please configure it in .env file or activate a provider"
+        raise LLMConfigError(
+            "LLM_HOST not set, please configure it in .env file or activate a provider"
         )
 
     return LLMConfig(
@@ -146,6 +153,7 @@ def get_llm_config() -> LLMConfig:
         model=model,
         api_key=api_key or "",
         base_url=base_url,
+        api_version=api_version,
         provider_type=provider_type,
     )
 
@@ -211,7 +219,6 @@ def get_token_limit_kwargs(model: str, max_tokens: int) -> dict:
 __all__ = [
     "LLMConfig",
     "get_llm_config",
-    "get_llm_mode",
     "uses_max_completion_tokens",
     "get_token_limit_kwargs",
     "LLM_MODE_API",

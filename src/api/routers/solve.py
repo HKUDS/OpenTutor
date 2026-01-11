@@ -22,6 +22,7 @@ _project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(_project_root))
 from src.logging import get_logger
 from src.services.config import load_config_with_main
+from src.services.llm import get_llm_config
 
 # Initialize logger with config
 project_root = Path(__file__).parent.parent.parent.parent
@@ -37,6 +38,47 @@ async def websocket_solve(websocket: WebSocket):
     await websocket.accept()
 
     task_manager = TaskIDManager.get_instance()
+    connection_closed = asyncio.Event()
+    log_queue = asyncio.Queue()
+    pusher_task = None
+
+    async def safe_send_json(data: dict[str, Any]):
+        """Safely send JSON to WebSocket, checking if connection is closed"""
+        if connection_closed.is_set():
+            return False
+        try:
+            await websocket.send_json(data)
+            return True
+        except (WebSocketDisconnect, RuntimeError, ConnectionError) as e:
+            logger.debug(f"WebSocket connection closed: {e}")
+            connection_closed.set()
+            return False
+        except Exception as e:
+            logger.debug(f"Error sending WebSocket message: {e}")
+            return False
+
+    async def log_pusher():
+        while not connection_closed.is_set():
+            try:
+                # Use timeout to periodically check if connection is closed
+                entry = await asyncio.wait_for(log_queue.get(), timeout=0.5)
+                try:
+                    await websocket.send_json(entry)
+                except (WebSocketDisconnect, RuntimeError, ConnectionError) as e:
+                    # Connection closed, stop pushing
+                    logger.debug(f"WebSocket connection closed in log_pusher: {e}")
+                    connection_closed.set()
+                    break
+                except Exception as e:
+                    logger.debug(f"Error sending log entry: {e}")
+                    # Continue to next entry
+                log_queue.task_done()
+            except asyncio.TimeoutError:
+                # Timeout, check if connection is still open
+                continue
+            except Exception as e:
+                logger.debug(f"Error in log_pusher: {e}")
+                break
 
     try:
         # 1. Wait for the initial message with the question and config
@@ -57,7 +99,23 @@ async def websocket_solve(websocket: WebSocket):
         root_dir = Path(__file__).parent.parent.parent.parent
         output_base = root_dir / "data" / "user" / "solve"
 
-        solver = MainSolver(kb_name=kb_name, output_base_dir=str(output_base))
+        try:
+            llm_config = get_llm_config()
+            api_key = llm_config.api_key
+            base_url = llm_config.base_url
+            api_version = getattr(llm_config, "api_version", None)
+        except Exception:
+            api_key = None
+            base_url = None
+            api_version = None
+
+        solver = MainSolver(
+            kb_name=kb_name,
+            output_base_dir=str(output_base),
+            api_key=api_key,
+            base_url=base_url,
+            api_version=api_version,
+        )
 
         logger.info(f"[{task_id}] Solving: {question[:50]}...")
 
@@ -67,7 +125,7 @@ async def websocket_solve(websocket: WebSocket):
         # The main logger already writes to data/user/logs/ai_tutor_YYYYMMDD.log
 
         # 3. Setup Log Queue
-        log_queue = asyncio.Queue()
+        # log_queue already initialized
 
         # 4. Setup status update mechanism
         display_manager = None
@@ -122,146 +180,102 @@ async def websocket_solve(websocket: WebSocket):
         solver._send_progress_update = send_progress_update
 
         # 5. Background task to push logs to WebSocket
-        connection_closed = asyncio.Event()
-
-        async def log_pusher():
-            while not connection_closed.is_set():
-                try:
-                    # Use timeout to periodically check if connection is closed
-                    entry = await asyncio.wait_for(log_queue.get(), timeout=0.5)
-                    try:
-                        await websocket.send_json(entry)
-                    except (WebSocketDisconnect, RuntimeError, ConnectionError) as e:
-                        # Connection closed, stop pushing
-                        logger.debug(f"WebSocket connection closed in log_pusher: {e}")
-                        connection_closed.set()
-                        break
-                    except Exception as e:
-                        logger.debug(f"Error sending log entry: {e}")
-                        # Continue to next entry
-                    log_queue.task_done()
-                except asyncio.TimeoutError:
-                    # Timeout, check if connection is still open
-                    continue
-                except Exception as e:
-                    logger.debug(f"Error in log_pusher: {e}")
-                    break
-
         pusher_task = asyncio.create_task(log_pusher())
 
-        # Helper function to safely send WebSocket messages
-        async def safe_send_json(data: dict[str, Any]):
-            """Safely send JSON to WebSocket, checking if connection is closed"""
-            if connection_closed.is_set():
-                return False
-            try:
-                await websocket.send_json(data)
-                return True
-            except (WebSocketDisconnect, RuntimeError, ConnectionError) as e:
-                logger.debug(f"WebSocket connection closed: {e}")
-                connection_closed.set()
-                return False
-            except Exception as e:
-                logger.debug(f"Error sending WebSocket message: {e}")
-                return False
-
         # 6. Run Solver within the LogInterceptor context
-        try:
-            interceptor = LogInterceptor(target_logger, log_queue)
-            with interceptor:
-                await safe_send_json({"type": "status", "content": "started"})
+        interceptor = LogInterceptor(target_logger, log_queue)
+        with interceptor:
+            await safe_send_json({"type": "status", "content": "started"})
 
-                if display_manager:
-                    await safe_send_json(
-                        {
-                            "type": "agent_status",
-                            "agent": "all",
-                            "status": "initial",
-                            "all_agents": display_manager.agents_status.copy(),
-                        }
-                    )
-                    await safe_send_json(
-                        {"type": "token_stats", "stats": display_manager.stats.copy()}
-                    )
+            if display_manager:
+                await safe_send_json(
+                    {
+                        "type": "agent_status",
+                        "agent": "all",
+                        "status": "initial",
+                        "all_agents": display_manager.agents_status.copy(),
+                    }
+                )
+                await safe_send_json({"type": "token_stats", "stats": display_manager.stats.copy()})
 
-                logger.progress(f"[{task_id}] Solving started")
+            logger.progress(f"[{task_id}] Solving started")
 
-                result = await solver.solve(question, verbose=True)
+            result = await solver.solve(question, verbose=True)
 
-                logger.success(f"[{task_id}] Solving completed")
-                task_manager.update_task_status(task_id, "completed")
+            logger.success(f"[{task_id}] Solving completed")
+            task_manager.update_task_status(task_id, "completed")
 
-                # Process Markdown content to fix image paths
-                final_answer = result.get("final_answer", "")
-                output_dir_str = result.get("output_dir", "")
+            # Process Markdown content to fix image paths
+            final_answer = result.get("final_answer", "")
+            output_dir_str = result.get("output_dir", "")
 
-                if output_dir_str and final_answer:
-                    try:
-                        output_dir = Path(output_dir_str)
+            if output_dir_str and final_answer:
+                try:
+                    output_dir = Path(output_dir_str)
 
-                        if not output_dir.is_absolute():
-                            output_dir = output_dir.resolve()
+                    if not output_dir.is_absolute():
+                        output_dir = output_dir.resolve()
 
-                        path_str = str(output_dir).replace("\\", "/")
-                        parts = path_str.split("/")
+                    path_str = str(output_dir).replace("\\", "/")
+                    parts = path_str.split("/")
 
-                        if "user" in parts:
-                            idx = parts.index("user")
-                            rel_path = "/".join(parts[idx + 1 :])
-                            base_url = f"/api/outputs/{rel_path}"
+                    if "user" in parts:
+                        idx = parts.index("user")
+                        rel_path = "/".join(parts[idx + 1 :])
+                        base_url = f"/api/outputs/{rel_path}"
 
-                            pattern = r"\]\(artifacts/([^)]+)\)"
-                            replacement = rf"]({base_url}/artifacts/\1)"
-                            final_answer = re.sub(pattern, replacement, final_answer)
-                    except Exception as e:
-                        logger.debug(f"Error processing image paths: {e}")
+                        pattern = r"\]\(artifacts/([^)]+)\)"
+                        replacement = rf"]({base_url}/artifacts/\1)"
+                        final_answer = re.sub(pattern, replacement, final_answer)
+                except Exception as e:
+                    logger.debug(f"Error processing image paths: {e}")
 
-                # Send final agent status update
-                if display_manager:
-                    final_agent_status = dict.fromkeys(display_manager.agents_status.keys(), "done")
-                    await safe_send_json(
-                        {
-                            "type": "agent_status",
-                            "agent": "all",
-                            "status": "complete",
-                            "all_agents": final_agent_status,
-                        }
-                    )
-
-                # Send final result
-                final_res = {
-                    "type": "result",
-                    "final_answer": final_answer,
-                    "output_dir": output_dir_str,
-                    "metadata": result.get("metadata"),
-                }
-                await safe_send_json(final_res)
-
-                # Save to history
-                history_manager.add_entry(
-                    activity_type=ActivityType.SOLVE,
-                    title=question[:50] + "..." if len(question) > 50 else question,
-                    content={
-                        "question": question,
-                        "answer": result.get("final_answer"),
-                        "kb_name": kb_name,
-                    },
-                    summary=(
-                        result.get("final_answer")[:100] + "..."
-                        if result.get("final_answer")
-                        else ""
-                    ),
+            # Send final agent status update
+            if display_manager:
+                final_agent_status = dict.fromkeys(display_manager.agents_status.keys(), "done")
+                await safe_send_json(
+                    {
+                        "type": "agent_status",
+                        "agent": "all",
+                        "status": "complete",
+                        "all_agents": final_agent_status,
+                    }
                 )
 
-        except Exception as e:
-            # Mark connection as closed before sending error (to prevent log_pusher from interfering)
-            connection_closed.set()
-            await safe_send_json({"type": "error", "content": str(e)})
-            logger.error(f"[{task_id}] Solving failed: {e}")
+            # Send final result
+            final_res = {
+                "type": "result",
+                "final_answer": final_answer,
+                "output_dir": output_dir_str,
+                "metadata": result.get("metadata"),
+            }
+            await safe_send_json(final_res)
+
+            # Save to history
+            history_manager.add_entry(
+                activity_type=ActivityType.SOLVE,
+                title=question[:50] + "..." if len(question) > 50 else question,
+                content={
+                    "question": question,
+                    "answer": result.get("final_answer"),
+                    "kb_name": kb_name,
+                },
+                summary=(
+                    result.get("final_answer")[:100] + "..." if result.get("final_answer") else ""
+                ),
+            )
+
+    except Exception as e:
+        # Mark connection as closed before sending error (to prevent log_pusher from interfering)
+        connection_closed.set()
+        await safe_send_json({"type": "error", "content": str(e)})
+        logger.error(f"[{task_id if 'task_id' in locals() else 'unknown'}] Solving failed: {e}")
+        if "task_id" in locals():
             task_manager.update_task_status(task_id, "error", error=str(e))
-        finally:
-            # Stop log pusher first
-            connection_closed.set()
+    finally:
+        # Stop log pusher first
+        connection_closed.set()
+        if pusher_task:
             pusher_task.cancel()
             try:
                 await pusher_task
@@ -270,23 +284,18 @@ async def websocket_solve(websocket: WebSocket):
             except Exception as e:
                 logger.debug(f"Error waiting for pusher task: {e}")
 
-            # Close WebSocket connection
-            try:
-                # Check if connection is still open before closing
-                if hasattr(websocket, "client_state"):
-                    state = websocket.client_state
-                    if hasattr(state, "name") and state.name != "DISCONNECTED":
-                        await websocket.close()
-                else:
-                    # Fallback: try to close anyway
+        # Close WebSocket connection
+        try:
+            # Check if connection is still open before closing
+            if hasattr(websocket, "client_state"):
+                state = websocket.client_state
+                if hasattr(state, "name") and state.name != "DISCONNECTED":
                     await websocket.close()
-            except (WebSocketDisconnect, RuntimeError, ConnectionError):
-                # Connection already closed, ignore
-                pass
-            except Exception as e:
-                logger.debug(f"Error closing WebSocket: {e}")
-
-    except WebSocketDisconnect:
-        logger.debug("Client disconnected")
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+            else:
+                # Fallback: try to close anyway
+                await websocket.close()
+        except (WebSocketDisconnect, RuntimeError, ConnectionError):
+            # Connection already closed, ignore
+            pass
+        except Exception as e:
+            logger.debug(f"Error closing WebSocket: {e}")

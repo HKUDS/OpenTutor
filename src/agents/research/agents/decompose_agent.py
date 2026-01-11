@@ -29,6 +29,7 @@ class DecomposeAgent(BaseAgent):
         config: dict[str, Any],
         api_key: str = None,
         base_url: str = None,
+        api_version: str = None,
         kb_name: str = "ai_textbook",
     ):
         language = config.get("system", {}).get("language", "zh")
@@ -37,6 +38,7 @@ class DecomposeAgent(BaseAgent):
             agent_name="decompose_agent",
             api_key=api_key,
             base_url=base_url,
+            api_version=api_version,
             language=language,
             config=config,
         )

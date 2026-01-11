@@ -55,7 +55,13 @@ services:
       - TTS_URL=${TTS_URL:-}
       - TTS_VOICE=${TTS_VOICE:-alloy}
       # Web Search Configuration (Optional)
+      - SEARCH_PROVIDER=${SEARCH_PROVIDER:-perplexity}
       - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
+      - BAIDU_API_KEY=${BAIDU_API_KEY:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - EXA_API_KEY=${EXA_API_KEY:-}
+      - SERPER_API_KEY=${SERPER_API_KEY:-}
+      - JINA_API_KEY=${JINA_API_KEY:-}
       # Logging Configuration
       - RAG_TOOL_MODULE_LOG_LEVEL=${RAG_TOOL_MODULE_LOG_LEVEL:-INFO}
       # ============================================

@@ -12,12 +12,20 @@ from src.agents.base_agent import BaseAgent
 class ChatAgent(BaseAgent):
     """Learning Q&A agent"""
 
-    def __init__(self, api_key: str, base_url: str, language: str = "zh", binding: str = "openai"):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str,
+        language: str = "zh",
+        api_version: str | None = None,
+        binding: str = "openai",
+    ):
         super().__init__(
             module_name="guide",
             agent_name="chat_agent",
             api_key=api_key,
             base_url=base_url,
+            api_version=api_version,
             language=language,
         )
 

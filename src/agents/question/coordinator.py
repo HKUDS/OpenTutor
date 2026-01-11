@@ -89,6 +89,7 @@ class AgentCoordinator:
         self,
         api_key: str | None = None,
         base_url: str | None = None,
+        api_version: str | None = None,
         max_rounds: int = 10,
         kb_name: str | None = None,
         output_dir: str | None = None,
@@ -122,6 +123,7 @@ class AgentCoordinator:
         # Store API credentials for creating multiple agents
         self._api_key = api_key
         self._base_url = base_url
+        self._api_version = api_version
 
         # Get config for generation agent
         gen_agent_config = self.config.get("agents", {}).get("question_generation", {})
@@ -131,6 +133,7 @@ class AgentCoordinator:
         self.question_agent = QuestionGenerationAgent(
             api_key=api_key,
             base_url=base_url,
+            api_version=api_version,
             max_iterations=max_gen_iterations,
             kb_name=kb_name,
             token_stats_callback=self.update_token_stats,
@@ -140,6 +143,7 @@ class AgentCoordinator:
         self.validation_workflow = QuestionValidationWorkflow(
             api_key=api_key,
             base_url=base_url,
+            api_version=api_version,
             kb_name=kb_name,
             token_stats_callback=self.update_token_stats,
         )
@@ -1252,6 +1256,7 @@ class AgentCoordinator:
                 question_agent = QuestionGenerationAgent(
                     api_key=self._api_key,
                     base_url=self._base_url,
+                    api_version=self._api_version,
                     max_iterations=max_gen_iterations,
                     kb_name=self.kb_name,
                     token_stats_callback=self.update_token_stats,

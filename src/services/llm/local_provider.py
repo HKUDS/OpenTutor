@@ -12,44 +12,21 @@ Key features:
 """
 
 import json
-import re
 from typing import AsyncGenerator, Dict, List, Optional
 
 import aiohttp
 
-from .exceptions import (
-    LLMAPIError,
-    LLMAuthenticationError,
-    LLMRateLimitError,
-    LLMTimeoutError,
+from .exceptions import LLMAPIError, LLMConfigError
+from .utils import (
+    build_auth_headers,
+    build_chat_url,
+    clean_thinking_tags,
+    extract_response_content,
+    sanitize_url,
 )
-from .utils import sanitize_url
 
 # Extended timeout for local servers (may be slower than cloud)
 DEFAULT_TIMEOUT = 300  # 5 minutes
-
-
-def _clean_thinking_tags(content: str) -> str:
-    """
-    Remove thinking tags from model output.
-
-    Some reasoning models (Qwen, etc.) include <think>...</think> blocks
-    that should be stripped from the final response.
-
-    Args:
-        content: Raw model output
-
-    Returns:
-        Cleaned content without thinking tags
-    """
-    if not content:
-        return content
-
-    # Remove <think>...</think> blocks
-    if "<think>" in content and "</think>" in content:
-        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
-
-    return content.strip()
 
 
 async def complete(
@@ -79,19 +56,14 @@ async def complete(
         str: The LLM response
     """
     if not base_url:
-        raise ValueError("base_url is required for local LLM provider")
+        raise LLMConfigError("base_url is required for local LLM provider")
 
-    # Sanitize URL
+    # Sanitize URL and build chat endpoint
     base_url = sanitize_url(base_url, model or "")
+    url = build_chat_url(base_url)
 
-    url = base_url.rstrip("/")
-    if not url.endswith("/chat/completions"):
-        url += "/chat/completions"
-
-    # Build headers
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    # Build headers using unified utility
+    headers = build_auth_headers(api_key)
 
     # Build messages
     if messages:
@@ -120,44 +92,20 @@ async def complete(
         async with session.post(url, json=data, headers=headers) as response:
             if response.status != 200:
                 error_text = await response.text()
-
-                # Map HTTP status codes to specific exceptions for local providers
-                if response.status == 401:
-                    raise LLMAuthenticationError(f"Local LLM authentication failed: {error_text}")
-                elif response.status == 429:
-                    raise LLMRateLimitError(
-                        f"Local LLM rate limit exceeded: {error_text}", provider="local"
-                    )
-                elif response.status >= 500:
-                    raise LLMAPIError(
-                        f"Local LLM server error: {error_text}",
-                        status_code=response.status,
-                        provider="local",
-                    )
-                else:
-                    raise LLMAPIError(
-                        f"Local LLM error: {response.status} - {error_text}",
-                        status_code=response.status,
-                        provider="local",
-                    )
+                raise LLMAPIError(
+                    f"Local LLM error: {error_text}",
+                    status_code=response.status,
+                    provider="local",
+                )
 
             result = await response.json()
 
             if "choices" in result and result["choices"]:
                 msg = result["choices"][0].get("message", {})
-                content = msg.get("content", "")
-
-                # Handle reasoning models that return content in different fields
-                if not content:
-                    content = (
-                        msg.get("reasoning_content")
-                        or msg.get("reasoning")
-                        or msg.get("thought")
-                        or ""
-                    )
-
-                # Clean thinking tags
-                content = _clean_thinking_tags(content)
+                # Use unified response extraction
+                content = extract_response_content(msg)
+                # Clean thinking tags using unified utility
+                content = clean_thinking_tags(content)
                 return content
 
             return ""
@@ -191,19 +139,14 @@ async def stream(
         str: Response chunks
     """
     if not base_url:
-        raise ValueError("base_url is required for local LLM provider")
+        raise LLMConfigError("base_url is required for local LLM provider")
 
-    # Sanitize URL
+    # Sanitize URL and build chat endpoint
     base_url = sanitize_url(base_url, model or "")
+    url = build_chat_url(base_url)
 
-    url = base_url.rstrip("/")
-    if not url.endswith("/chat/completions"):
-        url += "/chat/completions"
-
-    # Build headers
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    # Build headers using unified utility
+    headers = build_auth_headers(api_key)
 
     # Build messages
     if messages:
@@ -231,30 +174,12 @@ async def stream(
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, json=data, headers=headers) as response:
                 if response.status != 200:
-                    # Streaming failed, fall back to non-streaming
                     error_text = await response.text()
-
-                    # Map HTTP status codes to specific exceptions
-                    if response.status == 401:
-                        raise LLMAuthenticationError(
-                            f"Local LLM stream authentication failed: {error_text}"
-                        )
-                    elif response.status == 429:
-                        raise LLMRateLimitError(
-                            f"Local LLM stream rate limit exceeded: {error_text}", provider="local"
-                        )
-                    elif response.status >= 500:
-                        raise LLMAPIError(
-                            f"Local LLM stream server error: {error_text}",
-                            status_code=response.status,
-                            provider="local",
-                        )
-                    else:
-                        raise LLMAPIError(
-                            f"Local LLM stream error: {response.status} - {error_text}",
-                            status_code=response.status,
-                            provider="local",
-                        )
+                    raise LLMAPIError(
+                        f"Local LLM stream error: {error_text}",
+                        status_code=response.status,
+                        provider="local",
+                    )
 
                 # Track if we're inside a thinking block
                 in_thinking_block = False
@@ -282,7 +207,6 @@ async def stream(
 
                                 if content:
                                     # Handle thinking tags in streaming
-                                    # Buffer content that might be in a thinking block
                                     if "<think>" in content:
                                         in_thinking_block = True
                                         thinking_buffer = content
@@ -291,7 +215,7 @@ async def stream(
                                         thinking_buffer += content
                                         if "</think>" in thinking_buffer:
                                             # End of thinking block, clean and yield
-                                            cleaned = _clean_thinking_tags(thinking_buffer)
+                                            cleaned = clean_thinking_tags(thinking_buffer)
                                             if cleaned:
                                                 yield cleaned
                                             in_thinking_block = False
@@ -317,6 +241,8 @@ async def stream(
                         except json.JSONDecodeError:
                             pass
 
+    except LLMAPIError:
+        raise  # Re-raise LLM errors as-is
     except Exception as e:
         # Streaming failed, fall back to non-streaming
         print(f"⚠️ Streaming failed ({e}), falling back to non-streaming")
@@ -334,7 +260,10 @@ async def stream(
             if content:
                 yield content
         except Exception as e2:
-            raise LLMTimeoutError(f"Local LLM failed: streaming={e}, non-streaming={e2}")
+            raise LLMAPIError(
+                f"Local LLM failed: streaming={e}, non-streaming={e2}",
+                provider="local",
+            )
 
 
 async def fetch_models(
@@ -357,9 +286,10 @@ async def fetch_models(
     """
     base_url = base_url.rstrip("/")
 
-    headers = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    # Build headers using unified utility
+    headers = build_auth_headers(api_key)
+    # Remove Content-Type for GET request
+    headers.pop("Content-Type", None)
 
     timeout = aiohttp.ClientTimeout(total=30)
 
