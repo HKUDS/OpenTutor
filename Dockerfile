@@ -124,11 +124,24 @@ COPY --from=python-base /usr/local/lib/python3.11/site-packages /usr/local/lib/p
 COPY --from=python-base /usr/local/bin /usr/local/bin
 
 # Copy built frontend from frontend-builder stage
+# Including node_modules for full Next.js server support
 COPY --from=frontend-builder /app/web/.next ./web/.next
 COPY --from=frontend-builder /app/web/public ./web/public
 COPY --from=frontend-builder /app/web/package.json ./web/package.json
+COPY --from=frontend-builder /app/web/package-lock.json ./web/package-lock.json
 COPY --from=frontend-builder /app/web/next.config.js ./web/next.config.js
 COPY --from=frontend-builder /app/web/node_modules ./web/node_modules
+
+# Copy web source files (needed for next start to work)
+COPY web/app ./web/app
+COPY web/components ./web/components
+COPY web/context ./web/context
+COPY web/hooks ./web/hooks
+COPY web/lib ./web/lib
+COPY web/types ./web/types
+COPY web/public ./web/public
+COPY web/tsconfig.json ./web/
+COPY web/next-env.d.ts ./web/
 
 # Copy application source code
 COPY src/ ./src/
@@ -243,7 +256,7 @@ find /app/web/.next -type f \( -name "*.js" -o -name "*.json" \) -exec \
 # Also update .env.local for any runtime reads
 echo "NEXT_PUBLIC_API_BASE=${API_BASE}" > /app/web/.env.local
 
-# Start Next.js
+# Start Next.js server with full node_modules
 cd /app/web && exec node node_modules/next/dist/bin/next start -H 0.0.0.0 -p ${FRONTEND_PORT}
 EOF
 
