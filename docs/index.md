@@ -20,6 +20,12 @@ hero:
       link: /roadmap
 
 features:
+  - icon: 📚
+    title: Massive Document Q&A
+    details: Upload textbooks, papers, and manuals. Build AI-powered knowledge repositories with RAG and knowledge graph integration.
+  - icon: 🎨
+    title: Interactive Visualization
+    details: Transform complex concepts into visual aids with step-by-step breakdowns and engaging interactive demonstrations.
   - icon: 🧠
     title: Smart Problem Solving
     details: Dual-loop reasoning with step-by-step solutions and precise citations from your documents.
@@ -34,11 +40,31 @@ features:
     details: Systematic topic exploration with web search, paper retrieval, and literature synthesis.
   - icon: 💡
     title: Idea Generation
-    details: Brainstorm research ideas with automated concept synthesis and novelty evaluation.
-  - icon: ✏️
-    title: Co-Writer
-    details: AI-assisted writing with smart editing, auto-annotation, and TTS narration.
+    details: Automated and interactive concept development with multi-source insights and novelty evaluation.
 ---
+
+## Why DeepTutor?
+
+DeepTutor transforms how students interact with educational materials through a unified multi-agent architecture. Unlike traditional tools, it provides:
+
+- **Deep Understanding** - Not just answers, but guided learning journeys with visual explanations
+- **Multi-Modal Support** - PDF, LaTeX, images, code execution, and more
+- **Knowledge Graph** - Semantic connections powered by LightRAG for better comprehension
+- **All-in-One Platform** - Problem solving, question generation, research, and idea generation
+
+## Quick Demo
+
+```bash
+# Clone and setup
+git clone https://github.com/HKUDS/DeepTutor.git
+cd DeepTutor
+
+# Install dependencies
+bash scripts/install_all.sh
+
+# Start the application
+python scripts/start_web.py
+```
 
 <style>
 :root {
