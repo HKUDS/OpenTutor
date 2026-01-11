@@ -89,7 +89,7 @@ def validate_output(
 
 
 def safe_parse(
-    parser_func: Callable, text: str, default: Any = None, raise_on_error: bool = False
+    text: str, parser_func: Callable, default: Any = None, raise_on_error: bool = False
 ) -> Any:
     """
     Safe parsing (catch exceptions and return default value)
@@ -113,14 +113,17 @@ def safe_parse(
         return default
 
 
-def validate_investigate_output(output: dict[str, Any]) -> bool:
+async def validate_investigate_output(
+    output: dict[str, Any], valid_tools: list[str] | None = None
+) -> bool:
     """Validate InvestigateAgent output (refactored: multi-tool intent)"""
     required_fields = ["reasoning", "tools"]
     field_types = {"reasoning": str, "tools": list}
 
     validate_output(output, required_fields, field_types)
 
-    valid_tools = ["rag_naive", "rag_hybrid", "web_search", "query_item", "none"]
+    if valid_tools is None:
+        valid_tools = ["rag_naive", "rag_hybrid", "web_search", "query_item", "none"]
     tools = output["tools"]
     if not tools:
         raise ParseError("tools list cannot be empty")
@@ -154,7 +157,7 @@ def validate_investigate_output(output: dict[str, Any]) -> bool:
     return True
 
 
-def validate_note_output(output: dict[str, Any]) -> bool:
+async def validate_note_output(output: dict[str, Any]) -> bool:
     """Validate NoteAgent output (new format: only summary and citations)"""
     required_fields = ["summary"]
     field_types = {"summary": str, "citations": list}
@@ -174,7 +177,7 @@ def validate_note_output(output: dict[str, Any]) -> bool:
     return True
 
 
-def validate_reflect_output(output: dict[str, Any]) -> bool:
+async def validate_reflect_output(output: dict[str, Any]) -> bool:
     """Validate InvestigateReflectAgent output (new format: simplified)"""
     required_fields = ["should_stop", "reason", "remaining_questions"]
     field_types = {"should_stop": bool, "reason": str, "remaining_questions": list}
@@ -190,7 +193,7 @@ def validate_reflect_output(output: dict[str, Any]) -> bool:
     return True
 
 
-def validate_plan_output(output: dict[str, Any]) -> bool:
+async def validate_plan_output(output: dict[str, Any]) -> bool:
     """Validate PlanAgent output"""
     required_fields = ["answer_style", "blocks"]
     field_types = {"answer_style": str, "blocks": list}
@@ -222,6 +225,36 @@ def validate_plan_output(output: dict[str, Any]) -> bool:
 
             if "step_id" not in step or "plan" not in step:
                 raise ParseError("step missing required fields: step_id, plan")
+
+    return True
+
+
+async def validate_solve_output(output: dict[str, Any]) -> bool:
+    """Validate SolveAgent output"""
+    required_fields = ["tool_calls"]
+    field_types = {"tool_calls": list}
+
+    validate_output(output, required_fields, field_types)
+
+    # Validate tool_calls list
+    for tool_call in output["tool_calls"]:
+        if not isinstance(tool_call, dict):
+            raise ParseError(f"tool_call must be a dictionary, got: {type(tool_call)}")
+
+        if "tool_type" not in tool_call or "query" not in tool_call:
+            raise ParseError("tool_call missing required fields: tool_type, query")
+
+        tool_type = tool_call.get("tool_type", "").lower()
+        valid_tool_types = [
+            "none",
+            "rag_naive",
+            "rag_hybrid",
+            "web_search",
+            "code_execution",
+            "finish",
+        ]
+        if tool_type not in valid_tool_types:
+            raise ParseError(f"Invalid tool_type: {tool_type}, must be one of {valid_tool_types}")
 
     return True
 
