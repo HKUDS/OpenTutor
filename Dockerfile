@@ -205,7 +205,7 @@ EOF
 RUN chmod +x /app/start-backend.sh
 
 # Create frontend startup script
-# This script handles runtime environment variable injection for Next.js
+# This script handles runtime environment variable injection for Next.js standalone mode
 COPY <<'EOF' /app/start-frontend.sh
 #!/bin/bash
 set -e
@@ -243,8 +243,9 @@ find /app/web/.next -type f \( -name "*.js" -o -name "*.json" \) -exec \
 # Also update .env.local for any runtime reads
 echo "NEXT_PUBLIC_API_BASE=${API_BASE}" > /app/web/.env.local
 
-# Start Next.js
-cd /app/web && exec node node_modules/next/dist/bin/next start -H 0.0.0.0 -p ${FRONTEND_PORT}
+# Start Next.js using standalone server
+# With output: "standalone", Next.js builds a self-contained server that doesn't need node_modules
+cd /app/web/.next/standalone && exec node server.js
 EOF
 
 RUN chmod +x /app/start-frontend.sh
