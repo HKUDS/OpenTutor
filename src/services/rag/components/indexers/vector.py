@@ -2,11 +2,16 @@
 Vector Indexer
 ==============
 
-Vector-based indexer using dense embeddings.
+Vector-based indexer using dense embeddings with FAISS.
+Provides fast similarity search for RAG retrieval.
 """
 
+import json
+import pickle
 from pathlib import Path
 from typing import List, Optional
+
+import numpy as np
 
 from ...types import Document
 from ..base import BaseComponent
@@ -14,9 +19,10 @@ from ..base import BaseComponent
 
 class VectorIndexer(BaseComponent):
     """
-    Vector indexer using dense embeddings.
+    Vector indexer using FAISS for fast similarity search.
 
-    Can use LlamaIndex or other vector stores for indexing.
+    Creates and stores vector embeddings for efficient retrieval.
+    Falls back to simple cosine similarity if FAISS is not available.
     """
 
     name = "vector_indexer"
@@ -34,10 +40,23 @@ class VectorIndexer(BaseComponent):
             / "data"
             / "knowledge_bases"
         )
+        
+        # Try to import FAISS, fallback to simple storage if not available
+        self.use_faiss = False
+        try:
+            import faiss
+            self.faiss = faiss
+            self.use_faiss = True
+            self.logger.info("Using FAISS for vector indexing")
+        except ImportError:
+            self.logger.warning("FAISS not available, using simple vector storage")
 
     async def process(self, kb_name: str, documents: List[Document], **kwargs) -> bool:
         """
         Index documents using vector embeddings.
+
+        Creates FAISS index for fast similarity search or falls back to
+        simple JSON storage if FAISS is unavailable.
 
         Args:
             kb_name: Knowledge base name
@@ -67,23 +86,56 @@ class VectorIndexer(BaseComponent):
         kb_dir = Path(self.kb_base_dir) / kb_name / "vector_store"
         kb_dir.mkdir(parents=True, exist_ok=True)
 
-        # Simple JSON-based storage (placeholder for actual vector store)
-        import json
-
-        index_data = []
+        # Convert embeddings to numpy array
+        embeddings = np.array([
+            chunk.embedding if isinstance(chunk.embedding, list) 
+            else chunk.embedding.tolist() 
+            for chunk in all_chunks
+        ], dtype=np.float32)
+        
+        # Store metadata separately
+        metadata = []
         for i, chunk in enumerate(all_chunks):
-            index_data.append(
-                {
-                    "id": i,
-                    "content": chunk.content,
-                    "type": chunk.chunk_type,
-                    "metadata": chunk.metadata,
-                    "embedding": chunk.embedding,
-                }
-            )
+            metadata.append({
+                "id": i,
+                "content": chunk.content,
+                "type": chunk.chunk_type,
+                "metadata": chunk.metadata,
+            })
+        
+        # Save metadata
+        with open(kb_dir / "metadata.json", "w", encoding="utf-8") as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=2)
+        
+        if self.use_faiss:
+            # Create FAISS index
+            dimension = embeddings.shape[1]
+            index = self.faiss.IndexFlatL2(dimension)  # L2 distance (euclidean)
+            
+            # Normalize vectors for cosine similarity
+            self.faiss.normalize_L2(embeddings)
+            
+            # Add vectors to index
+            index.add(embeddings)
+            
+            # Save FAISS index
+            self.faiss.write_index(index, str(kb_dir / "index.faiss"))
+            self.logger.info(f"FAISS index saved with {index.ntotal} vectors")
+        else:
+            # Simple storage: save embeddings as pickle
+            with open(kb_dir / "embeddings.pkl", "wb") as f:
+                pickle.dump(embeddings, f)
+            self.logger.info(f"Embeddings saved for {len(all_chunks)} chunks")
 
-        with open(kb_dir / "index.json", "w", encoding="utf-8") as f:
-            json.dump(index_data, f, ensure_ascii=False, indent=2)
+        # Save index info
+        info = {
+            "num_chunks": len(all_chunks),
+            "num_documents": len(documents),
+            "embedding_dim": embeddings.shape[1],
+            "use_faiss": self.use_faiss,
+        }
+        with open(kb_dir / "info.json", "w", encoding="utf-8") as f:
+            json.dump(info, f, indent=2)
 
         self.logger.info(f"Vector index saved to {kb_dir}")
         return True

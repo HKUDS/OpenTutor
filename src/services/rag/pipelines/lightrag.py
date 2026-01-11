@@ -2,29 +2,31 @@
 LightRAG Pipeline
 =================
 
-Component-based pipeline using LightRAG for knowledge graph indexing.
+Pure LightRAG pipeline (text-only, no multimodal processing).
+Faster than RAGAnything for text-heavy documents.
 """
 
 from typing import Optional
 
-from ..components.chunkers import SemanticChunker
-from ..components.embedders import OpenAIEmbedder
-from ..components.indexers import GraphIndexer
-from ..components.parsers import TextParser
-from ..components.retrievers import HybridRetriever
+from ..components.indexers import LightRAGIndexer
+from ..components.parsers import PDFParser
+from ..components.retrievers import LightRAGRetriever
 from ..pipeline import RAGPipeline
 
 
 def LightRAGPipeline(kb_base_dir: Optional[str] = None) -> RAGPipeline:
     """
-    Create a LightRAG-based pipeline.
+    Create a pure LightRAG pipeline (text-only, no multimodal).
 
     This pipeline uses:
-    - TextParser for document parsing (supports txt, md files)
-    - SemanticChunker for text chunking
-    - OpenAIEmbedder for embedding generation
-    - GraphIndexer for knowledge graph indexing
-    - HybridRetriever for retrieval
+    - PDFParser for document parsing (extracts raw text from PDF/txt/md)
+    - LightRAGIndexer for knowledge graph indexing (text-only, fast)
+      * LightRAG handles chunking, entity extraction, and embedding internally
+      * No separate chunker/embedder needed - LightRAG does it all
+    - LightRAGRetriever for retrieval (uses LightRAG.aquery() directly)
+
+    Performance: Medium speed (~10-15s per document)
+    Use for: Business docs, text-heavy PDFs, when you need knowledge graph
 
     Args:
         kb_base_dir: Base directory for knowledge bases
@@ -34,9 +36,8 @@ def LightRAGPipeline(kb_base_dir: Optional[str] = None) -> RAGPipeline:
     """
     return (
         RAGPipeline("lightrag", kb_base_dir=kb_base_dir)
-        .parser(TextParser())
-        .chunker(SemanticChunker())
-        .embedder(OpenAIEmbedder())
-        .indexer(GraphIndexer(kb_base_dir=kb_base_dir))
-        .retriever(HybridRetriever(kb_base_dir=kb_base_dir))
+        .parser(PDFParser())
+        # No chunker/embedder - LightRAG does everything internally
+        .indexer(LightRAGIndexer(kb_base_dir=kb_base_dir))
+        .retriever(LightRAGRetriever(kb_base_dir=kb_base_dir))
     )

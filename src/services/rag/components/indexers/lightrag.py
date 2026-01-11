@@ -1,8 +1,8 @@
 """
-Graph Indexer
-=============
+LightRAG Indexer
+================
 
-Knowledge graph indexer using LightRAG.
+Pure LightRAG indexer (text-only, no multimodal processing).
 """
 
 from pathlib import Path
@@ -13,19 +13,20 @@ from ...types import Document
 from ..base import BaseComponent
 
 
-class GraphIndexer(BaseComponent):
+class LightRAGIndexer(BaseComponent):
     """
-    Knowledge graph indexer using LightRAG.
+    Pure LightRAG knowledge graph indexer (text-only).
 
-    Builds a knowledge graph from documents for graph-based retrieval.
+    Uses LightRAG library directly without multimodal processing.
+    Faster than RAGAnything for text-only documents.
     """
 
-    name = "graph_indexer"
-    _instances: Dict[str, any] = {}  # Cache RAG instances
+    name = "lightrag_indexer"
+    _instances: Dict[str, any] = {}  # Cache LightRAG instances
 
     def __init__(self, kb_base_dir: Optional[str] = None):
         """
-        Initialize graph indexer.
+        Initialize LightRAG indexer.
 
         Args:
             kb_base_dir: Base directory for knowledge bases
@@ -37,22 +38,22 @@ class GraphIndexer(BaseComponent):
             / "knowledge_bases"
         )
 
-    def _get_rag_instance(self, kb_name: str):
-        """Get or create a RAGAnything instance."""
+    def _get_lightrag_instance(self, kb_name: str):
+        """Get or create a LightRAG instance (text-only)."""
         working_dir = str(Path(self.kb_base_dir) / kb_name / "rag_storage")
 
         if working_dir in self._instances:
             return self._instances[working_dir]
 
-        # Add RAG-Anything path
+        # Add LightRAG path
         project_root = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
         raganything_path = project_root.parent / "raganything" / "RAG-Anything"
         if raganything_path.exists() and str(raganything_path) not in sys.path:
             sys.path.insert(0, str(raganything_path))
 
         try:
+            from lightrag import LightRAG
             from lightrag.llm.openai import openai_complete_if_cache
-            from raganything import RAGAnything, RAGAnythingConfig
 
             from src.services.embedding import get_embedding_client
             from src.services.llm import get_llm_client
@@ -60,7 +61,7 @@ class GraphIndexer(BaseComponent):
             llm_client = get_llm_client()
             embed_client = get_embedding_client()
 
-            # LLM function using services
+            # LLM function using services (SYNC - LightRAG expects sync functions)
             def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
                 return openai_complete_if_cache(
                     llm_client.config.model,
@@ -72,29 +73,23 @@ class GraphIndexer(BaseComponent):
                     **kwargs,
                 )
 
-            config = RAGAnythingConfig(
+            # Create pure LightRAG instance (no multimodal)
+            rag = LightRAG(
                 working_dir=working_dir,
-                enable_image_processing=True,
-                enable_table_processing=True,
-                enable_equation_processing=True,
-            )
-
-            rag = RAGAnything(
-                config=config,
                 llm_model_func=llm_model_func,
-                embedding_func=embed_client.get_embedding_func(),
+                embedding_func=embed_client.get_embedding_func(),  # Use proper EmbeddingFunc object
             )
 
             self._instances[working_dir] = rag
             return rag
 
         except ImportError as e:
-            self.logger.error(f"Failed to import RAG-Anything: {e}")
+            self.logger.error(f"Failed to import LightRAG: {e}")
             raise
 
     async def process(self, kb_name: str, documents: List[Document], **kwargs) -> bool:
         """
-        Build knowledge graph from documents.
+        Build knowledge graph from documents (text-only).
 
         Args:
             kb_name: Knowledge base name
@@ -104,19 +99,25 @@ class GraphIndexer(BaseComponent):
         Returns:
             True if successful
         """
-        self.logger.info(f"Building knowledge graph for {kb_name}...")
+        self.logger.info(f"Building knowledge graph for {kb_name} (text-only)...")
 
         from src.logging.adapters import LightRAGLogContext
 
         # Use log forwarding context
-        with LightRAGLogContext(scene="indexer"):
-            rag = self._get_rag_instance(kb_name)
-            await rag._ensure_lightrag_initialized()
+        with LightRAGLogContext(scene="LightRAG-Indexer"):
+            rag = self._get_lightrag_instance(kb_name)
+            
+            # Initialize storages (required for LightRAG)
+            await rag.initialize_storages()
+            
+            # Initialize pipeline status (required for document processing)
+            from lightrag.kg.shared_storage import initialize_pipeline_status
+            await initialize_pipeline_status()
 
             for doc in documents:
                 if doc.content:
-                    # RAGAnything uses process_document_complete_lightrag_api instead of ainsert
-                    await rag.process_document_complete_lightrag_api(doc.content)
+                    # Use direct LightRAG insert (text-only, fast)
+                    await rag.ainsert(doc.content)
 
-        self.logger.info("Knowledge graph built successfully")
+        self.logger.info("Knowledge graph built successfully (text-only)")
         return True

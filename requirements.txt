@@ -48,13 +48,19 @@ raganything>=0.1.0
 arxiv>=2.0.0
 
 # ============================================
-# Scientific computing (optional, for code execution)
+# Scientific computing (for RAG and code execution)
 # ============================================
-# Uncomment if users need these for code execution feature
-# numpy>=1.24.0
-# matplotlib>=3.7.0
-# scipy>=1.11.0
-# pandas>=2.0.0
+numpy>=1.24.0
+# matplotlib>=3.7.0  # Uncomment if needed for plotting
+# scipy>=1.11.0      # Uncomment if needed for scientific computing
+# pandas>=2.0.0      # Uncomment if needed for data analysis
+
+# PDF parsing
+PyMuPDF>=1.23.0      # For PDF text extraction (fast and reliable)
+
+# Vector search (optional but recommended for llamaindex pipeline)
+# faiss-cpu>=1.7.4   # Uncomment for CPU-only FAISS support (faster search)
+# faiss-gpu>=1.7.4   # Uncomment if you have GPU and want GPU acceleration
 
 # ============================================
 # Development tools

@@ -2,12 +2,15 @@
 Dense Retriever
 ===============
 
-Dense vector-based retriever.
+Dense vector-based retriever using FAISS or cosine similarity.
 """
 
 import json
+import pickle
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import numpy as np
 
 from ..base import BaseComponent
 
@@ -16,7 +19,8 @@ class DenseRetriever(BaseComponent):
     """
     Dense vector retriever.
 
-    Uses embedding similarity for retrieval.
+    Uses FAISS for fast similarity search or falls back to
+    cosine similarity if FAISS is unavailable.
     """
 
     name = "dense_retriever"
@@ -36,80 +40,144 @@ class DenseRetriever(BaseComponent):
             / "knowledge_bases"
         )
         self.top_k = top_k
+        
+        # Try to import FAISS
+        self.use_faiss = False
+        try:
+            import faiss
+            self.faiss = faiss
+            self.use_faiss = True
+        except ImportError:
+            self.logger.warning("FAISS not available, using simple cosine similarity")
 
     async def process(self, query: str, kb_name: str, **kwargs) -> Dict[str, Any]:
         """
-        Search using dense embeddings.
+        Search using dense embeddings with FAISS or cosine similarity.
 
         Args:
             query: Search query
             kb_name: Knowledge base name
-            **kwargs: Additional arguments
+            **kwargs: Additional arguments (mode, top_k, etc.)
 
         Returns:
-            Search results dictionary
+            Search results dictionary with answer and sources
         """
-        self.logger.info(f"Dense search in {kb_name}: {query[:50]}...")
+        top_k = kwargs.get("top_k", self.top_k)
+        self.logger.info(f"Dense search in {kb_name}: {query[:50]}... (top_k={top_k})")
 
         from src.services.embedding import get_embedding_client
 
         # Get query embedding
         client = get_embedding_client()
-        query_embedding = (await client.embed([query]))[0]
-
+        query_embedding = np.array((await client.embed([query]))[0], dtype=np.float32)
+        
         # Load index
         kb_dir = Path(self.kb_base_dir) / kb_name / "vector_store"
-        index_file = kb_dir / "index.json"
+        metadata_file = kb_dir / "metadata.json"
+        info_file = kb_dir / "info.json"
 
-        if not index_file.exists():
-            self.logger.warning(f"No vector index found at {index_file}")
+        if not metadata_file.exists():
+            self.logger.warning(f"No vector index found at {kb_dir}")
             return {
                 "query": query,
-                "answer": "No documents indexed.",
+                "answer": "No documents indexed. Please upload documents first.",
                 "content": "",
                 "mode": "dense",
-                "provider": "vector",
+                "provider": "llamaindex",
+                "results": [],
             }
 
-        with open(index_file, "r", encoding="utf-8") as f:
-            index_data = json.load(f)
+        # Load metadata and info
+        with open(metadata_file, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+        
+        with open(info_file, "r", encoding="utf-8") as f:
+            info = json.load(f)
+        
+        use_faiss = info.get("use_faiss", False)
+        
+        if use_faiss and self.use_faiss:
+            # Use FAISS for fast search
+            index_file = kb_dir / "index.faiss"
+            if not index_file.exists():
+                self.logger.error(f"FAISS index file not found: {index_file}")
+                return self._empty_response(query)
+            
+            # Load FAISS index
+            index = self.faiss.read_index(str(index_file))
+            
+            # Normalize query vector for cosine similarity
+            query_vec = query_embedding.reshape(1, -1)
+            self.faiss.normalize_L2(query_vec)
+            
+            # Search
+            distances, indices = index.search(query_vec, min(top_k, len(metadata)))
+            
+            # Build results
+            results = []
+            for dist, idx in zip(distances[0], indices[0]):
+                if idx < len(metadata):  # Valid index
+                    score = 1.0 / (1.0 + dist)  # Convert distance to similarity score
+                    results.append((score, metadata[idx]))
+        else:
+            # Fallback: Load embeddings and use cosine similarity
+            embeddings_file = kb_dir / "embeddings.pkl"
+            if not embeddings_file.exists():
+                self.logger.error(f"Embeddings file not found: {embeddings_file}")
+                return self._empty_response(query)
+            
+            with open(embeddings_file, "rb") as f:
+                embeddings = pickle.load(f)
+            
+            # Normalize for cosine similarity
+            query_vec = query_embedding / np.linalg.norm(query_embedding)
+            doc_vecs = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+            
+            # Compute similarities
+            similarities = np.dot(doc_vecs, query_vec)
+            
+            # Get top-k results
+            top_indices = np.argsort(similarities)[::-1][:top_k]
+            
+            results = []
+            for idx in top_indices:
+                score = float(similarities[idx])
+                results.append((score, metadata[idx]))
 
-        # Compute similarities
-        results = []
-        for item in index_data:
-            if item.get("embedding"):
-                similarity = self._cosine_similarity(query_embedding, item["embedding"])
-                results.append((similarity, item))
-
-        # Sort by similarity
-        results.sort(key=lambda x: x[0], reverse=True)
-        top_results = results[: self.top_k]
-
-        # Build response
+        # Build response content
+        # Format chunks cleanly for LLM context (without score annotations)
         content_parts = []
-        for score, item in top_results:
-            content_parts.append(f"[Score: {score:.3f}] {item['content'][:500]}")
+        sources = []
+        for score, item in results:
+            content = item.get("content", "").strip()
+            if content:  # Only include non-empty chunks
+                # Add chunk without score prefix for clean LLM input
+                content_parts.append(content)
+                sources.append({
+                    "content": content,
+                    "score": score,
+                    "metadata": item.get("metadata", {}),
+                })
 
+        # Join chunks with clear separation
         content = "\n\n".join(content_parts)
 
         return {
             "query": query,
-            "answer": content,
+            "answer": content,  # Return clean context for LLM to use
             "content": content,
             "mode": "dense",
-            "provider": "vector",
-            "results": [item for _, item in top_results],
+            "provider": "llamaindex",
+            "results": sources,
         }
-
-    def _cosine_similarity(self, a: List[float], b: List[float]) -> float:
-        """Compute cosine similarity between two vectors."""
-        import math
-
-        dot_product = sum(x * y for x, y in zip(a, b))
-        norm_a = math.sqrt(sum(x * x for x in a))
-        norm_b = math.sqrt(sum(x * x for x in b))
-
-        if norm_a == 0 or norm_b == 0:
-            return 0.0
-
-        return dot_product / (norm_a * norm_b)
+    
+    def _empty_response(self, query: str) -> Dict[str, Any]:
+        """Return empty response when no results found."""
+        return {
+            "query": query,
+            "answer": "No relevant documents found.",
+            "content": "",
+            "mode": "dense",
+            "provider": "llamaindex",
+            "results": [],
+        }

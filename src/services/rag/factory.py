@@ -13,9 +13,9 @@ from .pipelines.raganything import RAGAnythingPipeline
 
 # Pipeline registry
 _PIPELINES: Dict[str, Callable] = {
-    "raganything": RAGAnythingPipeline,
-    "lightrag": lightrag.LightRAGPipeline,
-    "llamaindex": llamaindex.LlamaIndexPipeline,
+    "raganything": RAGAnythingPipeline,  # Full multimodal: MinerU parser, deep analysis (slow, thorough)
+    "lightrag": lightrag.LightRAGPipeline,  # Knowledge graph: PDFParser, fast text-only (medium speed)
+    "llamaindex": llamaindex.LlamaIndexPipeline,  # Vector-only: Simple chunking, fast (fastest)
     "academic": academic.AcademicPipeline,
 }
 
