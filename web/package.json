@@ -11,7 +11,7 @@
   "dependencies": {
     "clsx": "^2.1.1",
     "cytoscape": "^3.33.1",
-    "framer-motion": "^12.24.0",
+    "framer-motion": "^12.25.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.0.0",
     "lucide-react": "^0.562.0",
