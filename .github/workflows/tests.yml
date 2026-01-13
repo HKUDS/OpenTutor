@@ -84,7 +84,6 @@ jobs:
       - name: Check core module imports
         run: |
           python -c "from src.core.core import get_llm_config, load_config_with_main; print('✅ Core imports OK')"
-          python -c "from src.knowledge.kb import KnowledgeBase; print('✅ Knowledge imports OK')"
-          python -c "from src.tools.rag_tool import rag_search; print('✅ Tools imports OK')"
+          python -c "from src.api.routers.knowledge import router; print('✅ API router imports OK')"
         env:
           PYTHONPATH: ${{ github.workspace }}
