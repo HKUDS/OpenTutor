@@ -6,11 +6,10 @@ import {
   Database,
   FileText,
   FolderOpen,
-  FolderSync,
   Image as ImageIcon,
   Layers,
   Link,
-  LinkOff,
+  Unlink,
   MoreVertical,
   Plus,
   Search,
@@ -1131,7 +1130,7 @@ export default function KnowledgePage() {
                                     className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-md text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                                     title="Unlink folder"
                                   >
-                                    <LinkOff className="w-3.5 h-3.5" />
+                                    <Unlink className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               </div>
