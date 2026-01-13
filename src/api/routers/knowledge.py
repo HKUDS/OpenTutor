@@ -64,6 +64,21 @@ class KnowledgeBaseInfo(BaseModel):
     statistics: dict
 
 
+class LinkFolderRequest(BaseModel):
+    """Request model for linking a local folder to a KB."""
+
+    folder_path: str
+
+
+class LinkedFolderInfo(BaseModel):
+    """Response model for linked folder information."""
+
+    id: str
+    path: str
+    added_at: str
+    file_count: int
+
+
 async def run_initialization_task(initializer: KnowledgeBaseInitializer):
     """Background task for knowledge base initialization"""
     task_manager = TaskIDManager.get_instance()
@@ -276,6 +291,155 @@ async def delete_knowledge_base(kb_name: str):
         return {"message": f"Knowledge base '{kb_name}' deleted successfully"}
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Knowledge base '{kb_name}' not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# Local Folder Integration Endpoints (Issue #101)
+# ============================================================
+
+
+@router.post("/{kb_name}/link-folder", response_model=LinkedFolderInfo)
+async def link_folder(kb_name: str, request: LinkFolderRequest):
+    """
+    Link a local folder to a knowledge base.
+
+    This allows syncing documents from a local folder (which can be
+    synced with SharePoint, Google Drive, OneLake, etc.) to the KB.
+
+    The folder path supports:
+    - Absolute paths: /Users/name/Documents or C:\\Users\\name\\Documents
+    - Home directory: ~/Documents
+    - Relative paths (resolved from server working directory)
+    """
+    try:
+        manager = get_kb_manager()
+        folder_info = manager.link_folder(kb_name, request.folder_path)
+        logger.info(f"Linked folder '{request.folder_path}' to KB '{kb_name}'")
+        return LinkedFolderInfo(**folder_info)
+    except ValueError as e:
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        raise HTTPException(status_code=400, detail=error_msg)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{kb_name}/linked-folders", response_model=list[LinkedFolderInfo])
+async def get_linked_folders(kb_name: str):
+    """Get list of linked folders for a knowledge base."""
+    try:
+        manager = get_kb_manager()
+        folders = manager.get_linked_folders(kb_name)
+        return [LinkedFolderInfo(**f) for f in folders]
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Knowledge base '{kb_name}' not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{kb_name}/linked-folders/{folder_id}")
+async def unlink_folder(kb_name: str, folder_id: str):
+    """Unlink a folder from a knowledge base."""
+    try:
+        manager = get_kb_manager()
+        success = manager.unlink_folder(kb_name, folder_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Folder '{folder_id}' not found")
+        logger.info(f"Unlinked folder '{folder_id}' from KB '{kb_name}'")
+        return {"message": "Folder unlinked successfully", "folder_id": folder_id}
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Knowledge base '{kb_name}' not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{kb_name}/sync-folder/{folder_id}")
+async def sync_folder(kb_name: str, folder_id: str, background_tasks: BackgroundTasks):
+    """
+    Sync files from a linked folder to the knowledge base.
+
+    This scans the linked folder for supported documents and processes
+    any new files that haven't been added yet.
+    """
+    try:
+        manager = get_kb_manager()
+
+        # Get linked folders and find the one with matching ID
+        folders = manager.get_linked_folders(kb_name)
+        folder_info = next((f for f in folders if f["id"] == folder_id), None)
+
+        if not folder_info:
+            raise HTTPException(status_code=404, detail=f"Linked folder '{folder_id}' not found")
+
+        folder_path = folder_info["path"]
+
+        # Check for changes (new or modified files)
+        changes = manager.detect_folder_changes(kb_name, folder_id)
+        files_to_process = changes["new_files"] + changes["modified_files"]
+
+        if not files_to_process:
+            return {"message": "No new or modified files to sync", "files": []}
+
+        # Get LLM config
+        try:
+            llm_config = get_llm_config()
+            api_key = llm_config["api_key"]
+            base_url = llm_config["base_url"]
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=f"LLM config error: {e!s}")
+
+        logger.info(
+            f"Syncing {len(files_to_process)} files from folder '{folder_path}' to KB '{kb_name}'"
+        )
+
+        # Update sync state to record what we're syncing
+        manager.update_folder_sync_state(kb_name, folder_id, files_to_process)
+
+        # Add background task to process files
+        background_tasks.add_task(
+            run_upload_processing_task,
+            kb_name=kb_name,
+            base_dir=str(_kb_base_dir),
+            api_key=api_key,
+            base_url=base_url,
+            uploaded_file_paths=files_to_process,
+        )
+
+        return {
+            "message": f"Syncing {len(files_to_process)} files from linked folder",
+            "folder_path": folder_path,
+            "new_files": changes["new_count"],
+            "modified_files": changes["modified_count"],
+            "file_count": len(files_to_process),
+        }
+    except HTTPException:
+        raise
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Knowledge base '{kb_name}' not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{kb_name}/linked-folders/{folder_id}/changes")
+async def check_folder_changes(kb_name: str, folder_id: str):
+    """
+    Check for new or modified files in a linked folder.
+
+    Returns info about files that have been added or changed since
+    the last sync. Useful for monitoring changes before triggering sync.
+    """
+    try:
+        manager = get_kb_manager()
+        changes = manager.detect_folder_changes(kb_name, folder_id)
+        return changes
+    except ValueError as e:
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        raise HTTPException(status_code=400, detail=error_msg)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -5,8 +5,10 @@ import {
   BookOpen,
   Database,
   FileText,
+  FolderOpen,
   Image as ImageIcon,
   Layers,
+  Link,
   MoreVertical,
   Plus,
   Search,
@@ -44,6 +46,13 @@ interface ProgressInfo {
   error?: string;
 }
 
+interface LinkedFolder {
+  id: string;
+  path: string;
+  added_at: string;
+  file_count: number;
+}
+
 export default function KnowledgePage() {
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +67,10 @@ export default function KnowledgePage() {
   const [progressMap, setProgressMap] = useState<Record<string, ProgressInfo>>(
     {},
   );
+  // Link Folder feature (Issue #101)
+  const [linkFolderModalOpen, setLinkFolderModalOpen] = useState(false);
+  const [folderPath, setFolderPath] = useState("");
+  const [linking, setLinking] = useState(false);
   // Use ref only for WebSocket connections (no need for state as it's not used in render)
   const wsConnectionsRef = useRef<Record<string, WebSocket>>({});
   const kbsNamesRef = useRef<string[]>([]);
@@ -568,6 +581,55 @@ export default function KnowledgePage() {
     }
   }, []);
 
+  // Handle linking a local folder to a KB (Issue #101)
+  const handleLinkFolder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!folderPath || !targetKb) return;
+
+    setLinking(true);
+    try {
+      // Link the folder
+      const linkRes = await fetch(
+        apiUrl(`/api/v1/knowledge/${targetKb}/link-folder`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ folder_path: folderPath }),
+        },
+      );
+
+      if (!linkRes.ok) {
+        const errorData = await linkRes.json();
+        throw new Error(errorData.detail || "Failed to link folder");
+      }
+
+      const folderInfo = await linkRes.json();
+
+      // Trigger sync to process the files
+      const syncRes = await fetch(
+        apiUrl(`/api/v1/knowledge/${targetKb}/sync-folder/${folderInfo.id}`),
+        { method: "POST" },
+      );
+
+      if (!syncRes.ok) {
+        console.warn("Folder linked but sync failed");
+      }
+
+      setLinkFolderModalOpen(false);
+      setFolderPath("");
+      await fetchKnowledgeBases();
+
+      alert(
+        `Folder linked successfully! Found ${folderInfo.file_count} documents. Processing started in background.`,
+      );
+    } catch (err: any) {
+      console.error(err);
+      alert(`Failed to link folder: ${err.message}`);
+    } finally {
+      setLinking(false);
+    }
+  };
+
   return (
     <div className="animate-fade-in">
       {/* Header */}
@@ -663,6 +725,17 @@ export default function KnowledgePage() {
                     title="Upload Documents"
                   >
                     <Upload className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTargetKb(kb.name);
+                      setFolderPath("");
+                      setLinkFolderModalOpen(true);
+                    }}
+                    className="p-2 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                    title="Link Local Folder"
+                  >
+                    <FolderOpen className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(kb.name)}
@@ -1006,6 +1079,88 @@ export default function KnowledgePage() {
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     "Upload"
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Link Folder Modal (Issue #101) */}
+      {linkFolderModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <FolderOpen className="w-5 h-5 text-emerald-500" />
+                Link Local Folder
+              </h2>
+              <button
+                onClick={() => setLinkFolderModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+              Link a local folder to{" "}
+              <span className="font-semibold text-slate-700 dark:text-slate-200">
+                {targetKb}
+              </span>
+              . Documents will be synced to the knowledge base.
+            </p>
+
+            <form onSubmit={handleLinkFolder} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="folder-path"
+                  className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1"
+                >
+                  Folder Path
+                </label>
+                <input
+                  type="text"
+                  id="folder-path"
+                  value={folderPath}
+                  onChange={(e) => setFolderPath(e.target.value)}
+                  placeholder="~/Documents/my-folder"
+                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+                <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+                  Examples: ~/Documents, /Users/name/folder,
+                  C:\Users\name\folder
+                </p>
+              </div>
+
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3 border border-emerald-100 dark:border-emerald-800">
+                <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                  <strong>Tip:</strong> This folder can be synced with Google
+                  Drive, SharePoint, OneDrive, or Dropbox for automatic updates.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setLinkFolderModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-50 dark:hover:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!folderPath || linking}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {linking ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Link className="w-4 h-4" />
+                      Link Folder
+                    </>
                   )}
                 </button>
               </div>
