@@ -1,0 +1,33 @@
+# ============================================
+# DeepTutor CI Dependencies (Minimal)
+# ============================================
+# Lightweight requirements for CI testing
+# Excludes heavy ML dependencies to fit in CI disk space
+
+# Core dependencies
+python-dotenv>=1.0.0
+PyYAML>=6.0
+tiktoken>=0.5.0
+
+# HTTP and API clients
+requests>=2.32.2
+openai>=1.30.0
+aiohttp>=3.9.4
+httpx>=0.27.0
+urllib3>=2.2.1
+
+# Async support
+nest_asyncio>=1.5.8
+
+# Web framework and server
+fastapi>=0.100.0
+uvicorn>=0.24.0
+websockets>=12.0
+python-multipart>=0.0.6
+pydantic>=2.0.0
+
+# Development tools
+pre-commit>=3.0.0
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
