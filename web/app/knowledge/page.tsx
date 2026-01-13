@@ -700,18 +700,17 @@ export default function KnowledgePage() {
       }
 
       const result = await res.json();
-      await fetchKnowledgeBases();
-      await fetchLinkedFolders(kbName);
 
-      if (result.file_count === 0) {
-        alert("No new or modified files to sync.");
-      } else {
-        alert(
-          `Syncing ${result.file_count} files (${result.new_files || 0} new, ${result.modified_files || 0} modified). Processing in background.`,
-        );
-      }
+      // Progress will be shown via WebSocket updates in the KB card
+      console.log("Sync started:", result);
+
+      // Refresh linked folders to update change indicators
+      await fetchLinkedFolders(kbName);
+      // Refresh KB list to see updated document counts
+      await fetchKnowledgeBases();
     } catch (err: any) {
       console.error("Sync error:", err);
+      // Show error as alert since errors should be visible
       alert(`Sync failed: ${err.message}`);
     } finally {
       setSyncingFolders((prev) => {
