@@ -15,7 +15,7 @@
 # ============================================
 # Stage 1: Frontend Builder
 # ============================================
-FROM node:25-slim AS frontend-builder
+FROM node:22-slim AS frontend-builder
 
 WORKDIR /app/web
 
@@ -55,6 +55,7 @@ WORKDIR /app
 
 # Install system dependencies
 # Note: libgl1 and libglib2.0-0 are required for OpenCV (used by mineru)
+# Rust is required for building tiktoken and other packages without pre-built wheels
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
@@ -64,7 +65,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender1 \
-    && rm -rf /var/lib/apt/lists/*
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+
+# Add Rust to PATH
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt ./
@@ -207,15 +214,26 @@ set -e
 BACKEND_PORT=${BACKEND_PORT:-8001}
 FRONTEND_PORT=${FRONTEND_PORT:-3782}
 
-# Determine the API base URL
+# Determine the API base URL with multiple fallback options
+# Priority: NEXT_PUBLIC_API_BASE_EXTERNAL > NEXT_PUBLIC_API_BASE > auto-detect
 if [ -n "$NEXT_PUBLIC_API_BASE_EXTERNAL" ]; then
+    # Explicit external URL for cloud deployments
     API_BASE="$NEXT_PUBLIC_API_BASE_EXTERNAL"
+    echo "[Frontend] 📌 Using external API URL: ${API_BASE}"
+elif [ -n "$NEXT_PUBLIC_API_BASE" ]; then
+    # Custom API base URL
+    API_BASE="$NEXT_PUBLIC_API_BASE"
+    echo "[Frontend] 📌 Using custom API URL: ${API_BASE}"
 else
+    # Default: localhost with configured backend port
+    # Note: This only works for local development, not cloud deployments
     API_BASE="http://localhost:${BACKEND_PORT}"
+    echo "[Frontend] 📌 Using default API URL: ${API_BASE}"
+    echo "[Frontend] ⚠️  For cloud deployment, set NEXT_PUBLIC_API_BASE_EXTERNAL to your server's public URL"
+    echo "[Frontend]    Example: -e NEXT_PUBLIC_API_BASE_EXTERNAL=https://your-server.com:${BACKEND_PORT}"
 fi
 
 echo "[Frontend] 🚀 Starting Next.js frontend on port ${FRONTEND_PORT}..."
-echo "[Frontend] 📌 API base URL: ${API_BASE}"
 
 # Replace placeholder in built Next.js files
 # This is necessary because NEXT_PUBLIC_* vars are inlined at build time
@@ -248,8 +266,8 @@ echo "📌 Backend Port: ${BACKEND_PORT}"
 echo "📌 Frontend Port: ${FRONTEND_PORT}"
 
 # Check for required environment variables
-if [ -z "$LLM_BINDING_API_KEY" ]; then
-    echo "⚠️  Warning: LLM_BINDING_API_KEY not set"
+if [ -z "$LLM_API_KEY" ]; then
+    echo "⚠️  Warning: LLM_API_KEY not set"
     echo "   Please provide LLM configuration via environment variables or .env file"
 fi
 
@@ -264,7 +282,7 @@ if [ ! -f "/app/data/user/user_history.json" ]; then
     echo "   Initializing user data directories..."
     python -c "
 from pathlib import Path
-from src.core.setup import init_user_directories
+from src.services.setup import init_user_directories
 init_user_directories(Path('/app'))
 " 2>/dev/null || echo "   ⚠️ Directory initialization skipped (will be created on first use)"
 fi

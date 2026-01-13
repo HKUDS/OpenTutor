@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Extract question information from MinerU-parsed exam papers
 
@@ -18,7 +19,8 @@ sys.path.insert(0, str(project_root))
 
 from openai import OpenAI
 
-from src.core.core import get_agent_params, get_llm_config
+from src.services.config import get_agent_params
+from src.services.llm import get_llm_config
 
 
 def load_parsed_paper(paper_dir: Path) -> tuple[str | None, list[dict] | None, Path]:
@@ -37,7 +39,7 @@ def load_parsed_paper(paper_dir: Path) -> tuple[str | None, list[dict] | None, P
 
     md_files = list(auto_dir.glob("*.md"))
     if not md_files:
-        print(f"❌ Error: No markdown file found in {auto_dir}")
+        print(f"✗ Error: No markdown file found in {auto_dir}")
         return None, None, auto_dir / "images"
 
     md_file = md_files[0]
@@ -172,16 +174,16 @@ Please analyze the above exam paper content, extract all question information, a
         result = json.loads(result_text)
 
         questions = result.get("questions", [])
-        print(f"✅ Successfully extracted {len(questions)} questions")
+        print(f"✓ Successfully extracted {len(questions)} questions")
 
         return questions
 
     except json.JSONDecodeError as e:
-        print(f"❌ JSON parsing error: {e!s}")
+        print(f"✗ JSON parsing error: {e!s}")
         print(f"LLM response content: {result_text[:500]}...")
         return []
     except Exception as e:
-        print(f"❌ LLM call failed: {e!s}")
+        print(f"✗ LLM call failed: {e!s}")
         import traceback
 
         traceback.print_exc()
@@ -239,7 +241,7 @@ def extract_questions_from_paper(paper_dir: str, output_dir: str | None = None) 
     """
     paper_dir = Path(paper_dir).resolve()
     if not paper_dir.exists():
-        print(f"❌ Error: Directory does not exist: {paper_dir}")
+        print(f"✗ Error: Directory does not exist: {paper_dir}")
         return False
 
     print(f"📁 Paper directory: {paper_dir}")
@@ -247,13 +249,13 @@ def extract_questions_from_paper(paper_dir: str, output_dir: str | None = None) 
     markdown_content, content_list, images_dir = load_parsed_paper(paper_dir)
 
     if not markdown_content:
-        print("❌ Error: Unable to load paper content")
+        print("✗ Error: Unable to load paper content")
         return False
 
     try:
         llm_config = get_llm_config()
     except ValueError as e:
-        print(f"❌ {e!s}")
+        print(f"✗ {e!s}")
         print(
             "Tip: Please create .env file in project root and configure LLM-related environment variables"
         )
@@ -263,9 +265,9 @@ def extract_questions_from_paper(paper_dir: str, output_dir: str | None = None) 
         markdown_content=markdown_content,
         content_list=content_list,
         images_dir=images_dir,
-        api_key=llm_config["api_key"],
-        base_url=llm_config["base_url"],
-        model=llm_config["model"],
+        api_key=llm_config.api_key,
+        base_url=llm_config.base_url,
+        model=llm_config.model,
     )
 
     if not questions:
@@ -280,7 +282,7 @@ def extract_questions_from_paper(paper_dir: str, output_dir: str | None = None) 
     paper_name = paper_dir.name
     output_file = save_questions_json(questions, output_dir, paper_name)
 
-    print("\n✅ Question extraction completed!")
+    print("\n✓ Question extraction completed!")
     print(f"📄 View results: {output_file}")
 
     return True

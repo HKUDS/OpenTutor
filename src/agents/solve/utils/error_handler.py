@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Error Handler - Error handling and retry mechanism
 """
@@ -238,15 +239,15 @@ if __name__ == "__main__":
 
     try:
         validate_investigate_output(test_investigate_output)
-        print("✅ InvestigateAgent output validation passed")
+        print("✓ InvestigateAgent output validation passed")
     except ParseError as e:
-        print(f"❌ InvestigateAgent output validation failed: {e}")
+        print(f"✗ InvestigateAgent output validation failed: {e}")
 
     # Test missing required fields
     test_invalid_output = {"actions": []}
 
     try:
         validate_investigate_output(test_invalid_output)
-        print("❌ Invalid output validation passed (should not happen)")
+        print("✓ Invalid output validation passed (should not happen)")
     except ParseError as e:
-        print(f"✅ Invalid output validation failed (expected): {e}")
+        print(f"✗ Invalid output validation failed (expected): {e}")

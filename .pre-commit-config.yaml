@@ -19,11 +19,11 @@ repos:
       # Remove trailing whitespace
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-        exclude: ^(.*\.min\.(js|css)|.*\.lock|.*\.log|.*\.pdf|.*\.zip|.*\.tar\.gz)
+        exclude: ^(assets/roster/.*\.svg|.*\.min\.(js|css)|.*\.lock|.*\.log|.*\.pdf|.*\.zip|.*\.tar\.gz)
 
       # Ensure files end with a newline
       - id: end-of-file-fixer
-        exclude: ^(.*\.min\.(js|css)|.*\.lock|.*\.log|.*\.pdf|.*\.zip|.*\.tar\.gz)
+        exclude: ^(assets/roster/.*\.svg|.*\.min\.(js|css)|.*\.lock|.*\.log|.*\.pdf|.*\.zip|.*\.tar\.gz)
 
       # Check YAML files for syntax errors
       - id: check-yaml
@@ -49,40 +49,30 @@ repos:
   # ============================================
   # Python code formatting and linting
   # ============================================
-  # Note: 使用 ruff format 替代 black，避免格式化工具冲突
-  # ruff format 更快且与 ruff linter 配合更好
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.7
     hooks:
-      # Ruff linting (只自动修复，不阻止提交)
+      # Ruff linting - removing --exit-zero to ensure we catch issues before they land
       - id: ruff
-        args: [--fix, --exit-zero]
-        files: ^(src/|scripts/).*\.py$
-        # --exit-zero: 即使有错误也不阻止提交，只自动修复
+        args: [--fix]
 
-      # Ruff import sorting (replaces isort)
+      # Ruff import sorting
       - id: ruff-format
-        files: ^(src/|scripts/).*\.py$
-
-  # Note: python-check-docstring-first hook removed as it's not available
-  # Ruff already handles most code quality checks including import ordering
 
   # ============================================
   # Frontend code formatting and linting
   # ============================================
-  # Note: ESLint 暂时禁用，因为 Next.js 项目通常有自己的 ESLint 配置
-  # 如果需要启用，可以取消下面的注释并配置 ESLint
+  # Note: ESLint is disabled for now due to missing config file in /web
   # - repo: https://github.com/pre-commit/mirrors-eslint
-  #   rev: v10.0.0-alpha.1
+  #   rev: v9.17.0
   #   hooks:
   #     - id: eslint
   #       files: ^web/.*\.(js|jsx|ts|tsx)$
   #       exclude: ^web/(node_modules|\.next|out|dist|build)/
   #       additional_dependencies:
-  #         - eslint@^8.57.0
-  #         - '@typescript-eslint/parser@^6.0.0'
-  #         - '@typescript-eslint/eslint-plugin@^6.0.0'
-  #         - eslint-config-next@14.0.3
+  #         - eslint@^9.0.0
+  #         - eslint-config-next@^15.0.0
+  #         - "@eslint/eslintrc"
   #       args: [--fix]
 
   - repo: https://github.com/pre-commit/mirrors-prettier
@@ -101,5 +91,4 @@ repos:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
         exclude: package-lock.json
-        # Only scan staged files for performance
         pass_filenames: false

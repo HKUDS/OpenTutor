@@ -31,8 +31,8 @@ sys.path.insert(0, str(project_root))
 from src.agents.question import AgentCoordinator
 from src.agents.solve import MainSolver
 from src.api.utils.history import ActivityType, history_manager
-from src.core.core import get_llm_config
-from src.core.logging import get_logger
+from src.logging import get_logger
+from src.services.llm import get_llm_config
 
 # Initialize logger for CLI
 logger = get_logger("CLI", console_output=True, file_output=True)
@@ -45,7 +45,7 @@ class AITutorStarter:
         """Initialize launcher"""
         # Initialize user data directories
         try:
-            from src.core.setup import init_user_directories
+            from src.services.setup import init_user_directories
 
             init_user_directories(project_root)
         except Exception as e:
@@ -54,8 +54,8 @@ class AITutorStarter:
 
         try:
             llm_config = get_llm_config()
-            self.api_key = llm_config["api_key"]
-            self.base_url = llm_config["base_url"]
+            self.api_key = llm_config.api_key
+            self.base_url = llm_config.base_url
         except ValueError as e:
             logger.error(str(e))
             logger.error("Please configure LLM settings in .env or DeepTutor.env file")
@@ -446,7 +446,7 @@ class AITutorStarter:
         try:
             # Import research pipeline
             from src.agents.research.research_pipeline import ResearchPipeline
-            from src.core.core import load_config_with_main
+            from src.services.config import load_config_with_main
 
             # Load configuration using unified config loader
             config = load_config_with_main("main.yaml", project_root)
@@ -710,9 +710,9 @@ class AITutorStarter:
         try:
             llm_config = get_llm_config()
             print("\n📦 LLM Configuration:")
-            print(f"   Model: {llm_config.get('model', 'N/A')}")
-            print(f"   API Endpoint: {llm_config.get('base_url', 'N/A')}")
-            print(f"   API Key: {'Configured' if llm_config.get('api_key') else 'Not configured'}")
+            print(f"   Model: {llm_config.model or 'N/A'}")
+            print(f"   API Endpoint: {llm_config.base_url or 'N/A'}")
+            print(f"   API Key: {'Configured' if llm_config.api_key else 'Not configured'}")
         except Exception as e:
             print(f"   ❌ Load failed: {e}")
 
@@ -797,7 +797,7 @@ def main():
 if __name__ == "__main__":
     # Initialize user data directories
     try:
-        from src.core.setup import init_user_directories
+        from src.services.setup import init_user_directories
 
         init_user_directories(project_root)
     except Exception as e:

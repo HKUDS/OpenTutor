@@ -247,11 +247,11 @@ cp .env.example .env
 | 变量 | 必需 | 描述 |
 |:---|:---:|:---|
 | `LLM_MODEL` | **是** | 模型名称（例如：`gpt-4o`） |
-| `LLM_BINDING_API_KEY` | **是** | 您的 LLM API 密钥 |
-| `LLM_BINDING_HOST` | **是** | API 端点 URL |
+| `LLM_API_KEY` | **是** | 您的 LLM API 密钥 |
+| `LLM_HOST` | **是** | API 端点 URL |
 | `EMBEDDING_MODEL` | **是** | 嵌入模型名称 |
-| `EMBEDDING_BINDING_API_KEY` | **是** | 嵌入 API 密钥 |
-| `EMBEDDING_BINDING_HOST` | **是** | 嵌入 API 端点 |
+| `EMBEDDING_API_KEY` | **是** | 嵌入 API 密钥 |
+| `EMBEDDING_HOST` | **是** | 嵌入 API 端点 |
 | `BACKEND_PORT` | 否 | 后端端口（默认：`8001`） |
 | `FRONTEND_PORT` | 否 | 前端端口（默认：`3782`） |
 | `TTS_*` | 否 | 文本转语音设置 |
@@ -309,11 +309,11 @@ cp .env.example .env
 docker run -d --name deeptutor \
   -p 8001:8001 -p 3782:3782 \
   -e LLM_MODEL=gpt-4o \
-  -e LLM_BINDING_API_KEY=your-api-key \
-  -e LLM_BINDING_HOST=https://api.openai.com/v1 \
+  -e LLM_API_KEY=your-api-key \
+  -e LLM_HOST=https://api.openai.com/v1 \
   -e EMBEDDING_MODEL=text-embedding-3-large \
-  -e EMBEDDING_BINDING_API_KEY=your-api-key \
-  -e EMBEDDING_BINDING_HOST=https://api.openai.com/v1 \
+  -e EMBEDDING_API_KEY=your-api-key \
+  -e EMBEDDING_HOST=https://api.openai.com/v1 \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/config:/app/config:ro \
   ghcr.io/hkuds/deeptutor:latest

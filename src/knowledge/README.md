@@ -236,8 +236,8 @@ knowledge_bases/
 Required in project root `.env` file:
 
 ```bash
-LLM_BINDING_API_KEY=your_openai_api_key
-LLM_BINDING_HOST=https://api.openai.com/v1
+LLM_API_KEY=your_openai_api_key
+LLM_HOST=https://api.openai.com/v1
 ```
 
 ## 💡 Usage Tips
@@ -402,7 +402,7 @@ A: Ensure `raganything/RAG-Anything` is in project parent directory, or modify p
 
 ### Q: API call failed?
 
-A: Check `LLM_BINDING_API_KEY` and `LLM_BINDING_HOST` configuration in `.env` file.
+A: Check `LLM_API_KEY` and `LLM_HOST` configuration in `.env` file.
 
 ### Q: RAG initialization failed, error "no element found" or GraphML parsing error?
 

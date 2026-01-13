@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -13,7 +13,7 @@
     "cytoscape": "^3.33.1",
     "framer-motion": "^12.24.0",
     "html2canvas": "^1.4.1",
-    "jspdf": "^2.5.2",
+    "jspdf": "^4.0.0",
     "lucide-react": "^0.562.0",
     "mermaid": "^11.12.2",
     "next": "^16.1.1",

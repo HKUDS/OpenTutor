@@ -53,8 +53,8 @@ This system is an intelligent problem-solving system based on a **dual-loop arch
 pip install -r requirements.txt
 
 # .env file (project root directory)
-LLM_BINDING_API_KEY=your_api_key
-LLM_BINDING_HOST=https://api.openai.com/v1
+LLM_API_KEY=your_api_key
+LLM_HOST=https://api.openai.com/v1
 LLM_MODEL=gpt-4o         # Optional
 PERPLEXITY_API_KEY=...   # Optional, enable Web search
 ```
@@ -69,8 +69,8 @@ from solve_agents import MainSolver
 async def main():
     solver = MainSolver(
         kb_name="ai_textbook",
-        api_key=os.getenv("LLM_BINDING_API_KEY"),
-        base_url=os.getenv("LLM_BINDING_HOST"),
+        api_key=os.getenv("LLM_API_KEY"),
+        base_url=os.getenv("LLM_HOST"),
     )
 
     result = await solver.solve(

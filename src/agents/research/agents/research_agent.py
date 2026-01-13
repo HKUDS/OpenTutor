@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 ResearchAgent - Research Agent
 Responsible for executing research logic and tool call decisions
@@ -14,18 +15,24 @@ from typing import Any
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+from src.agents.base_agent import BaseAgent
 from src.agents.research.data_structures import DynamicTopicQueue, TopicBlock
 
 from ..utils.json_utils import extract_json_from_text
-from .base_agent import BaseAgent
 
 
 class ResearchAgent(BaseAgent):
     """Research Agent"""
 
     def __init__(self, config: dict[str, Any], api_key: str = None, base_url: str = None):
+        language = config.get("system", {}).get("language", "zh")
         super().__init__(
-            config=config, api_key=api_key, base_url=base_url, agent_name="research_agent"
+            module_name="research",
+            agent_name="research_agent",
+            api_key=api_key,
+            base_url=base_url,
+            language=language,
+            config=config,
         )
         self.researching_config = config.get("researching", {})
         self.max_iterations = self.researching_config.get("max_iterations", 5)
@@ -558,7 +565,7 @@ Tools already used: {", ".join(used_tools) if used_tools else "None"}
                     else:
                         added = manager_agent.add_new_topic(trimmed_topic, new_overview or "")
                     if added:
-                        print(f"{block_id_prefix}   ➕ Added new topic《{trimmed_topic}》to queue")
+                        print(f"{block_id_prefix}   ✓ Added new topic《{trimmed_topic}》to queue")
                         send_progress(
                             "new_topic_added",
                             iteration=iteration,

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Example script that demonstrates how to use the Agent coordinator.
 """
@@ -48,7 +49,7 @@ async def run_single_example(coordinator: AgentCoordinator):
         question = result["question"]
         validation = result["validation"]
 
-        print(f"\n✅ Success in {result['rounds']} round(s)")
+        print(f"\n✓ Success in {result['rounds']} round(s)")
         print(f"\nType: {question.get('question_type')}")
         print(f"\nQuestion:\n{question.get('question')}")
 
@@ -71,7 +72,7 @@ async def run_single_example(coordinator: AgentCoordinator):
                 "\n💡 Tip: try a different knowledge point or ensure the knowledge base contains supporting material."
             )
         else:
-            print(f"\n❌ Failed: {error_type}")
+            print(f"\n✗ Failed: {error_type}")
             if result.get("last_question"):
                 print("\nLast attempted question:")
                 print(json.dumps(result["last_question"], ensure_ascii=False, indent=2))

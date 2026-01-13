@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 """
 Main Solver - Problem-Solving System Controller
@@ -21,7 +22,8 @@ import yaml
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.core.core import get_llm_config, load_config_with_main, parse_language
+from src.services.config import load_config_with_main, parse_language
+from src.services.llm import get_llm_config
 
 from .analysis_loop import InvestigateAgent, NoteAgent
 
@@ -123,24 +125,32 @@ class MainSolver:
             try:
                 llm_config = get_llm_config()
                 if api_key is None:
-                    api_key = llm_config["api_key"]
+                    api_key = llm_config.api_key
                 if base_url is None:
-                    base_url = llm_config["base_url"]
+                    base_url = llm_config.base_url
 
                 # Ensure LLM config is populated in self.config for agents
                 if "llm" not in self.config:
                     self.config["llm"] = {}
 
                 # Update config with complete details (binding, model, etc.)
-                self.config["llm"].update(llm_config)
+                from dataclasses import asdict
+
+                self.config["llm"].update(asdict(llm_config))
 
             except ValueError as e:
                 raise ValueError(f"LLM config error: {e!s}")
 
-        if not api_key:
-            raise ValueError(
-                "API key not set. Provide api_key param or set LLM_BINDING_API_KEY in .env"
-            )
+        # Check if API key is required
+        # Local LLM servers (Ollama, LM Studio, etc.) don't need API keys
+        from src.services.llm import is_local_llm_server
+
+        if not api_key and not is_local_llm_server(base_url):
+            raise ValueError("API key not set. Provide api_key param or set LLM_API_KEY in .env")
+
+        # For local servers, use a placeholder key if none provided
+        if not api_key and is_local_llm_server(base_url):
+            api_key = "sk-no-key-required"
 
         self.api_key = api_key
         self.base_url = base_url

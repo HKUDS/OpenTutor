@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Question Validation Workflow: retrieve -> validate -> return.
 Uses unified PromptManager for prompt loading.
@@ -17,9 +18,9 @@ from openai import AsyncOpenAI
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.core.core import get_agent_params, load_config_with_main
-from src.core.logging import get_logger
-from src.core.prompt_manager import get_prompt_manager
+from src.logging import get_logger
+from src.services.config import get_agent_params, load_config_with_main
+from src.services.prompt import get_prompt_manager
 from src.tools.rag_tool import rag_search
 
 # Module logger
@@ -51,13 +52,15 @@ class QuestionValidationWorkflow:
         """
         # API configuration
         if not api_key:
-            api_key = os.getenv("LLM_BINDING_API_KEY")
+            api_key = os.getenv("LLM_API_KEY")
         if not base_url:
-            base_url = os.getenv("LLM_BINDING_HOST")
+            base_url = os.getenv("LLM_HOST")
         if model is None:
             model = os.getenv("LLM_MODEL", "gpt-4o")
 
-        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        # For local LLM servers, use placeholder key if none provided
+        client_api_key = api_key or "sk-no-key-required"
+        self.client = AsyncOpenAI(api_key=client_api_key, base_url=base_url)
         self.api_key = api_key
         self.base_url = base_url
         self.model = model

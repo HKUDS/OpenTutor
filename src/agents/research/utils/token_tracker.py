@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Token Tracker - LLM Token usage and cost tracking system (DR-in-KG version)
 References student_TA/solve_agents/utils/token_tracker.py, with minor trimming and added global singleton getter method.
@@ -21,7 +22,7 @@ except ImportError:
 # Try importing litellm (optional)
 try:
     import litellm  # type: ignore
-    from litellm import completion_cost, token_counter  # type: ignore
+    from litellm import token_counter  # type: ignore
 
     LITELLM_AVAILABLE = True
 except ImportError:

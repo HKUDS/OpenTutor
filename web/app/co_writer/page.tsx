@@ -5,7 +5,7 @@ import { Edit3 } from "lucide-react";
 
 export default function CoWriterPage() {
   return (
-    <div className="h-[calc(100vh-4rem)] animate-fade-in flex flex-col">
+    <div className="h-screen animate-fade-in flex flex-col p-6">
       {/* Header */}
       <div className="mb-4 shrink-0">
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-2">

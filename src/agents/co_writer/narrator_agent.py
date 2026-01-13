@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 NarratorAgent - Note narration agent.
 Uses unified PromptManager for prompt loading.
@@ -21,11 +22,12 @@ _project_root = Path(__file__).parent.parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from lightrag.llm.openai import openai_complete_if_cache
-
-from src.core.core import get_agent_params, get_llm_config, get_tts_config, load_config_with_main
-from src.core.logging import get_logger
-from src.core.prompt_manager import get_prompt_manager
+from src.logging import get_logger
+from src.services.config import get_agent_params, load_config_with_main
+from src.services.llm import complete as llm_complete
+from src.services.llm import get_llm_config
+from src.services.prompt import get_prompt_manager
+from src.services.tts import get_tts_config
 
 # Initialize logger with config
 try:
@@ -160,6 +162,12 @@ class NarratorAgent:
                 - script: Narration script text
                 - key_points: List of extracted key points
         """
+        # Always refresh LLM config before starting to avoid stale credentials
+        try:
+            self.llm_config = get_llm_config()
+        except Exception as e:
+            logger.error(f"Failed to refresh LLM config: {e}")
+
         if not self.llm_config:
             raise ValueError("LLM configuration not available")
 
@@ -195,13 +203,14 @@ class NarratorAgent:
 
         logger.info(f"Generating narration script with style: {style}")
 
-        model = self.llm_config["model"]
-        response = await openai_complete_if_cache(
+        model = self.llm_config.model
+        response = await llm_complete(
+            binding=self.llm_config.binding,
             model=model,
             prompt=user_prompt,
             system_prompt=system_prompt,
-            api_key=self.llm_config["api_key"],
-            base_url=self.llm_config["base_url"],
+            api_key=self.llm_config.api_key,
+            base_url=self.llm_config.base_url,
             max_tokens=self._agent_params["max_tokens"],
             temperature=self._agent_params["temperature"],
         )
@@ -255,13 +264,14 @@ class NarratorAgent:
         user_prompt = user_template.format(content=content[:4000])
 
         try:
-            model = self.llm_config["model"]
-            response = await openai_complete_if_cache(
+            model = self.llm_config.model
+            response = await llm_complete(
+                binding=self.llm_config.binding,
                 model=model,
                 prompt=user_prompt,
                 system_prompt=system_prompt,
-                api_key=self.llm_config["api_key"],
-                base_url=self.llm_config["base_url"],
+                api_key=self.llm_config.api_key,
+                base_url=self.llm_config.base_url,
                 max_tokens=self._agent_params["max_tokens"],
                 temperature=self._agent_params["temperature"],
             )
@@ -388,6 +398,14 @@ class NarratorAgent:
         Returns:
             Dict containing script info and optionally audio info
         """
+        # Refresh TTS config before starting to avoid stale credentials
+        try:
+            self.tts_config = get_tts_config()
+            # Also refresh LLM config since narrate calls generate_script
+            self.llm_config = get_llm_config()
+        except Exception as e:
+            logger.error(f"Failed to refresh configs: {e}")
+
         script_result = await self.generate_script(content, style)
 
         # Use default voice if not specified

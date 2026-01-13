@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Parse PDF files using MinerU and save results to reference_papers directory
 """
@@ -47,7 +48,7 @@ def parse_pdf_with_mineru(pdf_path: str, output_base_dir: str = None):
     """
     mineru_cmd = check_mineru_installed()
     if not mineru_cmd:
-        print("❌ Error: MinerU installation not detected")
+        print("✗ Error: MinerU installation not detected")
         print("Please install MinerU first:")
         print("  pip install magic-pdf[full]")
         print("or")
@@ -55,15 +56,15 @@ def parse_pdf_with_mineru(pdf_path: str, output_base_dir: str = None):
         print("or visit: https://github.com/opendatalab/MinerU")
         return False
 
-    print(f"✅ Detected MinerU command: {mineru_cmd}")
+    print(f"✓ Detected MinerU command: {mineru_cmd}")
 
     pdf_path = Path(pdf_path).resolve()
     if not pdf_path.exists():
-        print(f"❌ Error: PDF file does not exist: {pdf_path}")
+        print(f"✗ Error: PDF file does not exist: {pdf_path}")
         return False
 
     if not pdf_path.suffix.lower() == ".pdf":
-        print(f"❌ Error: File is not PDF format: {pdf_path}")
+        print(f"✗ Error: File is not PDF format: {pdf_path}")
         return False
 
     script_dir = Path(__file__).parent.parent.parent.parent.parent
@@ -85,7 +86,7 @@ def parse_pdf_with_mineru(pdf_path: str, output_base_dir: str = None):
 
     print(f"📄 PDF file: {pdf_path}")
     print(f"📁 Output directory: {output_dir}")
-    print("⏳ Starting parsing...")
+    print("→ Starting parsing...")
 
     try:
         temp_output = output_base_dir / "temp_mineru_output"
@@ -98,14 +99,14 @@ def parse_pdf_with_mineru(pdf_path: str, output_base_dir: str = None):
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
         if result.returncode != 0:
-            print("❌ MinerU parsing failed:")
+            print("✗ MinerU parsing failed:")
             print(f"Stdout: {result.stdout}")
             print(f"Stderr: {result.stderr}")
             if temp_output.exists():
                 shutil.rmtree(temp_output)
             return False
 
-        print("✅ MinerU parsing completed!")
+        print("✓ MinerU parsing completed!")
 
         generated_folders = list(temp_output.iterdir())
 
@@ -150,7 +151,7 @@ def parse_pdf_with_mineru(pdf_path: str, output_base_dir: str = None):
         return True
 
     except Exception as e:
-        print(f"❌ Error occurred during parsing: {e!s}")
+        print(f"✗ Error occurred during parsing: {e!s}")
         import traceback
 
         traceback.print_exc()
@@ -187,10 +188,10 @@ Examples:
     success = parse_pdf_with_mineru(args.pdf_path, args.output)
 
     if success:
-        print("\n✅ Parsing completed!")
+        print("\n✓ Parsing completed!")
         sys.exit(0)
     else:
-        print("\n❌ Parsing failed!")
+        print("\n✗ Parsing failed!")
         sys.exit(1)
 
 

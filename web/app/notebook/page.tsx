@@ -454,7 +454,7 @@ export default function NotebookPage() {
 
   return (
     <div
-      className="h-[calc(100vh-4rem)] flex gap-4 animate-fade-in"
+      className="h-screen flex gap-4 p-4 animate-fade-in"
       style={{ justifyContent: "flex-start" }}
     >
       {/* Left Panel: Notebook List */}

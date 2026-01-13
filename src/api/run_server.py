@@ -30,7 +30,7 @@ if __name__ == "__main__":
         sys.path.insert(0, str(project_root))
 
     # Get port from configuration
-    from src.core.setup import get_backend_port
+    from src.services.setup import get_backend_port
 
     backend_port = get_backend_port(project_root)
 
@@ -44,6 +44,7 @@ if __name__ == "__main__":
         str(project_root / "web" / "node_modules"),  # Web node modules
         str(project_root / "web" / ".next"),  # Next.js build
         str(project_root / ".git"),  # Git directory
+        str(project_root / "scripts"),  # Scripts directory - don't reload on launcher changes
     ]
 
     # Filter out non-existent directories to avoid warnings

@@ -13,9 +13,9 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 # Infrastructure
-from src.core.logging import Logger, get_logger
+from src.agents.base_agent import BaseAgent
+from src.logging import Logger, get_logger
 
-from .base_agent import BaseAgent
 from .utils import (
     ConfigValidator,
     PerformanceMonitor,

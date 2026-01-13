@@ -314,7 +314,7 @@ export default function ResearchPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] animate-fade-in flex gap-6">
+    <div className="h-screen animate-fade-in flex gap-4 p-4">
       {/* LEFT PANEL */}
       <div className="flex-[1_1_33%] min-w-[350px] max-w-[500px] flex flex-col gap-4 h-full">
         {/* Config Header */}
@@ -462,9 +462,9 @@ export default function ResearchPage() {
                       <span>Optimizing topic...</span>
                     </div>
                   ) : (
-                    <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none">
-                      {msg.content}
-                    </ReactMarkdown>
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
                   )}
                 </div>
                 {msg.type === "topic_proposal" &&

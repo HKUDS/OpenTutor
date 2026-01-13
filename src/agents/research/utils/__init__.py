@@ -14,7 +14,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 # Import from unified logging system
-from src.core.logging import Logger, get_logger
+from src.logging import Logger, get_logger
 
 from .json_utils import (
     ensure_json_dict,
@@ -38,7 +38,7 @@ def get_llm_logger(research_id: str = None, log_dir: str = None, agent_name: str
 
 def reset_llm_logger():
     """Reset LLM logger (backwards compatibility)"""
-    from src.core.logging import reset_logger
+    from src.logging import reset_logger
 
     reset_logger()
 

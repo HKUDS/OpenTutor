@@ -166,9 +166,9 @@ export default function SolverPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex gap-6 animate-fade-in overflow-hidden">
+    <div className="h-screen flex gap-0 animate-fade-in overflow-hidden">
       {/* Left Panel: Chat Interface */}
-      <div className="flex-1 flex flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden min-h-0">
+      <div className="flex-1 flex flex-col bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 overflow-hidden min-h-0">
         {/* Chat Header */}
         <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex justify-between items-center backdrop-blur-sm shrink-0">
           <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-semibold">
@@ -539,7 +539,7 @@ export default function SolverPage() {
       </div>
 
       {/* Right Panel: Logic Stream - Modern Light Theme */}
-      <div className="w-[400px] flex-shrink-0 bg-white dark:bg-slate-800 rounded-2xl shadow-sm flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700 h-full">
+      <div className="w-[400px] flex-shrink-0 bg-white dark:bg-slate-800 flex flex-col overflow-hidden border-l border-slate-200 dark:border-slate-700 h-full">
         {/* Header */}
         <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 dark:text-slate-200">

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Config Validator - Configuration validator
 Validates the completeness and correctness of config.yaml
@@ -276,9 +277,9 @@ def print_validation_result(is_valid: bool, errors: list[str], warnings: list[st
     print("=" * 60)
 
     if is_valid:
-        print("✅ Configuration validation passed")
+        print("✓ Configuration validation passed")
     else:
-        print("❌ Configuration validation failed")
+        print("✗ Configuration validation failed")
 
     print()
 

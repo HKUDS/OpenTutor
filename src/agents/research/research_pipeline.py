@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 ResearchPipeline 2.0 - Research workflow based on dynamic topic queue
 Coordinates three stages: Planning -> Researching -> Reporting
@@ -54,7 +55,7 @@ from src.agents.research.agents import (
 )
 from src.agents.research.data_structures import DynamicTopicQueue
 from src.agents.research.utils.citation_manager import CitationManager
-from src.core.logging import get_logger
+from src.logging import get_logger
 from src.tools.code_executor import run_code
 from src.tools.paper_search_tool import PaperSearchTool
 from src.tools.query_item_tool import query_numbered_item
@@ -390,30 +391,30 @@ class ResearchPipeline:
 
         try:
             # ========== Phase 1: Planning (Planning and Initialization) ==========
-            self.logger.info("\n" + "█" * 70)
-            self.logger.info("█ Phase 1: Planning - Planning and Initialization")
-            self.logger.info("█" * 70)
+            self.logger.info("\n" + "═" * 70)
+            self.logger.info("▶ Phase 1: Planning - Planning and Initialization")
+            self.logger.info("═" * 70)
 
             optimized_topic = await self._phase1_planning(topic)
 
             # ========== Phase 2: Researching (Dynamic Research Loop) ==========
-            self.logger.info("\n" + "█" * 70)
-            self.logger.info("█ Phase 2: Researching - Dynamic Research Loop")
-            self.logger.info("█" * 70)
+            self.logger.info("\n" + "═" * 70)
+            self.logger.info("▶ Phase 2: Researching - Dynamic Research Loop")
+            self.logger.info("═" * 70)
 
             await self._phase2_researching()
 
             # ========== Phase 3: Reporting (Report Generation) ==========
-            self.logger.info("\n" + "█" * 70)
-            self.logger.info("█ Phase 3: Reporting - Report Generation")
-            self.logger.info("█" * 70)
+            self.logger.info("\n" + "═" * 70)
+            self.logger.info("▶ Phase 3: Reporting - Report Generation")
+            self.logger.info("═" * 70)
 
             report_result = await self._phase3_reporting(optimized_topic)
 
             # ========== Save Results ==========
-            self.logger.info("\n" + "█" * 70)
-            self.logger.info("█ Save Results")
-            self.logger.info("█" * 70 + "\n")
+            self.logger.info("\n" + "═" * 70)
+            self.logger.info("▶ Save Results")
+            self.logger.info("═" * 70 + "\n")
 
             report_file = self.reports_dir / f"{self.research_id}.md"
             with open(report_file, "w", encoding="utf-8") as f:
@@ -481,7 +482,7 @@ class ResearchPipeline:
             self.logger.warning("\n\n⚠️  Research interrupted by user")
             sys.exit(0)
         except Exception as e:
-            self.logger.error(f"\n\n❌ Research failed: {e!s}")
+            self.logger.error(f"\n\n✗ Research failed: {e!s}")
             import traceback
 
             self.logger.error(traceback.format_exc())
@@ -994,7 +995,7 @@ class ResearchPipeline:
                     )
 
                     if self.logger:
-                        self.logger.success(f"[{block.block_id}] ✅ Completed: {block.sub_topic}")
+                        self.logger.success(f"[{block.block_id}] ✓ Completed: {block.sub_topic}")
 
                     return result
 
@@ -1007,7 +1008,7 @@ class ResearchPipeline:
                     await update_active_task(block.block_id, None)
 
                     if self.logger:
-                        self.logger.error(f"[{block.block_id}] ❌ Failed: {block.sub_topic} - {e}")
+                        self.logger.error(f"[{block.block_id}] ✗ Failed: {block.sub_topic} - {e}")
 
                     self._log_researching_progress(
                         "block_failed",
@@ -1028,7 +1029,7 @@ class ResearchPipeline:
                 block = pending_blocks[i]
                 await manager.fail_task_async(block.block_id, str(result))
                 if self.logger:
-                    self.logger.error(f"[{block.block_id}] ❌ Exception: {result}")
+                    self.logger.error(f"[{block.block_id}] ✗ Exception: {result}")
 
         # Wait for any dynamically added topics (if manager adds new topics during research)
         # Continue until all tasks are processed (completed or failed)
@@ -1232,7 +1233,7 @@ async def main():
     from dotenv import load_dotenv
     import yaml
 
-    from src.core.core import get_llm_config
+    from src.services.llm import get_llm_config
 
     # Load environment variables
     load_dotenv()
@@ -1270,7 +1271,7 @@ async def main():
 
     # Create research pipeline
     pipeline = ResearchPipeline(
-        config=config, api_key=llm_config["api_key"], base_url=llm_config["base_url"]
+        config=config, api_key=llm_config.api_key, base_url=llm_config.base_url
     )
 
     # Execute research

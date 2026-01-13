@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Reference-based exam-question generation system
 
@@ -192,7 +193,7 @@ async def mimic_exam_questions(
                 "error": error_msg,
             }
 
-        print(f"✅ Exam directory detected: {latest_dir.name}")
+        print(f"✓ Exam directory detected: {latest_dir.name}")
         print(f"   Full path: {latest_dir}")
         print()
 
@@ -248,7 +249,7 @@ async def mimic_exam_questions(
             return {"success": False, "error": "No parsed outputs were found"}
 
         latest_dir = subdirs[0]
-        print(f"✅ Parsed folder: {latest_dir.name}")
+        print(f"✓ Parsed folder: {latest_dir.name}")
         print()
 
         await send_progress(
@@ -276,7 +277,7 @@ async def mimic_exam_questions(
     json_files = list(latest_dir.glob("*_questions.json"))
 
     if json_files:
-        print(f"✅ Found existing question file: {json_files[0].name}")
+        print(f"✓ Found existing question file: {json_files[0].name}")
         with open(json_files[0], encoding="utf-8") as f:
             questions_data = json.load(f)
     else:
@@ -302,7 +303,7 @@ async def mimic_exam_questions(
     if max_questions:
         reference_questions = reference_questions[:max_questions]
 
-    print(f"✅ Loaded {len(reference_questions)} reference questions")
+    print(f"✓ Loaded {len(reference_questions)} reference questions")
     print()
 
     # Send reference questions info
@@ -344,7 +345,7 @@ async def mimic_exam_questions(
 
     # Lazy import to avoid circular import
     from src.agents.question import AgentCoordinator
-    from src.core.core import load_config_with_main
+    from src.services.config import load_config_with_main
 
     # Load config for parallel settings
     config = load_config_with_main("question_config.yaml", project_root)
@@ -396,7 +397,7 @@ async def mimic_exam_questions(
                     current_completed = completed_count
 
                 if result.get("success"):
-                    print(f"✅ [{question_id}] Generated in {result['rounds']} round(s)")
+                    print(f"✓ [{question_id}] Generated in {result['rounds']} round(s)")
 
                     result_data = {
                         "success": True,
@@ -426,7 +427,7 @@ async def mimic_exam_questions(
 
                     return result_data
                 else:
-                    print(f"❌ [{question_id}] Failed: {result.get('error', 'Unknown error')}")
+                    print(f"✗ [{question_id}] Failed: {result.get('error', 'Unknown error')}")
 
                     error_data = {
                         "success": False,
@@ -451,7 +452,7 @@ async def mimic_exam_questions(
                     return error_data
 
             except Exception as e:
-                print(f"❌ [{question_id}] Exception: {e!s}")
+                print(f"✗ [{question_id}] Exception: {e!s}")
 
                 async with completed_lock:
                     completed_count += 1
@@ -603,10 +604,10 @@ Examples:
     )
 
     if result["success"]:
-        print("✅ Completed!")
+        print("✓ Completed!")
         sys.exit(0)
     else:
-        print(f"❌ Failed: {result.get('error')}")
+        print(f"✗ Failed: {result.get('error')}")
         sys.exit(1)
 
 

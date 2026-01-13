@@ -631,7 +631,7 @@ export default function KnowledgePage() {
   };
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in h-screen overflow-y-auto p-6">
       {/* Header */}
       <div className="flex justify-between items-end mb-8">
         <div>
@@ -918,7 +918,7 @@ export default function KnowledgePage() {
 
       {/* Create KB Modal */}
       {createModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 mt-40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">

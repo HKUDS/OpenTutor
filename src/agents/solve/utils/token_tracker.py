@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Token Tracker - LLM Token usage and cost tracking system (Advanced)
 Uses tiktoken for precise token counting, supports multiple models and more accurate cost calculation
@@ -21,7 +22,7 @@ except ImportError:
 # Try importing litellm (optional advanced library)
 try:
     import litellm
-    from litellm import completion_cost, token_counter
+    from litellm import token_counter
 
     LITELLM_AVAILABLE = True
 except ImportError:

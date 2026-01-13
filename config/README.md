@@ -220,8 +220,8 @@ Required environment variables (in `.env` or `DeepTutor.env`):
 
 ```bash
 # LLM Configuration (Required)
-LLM_BINDING_API_KEY=your_api_key
-LLM_BINDING_HOST=https://api.openai.com/v1
+LLM_API_KEY=your_api_key
+LLM_HOST=https://api.openai.com/v1
 LLM_MODEL=gpt-4o
 
 # Optional

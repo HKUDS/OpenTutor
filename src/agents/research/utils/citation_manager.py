@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 CitationManager - Citation management system
 Responsible for extracting citation information from tool calls and managing citation JSON files

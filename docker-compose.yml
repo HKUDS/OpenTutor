@@ -39,14 +39,14 @@ services:
       # LLM Configuration (Required)
       - LLM_BINDING=${LLM_BINDING:-openai}
       - LLM_MODEL=${LLM_MODEL}
-      - LLM_BINDING_API_KEY=${LLM_BINDING_API_KEY}
-      - LLM_BINDING_HOST=${LLM_BINDING_HOST}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_HOST=${LLM_HOST}
       - DISABLE_SSL_VERIFY=${DISABLE_SSL_VERIFY:-false}
       # Embedding Configuration (Required for Knowledge Base)
       - EMBEDDING_BINDING=${EMBEDDING_BINDING:-openai}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-large}
-      - EMBEDDING_BINDING_API_KEY=${EMBEDDING_BINDING_API_KEY}
-      - EMBEDDING_BINDING_HOST=${EMBEDDING_BINDING_HOST}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY}
+      - EMBEDDING_HOST=${EMBEDDING_HOST}
       - EMBEDDING_DIM=${EMBEDDING_DIM:-3072}
       - EMBEDDING_MAX_TOKENS=${EMBEDDING_MAX_TOKENS:-8192}
       # TTS Configuration (Optional)
@@ -58,11 +58,22 @@ services:
       - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
       # Logging Configuration
       - RAG_TOOL_MODULE_LOG_LEVEL=${RAG_TOOL_MODULE_LOG_LEVEL:-INFO}
-      # Service Ports
+      # ============================================
+      # Service Ports Configuration
+      # ============================================
+      # Backend API port (default: 8001)
       - BACKEND_PORT=${BACKEND_PORT:-8001}
+      # Frontend web port (default: 3782)
       - FRONTEND_PORT=${FRONTEND_PORT:-3782}
-      # External API URL (for browser access if different from localhost)
+      # ============================================
+      # API URL Configuration (Important for Cloud Deployment)
+      # ============================================
+      # For CLOUD/REMOTE deployment: Set this to your server's public URL
+      # Example: https://your-server.com:8001 or https://api.yourdomain.com
+      # If not set, defaults to http://localhost:${BACKEND_PORT} (only works locally)
       - NEXT_PUBLIC_API_BASE_EXTERNAL=${NEXT_PUBLIC_API_BASE_EXTERNAL:-}
+      # Alternative: Direct API base URL (same priority as NEXT_PUBLIC_API_BASE_EXTERNAL)
+      - NEXT_PUBLIC_API_BASE=${NEXT_PUBLIC_API_BASE:-}
 
     volumes:
       # Mount local config directory (read-only)

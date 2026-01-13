@@ -13,9 +13,9 @@ from typing import Any
 project_root = Path(__file__).parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.core.core import load_config_with_main
-from src.core.logging import get_logger
-from src.core.prompt_manager import get_prompt_manager
+from src.logging import get_logger
+from src.services.config import load_config_with_main
+from src.services.prompt import get_prompt_manager
 from src.tools.rag_tool import rag_search
 
 from .base_agent import Action, BaseAgent, Message, Observation
@@ -221,8 +221,19 @@ class QuestionGenerationAgent(BaseAgent):
             level="DEBUG",
         )
 
-        question = json.loads(response_content)
-        self.current_question = question
+        # Parse JSON with error handling
+        try:
+            question = json.loads(response_content)
+            self.current_question = question
+        except json.JSONDecodeError as e:
+            error_msg = (
+                f"[generate_question] Failed to parse JSON response: {e}\n"
+                f"Response content: {response_content[:500]}..."
+            )
+            _logger.error(error_msg)
+            return Observation(
+                success=False, result=None, message=f"Failed to parse question JSON: {e}"
+            )
 
         # Automatically submit after generation
         submit_result = await self._action_submit_question()
@@ -269,19 +280,56 @@ class QuestionGenerationAgent(BaseAgent):
             knowledge=knowledge_str,
         )
 
-        response = await self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": "You are a professional question designer"},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=self._agent_params["temperature"],
-            max_tokens=self._agent_params["max_tokens"],
-            response_format={"type": "json_object"},
+        # Log request details
+        _logger.debug(
+            f"[refine_question] Calling LLM: model={self.model}, "
+            f"prompt_len={len(prompt)}, temperature={self._agent_params['temperature']}"
         )
 
-        # Extract response content
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a professional question designer"},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=self._agent_params["temperature"],
+                max_tokens=self._agent_params["max_tokens"],
+                response_format={"type": "json_object"},
+                timeout=180.0,  # Add timeout
+            )
+        except Exception as e:
+            error_msg = f"[refine_question] LLM API call failed: {type(e).__name__}: {e}"
+            _logger.error(error_msg)
+            return Observation(
+                success=False, result=None, message=f"Failed to refine question: {e}"
+            )
+
+        # Validate response structure
+        if not response or not response.choices:
+            error_msg = "[refine_question] LLM returned empty response or no choices"
+            _logger.error(error_msg)
+            return Observation(success=False, result=None, message="LLM returned empty response")
+
+        # Extract response content with validation
         response_content = response.choices[0].message.content
+
+        # Validate content is not None or empty
+        if response_content is None:
+            error_msg = f"[refine_question] LLM returned None content. Response: {response}"
+            _logger.error(error_msg)
+            return Observation(success=False, result=None, message="LLM returned None content")
+
+        if not response_content.strip():
+            error_msg = f"[refine_question] LLM returned empty string. Response: {response}"
+            _logger.error(error_msg)
+            return Observation(success=False, result=None, message="LLM returned empty string")
+
+        # Log successful response
+        _logger.debug(
+            f"[refine_question] LLM response received: "
+            f"length={len(response_content)}, preview={response_content[:200]}..."
+        )
 
         # Update token statistics if callback is available
         input_tokens = 0
@@ -310,8 +358,19 @@ class QuestionGenerationAgent(BaseAgent):
             level="DEBUG",
         )
 
-        question = json.loads(response_content)
-        self.current_question = question
+        # Parse JSON with error handling
+        try:
+            question = json.loads(response_content)
+            self.current_question = question
+        except json.JSONDecodeError as e:
+            error_msg = (
+                f"[refine_question] Failed to parse JSON response: {e}\n"
+                f"Response content: {response_content[:500]}..."
+            )
+            _logger.error(error_msg)
+            return Observation(
+                success=False, result=None, message=f"Failed to parse question JSON: {e}"
+            )
 
         # Remove the processed feedback message
         self.inbox.remove(feedback_msg)

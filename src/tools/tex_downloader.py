@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 TeX Downloader - LaTeX source code download tool
 

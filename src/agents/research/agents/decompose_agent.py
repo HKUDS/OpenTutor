@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 DecomposeAgent - Topic decomposition Agent
 Responsible for decomposing topics into multiple subtopics and generating overviews for each subtopic
@@ -13,11 +14,11 @@ sys.path.insert(0, str(project_root))
 
 import json
 
+from src.agents.base_agent import BaseAgent
 from src.agents.research.data_structures import ToolTrace
 from src.tools.rag_tool import rag_search
 
 from ..utils.json_utils import extract_json_from_text
-from .base_agent import BaseAgent
 
 
 class DecomposeAgent(BaseAgent):
@@ -30,8 +31,14 @@ class DecomposeAgent(BaseAgent):
         base_url: str = None,
         kb_name: str = "ai_textbook",
     ):
+        language = config.get("system", {}).get("language", "zh")
         super().__init__(
-            config=config, api_key=api_key, base_url=base_url, agent_name="decompose_agent"
+            module_name="research",
+            agent_name="decompose_agent",
+            api_key=api_key,
+            base_url=base_url,
+            language=language,
+            config=config,
         )
         # Load KB and RAG mode from config, no hardcoding
         rag_cfg = config.get("rag", {})
@@ -174,7 +181,7 @@ Generate exactly {num_subtopics} subtopics. Please ensure exactly {num_subtopics
         except Exception:
             sub_topics = []
 
-        print(f"✅ Generated {len(sub_topics)} subtopics (without RAG)")
+        print(f"✓ Generated {len(sub_topics)} subtopics (without RAG)")
 
         return {
             "main_topic": topic,
@@ -191,7 +198,7 @@ Generate exactly {num_subtopics} subtopics. Please ensure exactly {num_subtopics
         # Step 1: Generate sub-queries
         print("\n🔍 Step 1: Generating sub-queries...")
         sub_queries = await self._generate_sub_queries(topic, num_subtopics)
-        print(f"✅ Generated {len(sub_queries)} sub-queries")
+        print(f"✓ Generated {len(sub_queries)} sub-queries")
 
         # Step 2: Execute RAG retrieval to get background knowledge
         print("\n🔍 Step 2: Executing RAG retrieval...")
@@ -247,7 +254,7 @@ Generate exactly {num_subtopics} subtopics. Please ensure exactly {num_subtopics
             topic=topic, rag_context=combined_rag_context, num_subtopics=num_subtopics
         )
 
-        print(f"✅ Generated {len(sub_topics)} subtopics")
+        print(f"✓ Generated {len(sub_topics)} subtopics")
 
         return {
             "main_topic": topic,
@@ -308,7 +315,7 @@ Generate exactly {num_subtopics} subtopics. Please ensure exactly {num_subtopics
             topic=topic, rag_context=rag_context, max_subtopics=max_subtopics
         )
 
-        print(f"✅ Autonomously generated {len(sub_topics)} subtopics")
+        print(f"✓ Autonomously generated {len(sub_topics)} subtopics")
 
         return {
             "main_topic": topic,

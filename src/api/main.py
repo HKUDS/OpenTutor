@@ -7,8 +7,10 @@ from fastapi.staticfiles import StaticFiles
 
 from src.api.routers import (
     agent_config,
+    chat,
     co_writer,
     dashboard,
+    embedding_provider,
     guide,
     ideagen,
     knowledge,
@@ -20,7 +22,7 @@ from src.api.routers import (
     solve,
     system,
 )
-from src.core.logging import get_logger
+from src.logging import get_logger
 
 logger = get_logger("API")
 
@@ -58,7 +60,7 @@ user_dir = project_root / "data" / "user"
 
 # Initialize user directories on startup
 try:
-    from src.core.setup import init_user_directories
+    from src.services.setup import init_user_directories
 
     init_user_directories(project_root)
 except Exception:
@@ -70,6 +72,7 @@ app.mount("/api/outputs", StaticFiles(directory=str(user_dir)), name="outputs")
 
 # Include routers
 app.include_router(solve.router, prefix="/api/v1", tags=["solve"])
+app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(question.router, prefix="/api/v1/question", tags=["question"])
 app.include_router(research.router, prefix="/api/v1/research", tags=["research"])
 app.include_router(knowledge.router, prefix="/api/v1/knowledge", tags=["knowledge"])
@@ -81,6 +84,7 @@ app.include_router(ideagen.router, prefix="/api/v1/ideagen", tags=["ideagen"])
 app.include_router(settings.router, prefix="/api/v1/settings", tags=["settings"])
 app.include_router(system.router, prefix="/api/v1/system", tags=["system"])
 app.include_router(llm_provider.router, prefix="/api/v1/config/llm", tags=["config"])
+app.include_router(embedding_provider.router, prefix="/api/v1/config/embedding", tags=["config"])
 app.include_router(agent_config.router, prefix="/api/v1/config", tags=["config"])
 
 
@@ -104,7 +108,7 @@ if __name__ == "__main__":
         sys.path.insert(0, str(project_root))
 
     # Get port from configuration
-    from src.core.setup import get_backend_port
+    from src.services.setup import get_backend_port
 
     backend_port = get_backend_port(project_root)
 

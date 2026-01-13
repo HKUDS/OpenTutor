@@ -1,425 +1,482 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
-  LayoutDashboard,
-  History,
-  ArrowRight,
-  FileText,
-  HelpCircle,
-  Search,
-  Clock,
-  ChevronRight,
+  Send,
+  Loader2,
+  Bot,
+  User,
   Database,
-  BookOpen,
-  Book,
+  Globe,
   Calculator,
+  FileText,
   Microscope,
-  PenTool,
-  Plus,
   Lightbulb,
-  LucideIcon,
+  Trash2,
+  ExternalLink,
+  BookOpen,
+  Sparkles,
+  Edit3,
+  GraduationCap,
+  PenTool,
 } from "lucide-react";
 import Link from "next/link";
-import ActivityDetail from "@/components/ActivityDetail";
-import SystemStatus from "@/components/SystemStatus";
-import { apiUrl } from "@/lib/api";
-import { getTranslation } from "@/lib/i18n";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { useGlobal } from "@/context/GlobalContext";
+import { apiUrl } from "@/lib/api";
+import { processLatexContent } from "@/lib/latex";
+import { getTranslation } from "@/lib/i18n";
 
-// Icon mapping for data-driven UI
-const ICON_MAP: Record<string, LucideIcon> = {
-  HelpCircle,
-  FileText,
-  Search,
-  PenTool,
-  BookOpen,
-  Lightbulb,
-  LayoutDashboard,
-};
-
-// Color mapping for Tailwind classes
-const COLOR_MAP: Record<string, string> = {
-  blue: "text-blue-500",
-  purple: "text-purple-500",
-  emerald: "text-emerald-500",
-  amber: "text-amber-500",
-  indigo: "text-indigo-500",
-  yellow: "text-yellow-500",
-  slate: "text-slate-500",
-};
-
-// Fallback agent config (used if API fails)
-const FALLBACK_AGENT_CONFIG: Record<string, AgentConfig> = {
-  solve: { icon: "HelpCircle", color: "blue", label_key: "Problem Solved" },
-  question: {
-    icon: "FileText",
-    color: "purple",
-    label_key: "Question Generated",
-  },
-  research: { icon: "Search", color: "emerald", label_key: "Research Report" },
-  co_writer: { icon: "PenTool", color: "amber", label_key: "Co-Writer" },
-  guide: { icon: "BookOpen", color: "indigo", label_key: "Guided Learning" },
-  ideagen: { icon: "Lightbulb", color: "yellow", label_key: "Idea Generated" },
-};
-
-interface AgentConfig {
-  icon: string;
-  color: string;
-  label_key: string;
-}
-
-interface Activity {
-  id: string;
-  type: "solve" | "question" | "research";
-  title: string;
-  summary: string;
-  timestamp: number;
-  content: any;
-}
-
-interface NotebookSummary {
-  id: string;
+interface KnowledgeBase {
   name: string;
-  description: string;
-  record_count: number;
-  updated_at: number;
-  color: string;
+  is_default?: boolean;
 }
 
-interface NotebookStats {
-  total_notebooks: number;
-  total_records: number;
-  records_by_type: {
-    solve: number;
-    question: number;
-    research: number;
-    co_writer: number;
-  };
-  recent_notebooks: NotebookSummary[];
-}
-
-export default function DashboardPage() {
-  const { uiSettings } = useGlobal();
+export default function HomePage() {
+  const {
+    chatState,
+    setChatState,
+    sendChatMessage,
+    clearChatHistory,
+    newChatSession,
+    uiSettings,
+  } = useGlobal();
   const t = (key: string) => getTranslation(uiSettings.language, key);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(
-    null,
-  );
-  const [notebookStats, setNotebookStats] = useState<NotebookStats | null>(
-    null,
-  );
-  const [agentConfig, setAgentConfig] = useState<Record<string, AgentConfig>>(
-    FALLBACK_AGENT_CONFIG,
-  );
 
+  const [inputMessage, setInputMessage] = useState("");
+  const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch knowledge bases
   useEffect(() => {
-    // Fetch agent configuration
-    fetch(apiUrl("/api/v1/config/agents"))
+    fetch(apiUrl("/api/v1/knowledge/list"))
       .then((res) => res.json())
-      .then((data) => setAgentConfig(data))
-      .catch((err) => {
-        console.error("Failed to fetch agent config, using fallback:", err);
-      });
-
-    // Fetch activities
-    fetch(apiUrl("/api/v1/dashboard/recent?limit=10"))
-      .then((res) => res.json())
-      .then((data) => setActivities(data))
-      .catch((err) => {
-        console.error(err);
+      .then((data) => {
+        setKbs(data);
+        if (!chatState.selectedKb) {
+          const defaultKb = data.find((kb: KnowledgeBase) => kb.is_default);
+          if (defaultKb) {
+            setChatState((prev) => ({ ...prev, selectedKb: defaultKb.name }));
+          } else if (data.length > 0) {
+            setChatState((prev) => ({ ...prev, selectedKb: data[0].name }));
+          }
+        }
       })
-      .finally(() => setLoading(false));
-
-    // Fetch notebook statistics
-    fetch(apiUrl("/api/v1/notebook/statistics"))
-      .then((res) => res.json())
-      .then((data) => setNotebookStats(data))
-      .catch((err) => {
-        console.error("Failed to fetch notebook stats:", err);
-      });
+      .catch((err) => console.error("Failed to fetch KBs:", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Data-driven icon getter
-  const getIcon = (type: string) => {
-    const config = agentConfig[type];
-    const IconComponent = ICON_MAP[config?.icon] || LayoutDashboard;
-    const colorClass = COLOR_MAP[config?.color] || "text-slate-500";
-    return <IconComponent className={`w-5 h-5 ${colorClass}`} />;
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatState.messages]);
+
+  const handleSend = () => {
+    if (!inputMessage.trim() || chatState.isLoading) return;
+    sendChatMessage(inputMessage);
+    setInputMessage("");
   };
 
-  // Data-driven label getter
-  const getLabel = (type: string) => {
-    const config = agentConfig[type];
-    return t(config?.label_key || "Activity");
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   };
+
+  const quickActions = [
+    {
+      icon: Calculator,
+      label: t("Smart Problem Solving"),
+      href: "/solver",
+      color: "blue",
+      description: "Multi-agent reasoning",
+    },
+    {
+      icon: PenTool,
+      label: t("Generate Practice Questions"),
+      href: "/question",
+      color: "purple",
+      description: "Auto-validated quizzes",
+    },
+    {
+      icon: Microscope,
+      label: t("Deep Research Reports"),
+      href: "/research",
+      color: "emerald",
+      description: "Comprehensive analysis",
+    },
+    {
+      icon: Lightbulb,
+      label: t("Generate Novel Ideas"),
+      href: "/ideagen",
+      color: "amber",
+      description: "Brainstorm & synthesize",
+    },
+    {
+      icon: GraduationCap,
+      label: t("Guided Learning"),
+      href: "/guide",
+      color: "indigo",
+      description: "Step-by-step tutoring",
+    },
+    {
+      icon: Edit3,
+      label: t("Co-Writer"),
+      href: "/co_writer",
+      color: "pink",
+      description: "Collaborative writing",
+    },
+  ];
+
+  const hasMessages = chatState.messages.length > 0;
 
   return (
-    <div className="animate-fade-in space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight flex items-center gap-3">
-          <LayoutDashboard className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-          {t("Dashboard")}
-        </h1>
-        <p className="text-slate-500 dark:text-slate-400 mt-2">
-          {t("Overview of your recent learning activities")}
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left: Recent Activity Feed */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-              <History className="w-5 h-5 text-slate-400 dark:text-slate-500" />
-              {t("Recent Activity")}
-            </h2>
-            <Link
-              href="#"
-              className="text-sm text-blue-600 dark:text-blue-400 font-medium hover:underline flex items-center gap-1"
-            >
-              {t("View All")} <ChevronRight className="w-4 h-4" />
-            </Link>
+    <div className="h-screen flex flex-col animate-fade-in">
+      {/* Empty State / Welcome Screen */}
+      {!hasMessages && (
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="text-center max-w-2xl mx-auto mb-8">
+            <h1 className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3 tracking-tight">
+              {t("Welcome to DeepTutor")}
+            </h1>
+            <p className="text-lg text-slate-500 dark:text-slate-400">
+              {t("How can I help you today?")}
+            </p>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700 overflow-hidden">
-            {loading ? (
-              <div className="p-8 text-center text-slate-400 dark:text-slate-500">
-                {t("Loading activities...")}
-              </div>
-            ) : activities.length === 0 ? (
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-slate-50 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <History className="w-8 h-8 text-slate-300 dark:text-slate-500" />
-                </div>
-                <p className="text-slate-500 dark:text-slate-400">
-                  {t("No recent activity found")}
-                </p>
-                <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-                  {t("Start solving problems or generating questions!")}
-                </p>
-              </div>
-            ) : (
-              activities.map((activity) => (
-                <div
-                  key={activity.id}
-                  onClick={() => setSelectedActivity(activity)}
-                  className="p-5 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors group cursor-pointer"
+          {/* Input Box - Centered */}
+          <div className="w-full max-w-2xl mx-auto mb-12">
+            {/* Mode Toggles */}
+            <div className="flex items-center justify-between mb-3 px-1">
+              <div className="flex items-center gap-2">
+                {/* RAG Toggle */}
+                <button
+                  onClick={() =>
+                    setChatState((prev) => ({
+                      ...prev,
+                      enableRag: !prev.enableRag,
+                    }))
+                  }
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    chatState.enableRag
+                      ? "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  }`}
                 >
-                  <div className="flex gap-4">
-                    <div className="mt-1">
-                      <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-700 border border-slate-100 dark:border-slate-600 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                        {getIcon(activity.type)}
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start">
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                          {getLabel(activity.type)}
-                        </p>
-                        <span className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {new Date(
-                            activity.timestamp * 1000,
-                          ).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate pr-4">
-                        {activity.title}
-                      </h3>
-                      {activity.summary && (
-                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
-                          {activity.summary}
-                        </p>
-                      )}
-                      {activity.content?.kb_name && (
-                        <div className="mt-3 flex items-center gap-2">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                            <Database className="w-3 h-3 mr-1" />
-                            {activity.content.kb_name}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="self-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <ArrowRight className="w-5 h-5 text-slate-400 dark:text-slate-500" />
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+                  <Database className="w-3.5 h-3.5" />
+                  {t("RAG")}
+                </button>
 
-        {/* Right: Quick Actions / Stats */}
-        <div className="space-y-6">
-          {/* Notebooks Overview */}
-          <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-lg flex items-center gap-2">
-                <Book className="w-5 h-5" />
-                {t("My Notebooks")}
-              </h3>
-              <Link
-                href="/notebook"
-                className="text-xs text-white/80 hover:text-white flex items-center gap-1"
-              >
-                {t("View All")} <ChevronRight className="w-3 h-3" />
-              </Link>
+                {/* Web Search Toggle */}
+                <button
+                  onClick={() =>
+                    setChatState((prev) => ({
+                      ...prev,
+                      enableWebSearch: !prev.enableWebSearch,
+                    }))
+                  }
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    chatState.enableWebSearch
+                      ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  {t("Web Search")}
+                </button>
+              </div>
+
+              {/* KB Selector */}
+              {chatState.enableRag && (
+                <select
+                  value={chatState.selectedKb}
+                  onChange={(e) =>
+                    setChatState((prev) => ({
+                      ...prev,
+                      selectedKb: e.target.value,
+                    }))
+                  }
+                  className="text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 outline-none focus:border-blue-400 dark:text-slate-200"
+                >
+                  {kbs.map((kb) => (
+                    <option key={kb.name} value={kb.name}>
+                      {kb.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
-            {notebookStats ? (
-              <>
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <div className="bg-white/10 rounded-xl p-3">
-                    <div className="text-2xl font-bold">
-                      {notebookStats.total_notebooks}
-                    </div>
-                    <div className="text-xs text-white/70">
-                      {t("Notebooks")}
-                    </div>
-                  </div>
-                  <div className="bg-white/10 rounded-xl p-3">
-                    <div className="text-2xl font-bold">
-                      {notebookStats.total_records}
-                    </div>
-                    <div className="text-xs text-white/70">{t("records")}</div>
-                  </div>
-                </div>
-
-                {/* Records by type */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 text-white/80">
-                      <Calculator className="w-3 h-3" /> {t("Solve")}
-                    </span>
-                    <span className="font-medium">
-                      {notebookStats.records_by_type.solve}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 text-white/80">
-                      <FileText className="w-3 h-3" /> {t("Question")}
-                    </span>
-                    <span className="font-medium">
-                      {notebookStats.records_by_type.question}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 text-white/80">
-                      <Microscope className="w-3 h-3" /> {t("Research")}
-                    </span>
-                    <span className="font-medium">
-                      {notebookStats.records_by_type.research}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 text-white/80">
-                      <PenTool className="w-3 h-3" /> {t("Co-Writer")}
-                    </span>
-                    <span className="font-medium">
-                      {notebookStats.records_by_type.co_writer}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Recent notebooks */}
-                {notebookStats.recent_notebooks.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-white/20">
-                    <div className="text-xs text-white/60 mb-2">Recent</div>
-                    <div className="space-y-2">
-                      {notebookStats.recent_notebooks.slice(0, 3).map((nb) => (
-                        <Link
-                          key={nb.id}
-                          href="/notebook"
-                          className="flex items-center gap-2 p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
-                        >
-                          <div
-                            className="w-6 h-6 rounded flex items-center justify-center"
-                            style={{ backgroundColor: nb.color }}
-                          >
-                            <BookOpen className="w-3 h-3 text-white" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">
-                              {nb.name}
-                            </div>
-                            <div className="text-[10px] text-white/60">
-                              {nb.record_count} records
-                            </div>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
+            {/* Input Field */}
+            <div className="relative">
+              <input
+                ref={inputRef}
+                type="text"
+                className="w-full px-5 py-4 pr-14 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-700 dark:text-slate-200 shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50"
+                placeholder={t("Ask anything...")}
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={chatState.isLoading}
+              />
+              <button
+                onClick={handleSend}
+                disabled={chatState.isLoading || !inputMessage.trim()}
+                className="absolute right-2 top-2 bottom-2 aspect-square bg-blue-600 text-white rounded-xl flex items-center justify-center hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-all shadow-md shadow-blue-500/20"
+              >
+                {chatState.isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5" />
                 )}
-              </>
-            ) : (
-              <div className="text-center py-4">
-                <BookOpen className="w-8 h-8 mx-auto mb-2 text-white/40" />
-                <p className="text-sm text-white/60">{t("No notebooks yet")}</p>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Actions Grid */}
+          <div className="w-full max-w-3xl mx-auto">
+            <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 text-center">
+              {t("Explore Modules")}
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {quickActions.map((action, i) => (
                 <Link
-                  href="/notebook"
-                  className="mt-2 inline-flex items-center gap-1 text-xs text-white/80 hover:text-white"
+                  key={i}
+                  href={action.href}
+                  className={`group p-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:shadow-lg hover:border-${action.color}-300 dark:hover:border-${action.color}-600 transition-all`}
                 >
-                  <Plus className="w-3 h-3" /> {t("Create your first notebook")}
+                  <div
+                    className={`w-10 h-10 rounded-xl bg-${action.color}-100 dark:bg-${action.color}-900/30 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}
+                  >
+                    <action.icon
+                      className={`w-5 h-5 text-${action.color}-600 dark:text-${action.color}-400`}
+                    />
+                  </div>
+                  <h4 className="font-semibold text-slate-900 dark:text-slate-100 text-sm mb-1">
+                    {action.label}
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {action.description}
+                  </p>
                 </Link>
-              </div>
-            )}
-          </div>
-
-          {/* System Status */}
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-            <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-4">
-              {t("System Status")}
-            </h3>
-            <SystemStatus />
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-            <h3 className="font-bold text-slate-900 dark:text-slate-100 mb-4">
-              {t("Quick Actions")}
-            </h3>
-            <div className="space-y-3">
-              <Link
-                href="/solver"
-                className="block w-full p-3 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors text-sm flex items-center gap-3"
-              >
-                <div className="p-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
-                  <HelpCircle className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                {t("Ask a Question")}
-              </Link>
-              <Link
-                href="/question"
-                className="block w-full p-3 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors text-sm flex items-center gap-3"
-              >
-                <div className="p-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
-                  <FileText className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                </div>
-                {t("Generate Quiz")}
-              </Link>
-              <Link
-                href="/research"
-                className="block w-full p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors text-sm flex items-center gap-3"
-              >
-                <div className="p-1.5 bg-white dark:bg-slate-700 rounded-lg shadow-sm">
-                  <Search className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                {t("Start Research")}
-              </Link>
+              ))}
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {selectedActivity && (
-        <ActivityDetail
-          activity={selectedActivity}
-          onClose={() => setSelectedActivity(null)}
-        />
+      {/* Chat Interface - When there are messages */}
+      {hasMessages && (
+        <>
+          {/* Header Bar */}
+          <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
+            <div className="flex items-center gap-3">
+              {/* Mode Toggles */}
+              <button
+                onClick={() =>
+                  setChatState((prev) => ({
+                    ...prev,
+                    enableRag: !prev.enableRag,
+                  }))
+                }
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  chatState.enableRag
+                    ? "bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                }`}
+              >
+                <Database className="w-3 h-3" />
+                {t("RAG")}
+              </button>
+
+              <button
+                onClick={() =>
+                  setChatState((prev) => ({
+                    ...prev,
+                    enableWebSearch: !prev.enableWebSearch,
+                  }))
+                }
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  chatState.enableWebSearch
+                    ? "bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                }`}
+              >
+                <Globe className="w-3 h-3" />
+                {t("Web Search")}
+              </button>
+
+              {chatState.enableRag && (
+                <select
+                  value={chatState.selectedKb}
+                  onChange={(e) =>
+                    setChatState((prev) => ({
+                      ...prev,
+                      selectedKb: e.target.value,
+                    }))
+                  }
+                  className="text-xs bg-slate-100 dark:bg-slate-800 border-0 rounded-lg px-2 py-1 outline-none dark:text-slate-200"
+                >
+                  {kbs.map((kb) => (
+                    <option key={kb.name} value={kb.name}>
+                      {kb.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <button
+              onClick={newChatSession}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {t("New Chat")}
+            </button>
+          </div>
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+            {chatState.messages.map((msg, idx) => (
+              <div
+                key={idx}
+                className="flex gap-4 w-full max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-2"
+              >
+                {msg.role === "user" ? (
+                  <>
+                    <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                      <User className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                    </div>
+                    <div className="flex-1 bg-slate-100 dark:bg-slate-700 px-4 py-3 rounded-2xl rounded-tl-none text-slate-800 dark:text-slate-200">
+                      {msg.content}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/30">
+                      <Bot className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1 space-y-3">
+                      <div className="bg-white dark:bg-slate-800 px-5 py-4 rounded-2xl rounded-tl-none border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <div className="prose prose-slate dark:prose-invert prose-sm max-w-none">
+                          <ReactMarkdown
+                            remarkPlugins={[remarkMath]}
+                            rehypePlugins={[rehypeKatex]}
+                          >
+                            {processLatexContent(msg.content)}
+                          </ReactMarkdown>
+                        </div>
+
+                        {/* Loading indicator */}
+                        {msg.isStreaming && (
+                          <div className="flex items-center gap-2 mt-3 text-blue-600 dark:text-blue-400 text-sm">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>{t("Generating response...")}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Sources */}
+                      {msg.sources &&
+                        (msg.sources.rag?.length ?? 0) +
+                          (msg.sources.web?.length ?? 0) >
+                          0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {msg.sources.rag?.map((source, i) => (
+                              <div
+                                key={`rag-${i}`}
+                                className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs"
+                              >
+                                <BookOpen className="w-3 h-3" />
+                                <span>{source.kb_name}</span>
+                              </div>
+                            ))}
+                            {msg.sources.web?.slice(0, 3).map((source, i) => (
+                              <a
+                                key={`web-${i}`}
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+                              >
+                                <Globe className="w-3 h-3" />
+                                <span className="max-w-[150px] truncate">
+                                  {source.title || source.url}
+                                </span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+
+            {/* Status indicator */}
+            {chatState.isLoading && chatState.currentStage && (
+              <div className="flex gap-4 w-full max-w-4xl mx-auto">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0">
+                  <Loader2 className="w-4 h-4 text-white animate-spin" />
+                </div>
+                <div className="flex-1 bg-slate-100 dark:bg-slate-800 px-4 py-3 rounded-2xl rounded-tl-none">
+                  <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 text-sm">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                    </span>
+                    {chatState.currentStage === "rag" &&
+                      t("Searching knowledge base...")}
+                    {chatState.currentStage === "web" &&
+                      t("Searching the web...")}
+                    {chatState.currentStage === "generating" &&
+                      t("Generating response...")}
+                    {!["rag", "web", "generating"].includes(
+                      chatState.currentStage,
+                    ) && chatState.currentStage}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Input Area - Fixed at bottom */}
+          <div className="border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-6 py-4">
+            <div className="max-w-4xl mx-auto relative">
+              <input
+                ref={inputRef}
+                type="text"
+                className="w-full px-5 py-3.5 pr-14 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 text-slate-700 dark:text-slate-200"
+                placeholder={t("Type your message...")}
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={chatState.isLoading}
+              />
+              <button
+                onClick={handleSend}
+                disabled={chatState.isLoading || !inputMessage.trim()}
+                className="absolute right-2 top-2 bottom-2 aspect-square bg-blue-600 text-white rounded-lg flex items-center justify-center hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 transition-all"
+              >
+                {chatState.isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

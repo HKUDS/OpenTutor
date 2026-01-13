@@ -102,7 +102,7 @@ All session data is stored in the `user/guide/` directory, with each session sav
 
 ## Configuration Requirements
 
-- LLM environment variables must be configured (LLM_MODEL, LLM_BINDING_API_KEY, LLM_BINDING_HOST)
+- LLM environment variables must be configured (LLM_MODEL, LLM_API_KEY, LLM_HOST)
 - Ensure notebook has sufficient records (at least 1)
 - Recommend using LLM models that support JSON format output
 

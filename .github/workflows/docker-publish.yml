@@ -23,8 +23,11 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
-    name: Build and Push Docker Image
+  # ============================================
+  # Build AMD64 Image (Intel/AMD processors)
+  # ============================================
+  build-amd64:
+    name: Build AMD64 Image
     runs-on: ubuntu-latest
 
     permissions:
@@ -32,6 +35,85 @@ jobs:
       packages: write
 
     steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for AMD64
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # For releases: version tag (v0.2.0 -> 0.2.0)
+            type=semver,pattern={{version}}
+            # For releases: major.minor (v0.2.0 -> 0.2)
+            type=semver,pattern={{major}}.{{minor}}
+            # For releases: tag as latest (default for amd64)
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            # For manual trigger: use input tag
+            type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            # For push tags: use the tag name
+            type=ref,event=tag
+
+      - name: Build and push AMD64 image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          target: production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64
+          cache-from: type=gha,scope=amd64
+          cache-to: type=gha,mode=max,scope=amd64
+          build-args: |
+            BACKEND_PORT=8001
+
+  # ============================================
+  # Build ARM64 Image (Apple Silicon, ARM servers)
+  # ============================================
+  build-arm64:
+    name: Build ARM64 Image
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - name: Checkout repository
         uses: actions/checkout@v6
 
@@ -48,24 +130,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
+      - name: Extract metadata for ARM64
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # For releases: use version tag (v0.2.0 -> 0.2.0)
-            type=semver,pattern={{version}}
-            # For releases: use major.minor (v0.2.0 -> 0.2)
-            type=semver,pattern={{major}}.{{minor}}
-            # For releases: tag as latest
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
-            # For manual trigger: use input tag
-            type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
-            # For push tags: use the tag name
-            type=ref,event=tag
+            # For releases: version-arm64 (v0.2.0 -> 0.2.0-arm64)
+            type=semver,pattern={{version}}-arm64
+            # For releases: major.minor-arm64 (v0.2.0 -> 0.2-arm64)
+            type=semver,pattern={{major}}.{{minor}}-arm64
+            # For releases: tag as latest-arm64
+            type=raw,value=latest-arm64,enable=${{ github.event_name == 'release' }}
+            # For manual trigger: use input tag with -arm64 suffix
+            type=raw,value=${{ github.event.inputs.tag }}-arm64,enable=${{ github.event_name == 'workflow_dispatch' }}
+            # For push tags: use the tag name with -arm64 suffix
+            type=raw,value=${{ github.ref_name }}-arm64,enable=${{ startsWith(github.ref, 'refs/tags/') }}
 
-      - name: Build and push Docker image
+      - name: Build and push ARM64 image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -74,34 +156,52 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          platforms: linux/arm64
+          cache-from: type=gha,scope=arm64
+          cache-to: type=gha,mode=max,scope=arm64
           build-args: |
             BACKEND_PORT=8001
 
+  # ============================================
+  # Generate Summary
+  # ============================================
+  summary:
+    name: Generate Summary
+    runs-on: ubuntu-latest
+    needs: [build-amd64, build-arm64]
+
+    steps:
       - name: Generate image summary
         run: |
-          echo "## 🐳 Docker Image Published" >> $GITHUB_STEP_SUMMARY
+          echo "## 🐳 Docker Images Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Registry:** \`${{ env.REGISTRY }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "### Available Images" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "| Architecture | Image Tag | Use Case |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------------|-----------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **AMD64** | \`latest\` | Intel/AMD processors (most cloud servers, Windows/Linux PCs) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **ARM64** | \`latest-arm64\` | Apple Silicon (M1/M2/M3/M4), ARM servers (AWS Graviton, etc.) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Quick Start" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**For AMD64 (Intel/AMD):**" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**For ARM64 (Apple Silicon/ARM servers):**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest-arm64" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Run the container:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "docker run -d -p 8001:8001 -p 3782:3782 \\\\" >> $GITHUB_STEP_SUMMARY
           echo "  -e LLM_MODEL=gpt-4o \\\\" >> $GITHUB_STEP_SUMMARY
           echo "  -e LLM_BINDING_API_KEY=your-api-key \\\\" >> $GITHUB_STEP_SUMMARY
           echo "  -e EMBEDDING_MODEL=text-embedding-3-large \\\\" >> $GITHUB_STEP_SUMMARY
           echo "  -e EMBEDDING_BINDING_API_KEY=your-api-key \\\\" >> $GITHUB_STEP_SUMMARY
-          echo "  ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "  ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest  # or :latest-arm64" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

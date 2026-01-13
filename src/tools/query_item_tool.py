@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Query Numbered Item Tool - Query definitions, theorems, formulas, figures, etc.
 """
@@ -53,7 +54,7 @@ def query_numbered_item(
     # Load configuration for max_results if not specified
     if max_results is None:
         try:
-            from src.core.core import load_config_with_main
+            from src.services.config import load_config_with_main
 
             project_root = Path(__file__).parent.parent.parent
             config = load_config_with_main("main.yaml", project_root)

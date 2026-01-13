@@ -21,8 +21,9 @@ from src.agents.co_writer.edit_agent import (
     print_stats,
 )
 from src.agents.co_writer.narrator_agent import NarratorAgent
-from src.core.core import get_tts_config, load_config_with_main
-from src.core.logging import get_logger
+from src.logging import get_logger
+from src.services.config import load_config_with_main
+from src.services.tts import get_tts_config
 
 router = APIRouter()
 

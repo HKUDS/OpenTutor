@@ -215,8 +215,12 @@ export default function IdeaGenPage() {
     setSelectedRecords(new Map());
   };
 
+  // Check if we can generate (either have records or user thoughts)
+  const canGenerate =
+    selectedRecords.size > 0 || userThoughts.trim().length > 0;
+
   const startGeneration = () => {
-    if (selectedRecords.size === 0) return;
+    if (!canGenerate) return;
 
     setIsGenerating(true);
     setGenerationStatus("Connecting...");
@@ -228,7 +232,7 @@ export default function IdeaGenPage() {
 
     ws.onopen = () => {
       setGenerationStatus("Initializing...");
-      // Send records directly for cross-notebook support
+      // Send records directly for cross-notebook support (can be empty if only user thoughts)
       const recordsArray = Array.from(selectedRecords.values()).map((r) => ({
         id: r.id,
         title: r.title,
@@ -238,7 +242,7 @@ export default function IdeaGenPage() {
       }));
       ws.send(
         JSON.stringify({
-          records: recordsArray,
+          records: recordsArray.length > 0 ? recordsArray : undefined,
           user_thoughts: userThoughts.trim() || undefined,
         }),
       );
@@ -360,7 +364,7 @@ export default function IdeaGenPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex gap-4 animate-fade-in">
+    <div className="h-screen flex gap-4 p-4 animate-fade-in">
       {/* Left Panel: Source Selection */}
       <div className="flex-[1_1_33%] min-w-[350px] max-w-[500px] flex flex-col gap-4">
         {/* Multi-Notebook Selection */}
@@ -524,22 +528,33 @@ export default function IdeaGenPage() {
           {/* User Thoughts Input */}
           <div className="p-3 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-2">
-              Your Thoughts (Optional)
+              Your Thoughts{" "}
+              {selectedRecords.size > 0 ? "(Optional)" : "(Required)"}
             </label>
             <textarea
               value={userThoughts}
               onChange={(e) => setUserThoughts(e.target.value)}
-              placeholder="Describe your thoughts or research direction based on these materials..."
+              placeholder={
+                selectedRecords.size > 0
+                  ? "Describe your thoughts or research direction based on these materials..."
+                  : "Describe your research topic or idea (no notebook selection needed)..."
+              }
               className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 resize-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
-              rows={2}
+              rows={3}
             />
+            {selectedRecords.size === 0 && (
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                💡 You can generate ideas from text description alone, or select
+                notebook records above for richer context.
+              </p>
+            )}
           </div>
 
           {/* Generate Button */}
           <div className="p-3 border-t border-slate-100 dark:border-slate-700">
             <button
               onClick={startGeneration}
-              disabled={isGenerating || selectedRecords.size === 0}
+              disabled={isGenerating || !canGenerate}
               className="w-full px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium shadow-md shadow-amber-500/20"
             >
               {isGenerating ? (
@@ -550,7 +565,9 @@ export default function IdeaGenPage() {
               ) : (
                 <>
                   <Sparkles className="w-4 h-4" />
-                  Generate Ideas ({selectedRecords.size} items)
+                  {selectedRecords.size > 0
+                    ? `Generate Ideas (${selectedRecords.size} items)`
+                    : "Generate Ideas (Text Only)"}
                 </>
               )}
             </button>
@@ -621,11 +638,11 @@ export default function IdeaGenPage() {
             <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500">
               <Brain className="w-16 h-16 text-slate-200 dark:text-slate-600 mb-4" />
               <p className="text-slate-500 dark:text-slate-400 text-center max-w-md">
-                Select notebook records and click "Generate Ideas"
+                Select notebook records or describe your research topic
                 <br />
                 <span className="text-xs text-slate-400 dark:text-slate-500 mt-2 block">
-                  System will analyze content, extract knowledge points, and
-                  generate research ideas
+                  You can select notebooks for context, or simply describe your
+                  research direction in the text field
                 </span>
               </p>
             </div>

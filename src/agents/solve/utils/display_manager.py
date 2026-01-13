@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Display Manager - Terminal display manager
 Uses rich library to implement beautiful terminal interface, including fixed header (status/statistics) and scrolling log area
@@ -8,11 +9,9 @@ import sys
 from typing import Any
 
 try:
-    from rich import box
     from rich.console import Console
     from rich.layout import Layout
     from rich.live import Live
-    from rich.logging import RichHandler
     from rich.panel import Panel
     from rich.table import Table
     from rich.text import Text
@@ -119,7 +118,7 @@ class DisplayManager:
                 icon = "✓"
                 style = "green"
             elif status == "running":
-                icon = "…"
+                icon = "●"
                 style = "yellow"
             elif status == "error":
                 icon = "✗"

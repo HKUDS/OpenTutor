@@ -22,7 +22,7 @@ RUN_CODE_ALLOWED_ROOTS_ENV = "RUN_CODE_ALLOWED_ROOTS"
 DEFAULT_WORKSPACE_NAME = "run_code_workspace"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-from src.core.logging import get_logger
+from src.logging import get_logger
 
 logger = get_logger("CodeExecutor")
 
@@ -30,7 +30,7 @@ logger = get_logger("CodeExecutor")
 def _load_config() -> dict[str, Any]:
     """Load run_code configuration from main.yaml and module configs"""
     try:
-        from src.core.core import load_config_with_main
+        from src.services.config import load_config_with_main
 
         # Try loading from solve_config (most common use case)
         try:

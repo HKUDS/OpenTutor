@@ -256,8 +256,8 @@ refine: |
 
 ```bash
 # LLM API Configuration
-LLM_BINDING_API_KEY=your_api_key_here
-LLM_BINDING_HOST=https://api.openai.com/v1
+LLM_API_KEY=your_api_key_here
+LLM_HOST=https://api.openai.com/v1
 LLM_MODEL=gpt-4o
 ```
 

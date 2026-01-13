@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Knowledge Base Management Startup Script - Unified Entry Point
 Provides knowledge base initialization, management, querying, and other functions
@@ -44,7 +45,7 @@ def list_knowledge_bases():
         print("\nTip: Use 'init' command to create a new knowledge base")
     else:
         for kb_name in kb_list:
-            default_marker = " ⭐ (default)" if kb_name == default_kb else ""
+            default_marker = " ★(default)" if kb_name == default_kb else ""
             print(f"  • {kb_name}{default_marker}")
 
             # Display statistics
@@ -95,7 +96,7 @@ def show_kb_info(kb_name=None):
         print("=" * 60 + "\n")
 
     except Exception as e:
-        print(f"❌ Error: {e!s}\n")
+        print(f"✗ Error: {e!s}\n")
 
 
 def set_default_kb(kb_name):
@@ -104,9 +105,9 @@ def set_default_kb(kb_name):
 
     try:
         manager.set_default(kb_name)
-        print(f"✅ Set '{kb_name}' as default knowledge base\n")
+        print(f"✓ Set '{kb_name}' as default knowledge base\n")
     except Exception as e:
-        print(f"❌ Error: {e!s}\n")
+        print(f"✗ Error: {e!s}\n")
 
 
 async def init_knowledge_base(args):
@@ -117,8 +118,8 @@ async def init_knowledge_base(args):
     base_url = args.base_url or env_config["base_url"]
 
     if not api_key and not args.skip_processing:
-        print("❌ Error: API Key not set")
-        print("Please set environment variable LLM_BINDING_API_KEY or use --api-key parameter\n")
+        print("✗ Error: API Key not set")
+        print("Please set environment variable LLM_API_KEY or use --api-key parameter\n")
         return
 
     # Collect document files
@@ -132,11 +133,11 @@ async def init_knowledge_base(args):
             for ext in ["*.pdf", "*.docx", "*.doc", "*.txt", "*.md"]:
                 doc_files.extend([str(f) for f in docs_dir.glob(ext)])
         else:
-            print(f"❌ Error: Document directory does not exist: {args.docs_dir}\n")
+            print(f"✗ Error: Document directory does not exist: {args.docs_dir}\n")
             return
 
     if not args.skip_processing and not doc_files:
-        print("❌ Error: No documents specified")
+        print("✗ Error: No documents specified")
         print("Use --docs or --docs-dir to specify documents\n")
         return
 
@@ -155,7 +156,7 @@ async def init_knowledge_base(args):
     # Copy documents
     if doc_files:
         copied_files = initializer.copy_documents(doc_files)
-        print(f"✅ Copied {len(copied_files)} files\n")
+        print(f"✓ Copied {len(copied_files)} files\n")
 
     # Process documents
     if not args.skip_processing:
@@ -170,7 +171,7 @@ async def init_knowledge_base(args):
         print("⏭️  Skipping numbered items extraction\n")
 
     print("\n" + "=" * 60)
-    print(f"✅ Knowledge base '{args.name}' initialization complete!")
+    print(f"✓ Knowledge base '{args.name}' initialization complete!")
     print(f"Location: {initializer.kb_dir}")
     print("=" * 60 + "\n")
 
@@ -183,8 +184,8 @@ def extract_items(args):
     base_url = args.base_url or env_config["base_url"]
 
     if not api_key:
-        print("❌ Error: API Key not set")
-        print("Please set environment variable LLM_BINDING_API_KEY or use --api-key parameter\n")
+        print("✗ Error: API Key not set")
+        print("Please set environment variable LLM_API_KEY or use --api-key parameter\n")
         return
 
     # Build paths
@@ -192,19 +193,19 @@ def extract_items(args):
     content_list_dir = kb_dir / "content_list"
 
     if not content_list_dir.exists():
-        print(f"❌ Error: content_list directory does not exist: {content_list_dir}\n")
+        print(f"✗ Error: content_list directory does not exist: {content_list_dir}\n")
         return
 
     # Get files to process
     if args.content_file:
         content_list_files = [content_list_dir / args.content_file]
         if not content_list_files[0].exists():
-            print(f"❌ Error: content_list file does not exist: {content_list_files[0]}\n")
+            print(f"✗ Error: content_list file does not exist: {content_list_files[0]}\n")
             return
     else:
         content_list_files = sorted(content_list_dir.glob("*.json"))
         if not content_list_files:
-            print(f"❌ Error: No JSON files found in {content_list_dir}\n")
+            print(f"✗ Error: No JSON files found in {content_list_dir}\n")
             return
 
         if args.debug:
@@ -235,12 +236,12 @@ def extract_items(args):
             )
 
         print("\n" + "=" * 60)
-        print("✅ Extraction complete!")
+        print("✓ Extraction complete!")
         print(f"Output file: {output_file}")
         print("=" * 60 + "\n")
 
     except Exception as e:
-        print(f"\n❌ Extraction failed: {e}\n")
+        print(f"\n✗ Extraction failed: {e}\n")
 
 
 def delete_knowledge_base(args):
@@ -250,9 +251,9 @@ def delete_knowledge_base(args):
     try:
         success = manager.delete_knowledge_base(args.name, confirm=args.force)
         if success:
-            print(f"\n✅ Deleted knowledge base '{args.name}'\n")
+            print(f"\n✓ Deleted knowledge base '{args.name}'\n")
     except Exception as e:
-        print(f"\n❌ Error: {e}\n")
+        print(f"\n✗ Error: {e}\n")
 
 
 def clean_rag_storage(args):
@@ -266,11 +267,11 @@ def clean_rag_storage(args):
     try:
         manager.clean_rag_storage(args.name, backup=not args.no_backup)
         print("\n" + "=" * 60)
-        print("✅ RAG storage cleaned!")
+        print("✓ RAG storage cleaned!")
         print("💡 Tip: Use 'add_documents.py' to reprocess documents to rebuild RAG")
         print("=" * 60 + "\n")
     except Exception as e:
-        print(f"\n❌ Error: {e}\n")
+        print(f"\n✗ Error: {e}\n")
 
 
 async def refresh_knowledge_base(args):
@@ -283,8 +284,8 @@ async def refresh_knowledge_base(args):
     base_url = args.base_url or env_config["base_url"]
 
     if not api_key:
-        print("❌ Error: API Key not set")
-        print("Please set environment variable LLM_BINDING_API_KEY or use --api-key parameter\n")
+        print("✗ Error: API Key not set")
+        print("Please set environment variable LLM_API_KEY or use --api-key parameter\n")
         return
 
     try:
@@ -293,7 +294,7 @@ async def refresh_knowledge_base(args):
         raw_dir = kb_dir / "raw"
 
         if not raw_dir.exists() or not list(raw_dir.glob("*")):
-            print(f"❌ Error: No raw documents found in knowledge base '{kb_name}'\n")
+            print(f"✗ Error: No raw documents found in knowledge base '{kb_name}'\n")
             return
 
         print("\n" + "=" * 60)
@@ -346,11 +347,11 @@ async def refresh_knowledge_base(args):
             initializer.extract_numbered_items(batch_size=args.batch_size)
 
         print("\n" + "=" * 60)
-        print(f"✅ Knowledge base '{kb_name}' refresh complete!")
+        print(f"✓ Knowledge base '{kb_name}' refresh complete!")
         print("=" * 60 + "\n")
 
     except Exception as e:
-        print(f"\n❌ Refresh failed: {e}\n")
+        print(f"\n✗ Refresh failed: {e}\n")
         raise
 
 
@@ -501,7 +502,7 @@ Usage Examples:
             if "pop from an empty deque" not in str(e):
                 raise
         except Exception as e:
-            print(f"\n❌ Error: {e}")
+            print(f"\n✗ Error: {e}")
             raise
 
     elif args.command == "extract":
@@ -523,7 +524,7 @@ Usage Examples:
             if "pop from an empty deque" not in str(e):
                 raise
         except Exception as e:
-            print(f"\n❌ Error: {e}")
+            print(f"\n✗ Error: {e}")
             raise
 
     else:

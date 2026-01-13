@@ -8,6 +8,12 @@ import React, {
   useEffect,
 } from "react";
 import { wsUrl, apiUrl } from "@/lib/api";
+import {
+  initializeTheme,
+  setTheme,
+  getStoredTheme,
+  type Theme,
+} from "@/lib/theme";
 
 // --- Types ---
 interface LogEntry {
@@ -203,11 +209,35 @@ interface IdeaGenState {
   progress: { current: number; total: number } | null;
 }
 
+// Chat Types
+interface ChatSource {
+  rag?: Array<{ kb_name: string; content: string }>;
+  web?: Array<{ url: string; title?: string; snippet?: string }>;
+}
+
+interface HomeChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  sources?: ChatSource;
+  isStreaming?: boolean;
+}
+
+interface ChatState {
+  sessionId: string | null;
+  messages: HomeChatMessage[];
+  isLoading: boolean;
+  selectedKb: string;
+  enableRag: boolean;
+  enableWebSearch: boolean;
+  currentStage: string | null;
+}
+
 interface GlobalContextType {
   // Solver
   solverState: SolverState;
   setSolverState: React.Dispatch<React.SetStateAction<SolverState>>;
   startSolver: (question: string, kb: string) => void;
+  stopSolver: () => void;
 
   // Question
   questionState: QuestionState;
@@ -242,9 +272,24 @@ interface GlobalContextType {
   ideaGenState: IdeaGenState;
   setIdeaGenState: React.Dispatch<React.SetStateAction<IdeaGenState>>;
 
+  // Chat
+  chatState: ChatState;
+  setChatState: React.Dispatch<React.SetStateAction<ChatState>>;
+  sendChatMessage: (message: string) => void;
+  clearChatHistory: () => void;
+  loadChatSession: (sessionId: string) => Promise<void>;
+  newChatSession: () => void;
+
   // UI Settings
   uiSettings: { theme: "light" | "dark"; language: "en" | "zh" };
   refreshSettings: () => Promise<void>;
+
+  // Sidebar
+  sidebarWidth: number;
+  setSidebarWidth: (width: number) => void;
+  sidebarCollapsed: boolean;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  toggleSidebar: () => void;
 }
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
@@ -256,32 +301,102 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     language: "en" | "zh";
   }>({ theme: "light", language: "en" });
 
+  const [isInitialized, setIsInitialized] = useState(false);
+
   const refreshSettings = async () => {
     try {
       const res = await fetch(apiUrl("/api/v1/settings"));
       if (res.ok) {
         const data = await res.json();
         if (data.ui) {
+          // localStorage takes priority over backend
+          const storedTheme = getStoredTheme();
+          const themeToUse = storedTheme || data.ui.theme;
+
           setUiSettings({
-            theme: data.ui.theme,
+            theme: themeToUse,
             language: data.ui.language,
           });
-          // Apply theme immediately
-          if (data.ui.theme === "dark") {
-            document.documentElement.classList.add("dark");
-          } else {
-            document.documentElement.classList.remove("dark");
-          }
+          // Apply and persist theme
+          setTheme(themeToUse);
         }
       }
     } catch (e) {
-      console.error("Failed to load settings", e);
+      // Fall back to localStorage theme on error
+      const stored = getStoredTheme();
+      if (stored) {
+        setUiSettings((prev) => ({ ...prev, theme: stored }));
+      }
     }
   };
 
   useEffect(() => {
-    refreshSettings();
+    // Initialize theme immediately on first render
+    if (!isInitialized) {
+      const initialTheme = initializeTheme();
+      setUiSettings((prev) => ({ ...prev, theme: initialTheme }));
+      setIsInitialized(true);
+
+      // Then fetch from backend and sync
+      refreshSettings();
+    }
+  }, [isInitialized]);
+
+  // --- Sidebar State ---
+  const SIDEBAR_MIN_WIDTH = 64;
+  const SIDEBAR_MAX_WIDTH = 320;
+  const SIDEBAR_DEFAULT_WIDTH = 256;
+  const SIDEBAR_COLLAPSED_WIDTH = 64;
+
+  const [sidebarWidth, setSidebarWidthState] = useState<number>(
+    SIDEBAR_DEFAULT_WIDTH,
+  );
+  const [sidebarCollapsed, setSidebarCollapsedState] = useState<boolean>(false);
+
+  // Initialize sidebar state from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedWidth = localStorage.getItem("sidebarWidth");
+      const storedCollapsed = localStorage.getItem("sidebarCollapsed");
+
+      if (storedWidth) {
+        const width = parseInt(storedWidth, 10);
+        if (
+          !isNaN(width) &&
+          width >= SIDEBAR_MIN_WIDTH &&
+          width <= SIDEBAR_MAX_WIDTH
+        ) {
+          setSidebarWidthState(width);
+        }
+      }
+
+      if (storedCollapsed) {
+        setSidebarCollapsedState(storedCollapsed === "true");
+      }
+    }
   }, []);
+
+  const setSidebarWidth = (width: number) => {
+    const clampedWidth = Math.max(
+      SIDEBAR_MIN_WIDTH,
+      Math.min(SIDEBAR_MAX_WIDTH, width),
+    );
+    setSidebarWidthState(clampedWidth);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("sidebarWidth", clampedWidth.toString());
+    }
+  };
+
+  const setSidebarCollapsed = (collapsed: boolean) => {
+    setSidebarCollapsedState(collapsed);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("sidebarCollapsed", collapsed.toString());
+    }
+  };
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
 
   // --- Solver Logic ---
   const [solverState, setSolverState] = useState<SolverState>({
@@ -440,6 +555,22 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         solverWs.current = null;
       }
     };
+  };
+
+  // Stop the current solving process
+  const stopSolver = () => {
+    if (solverWs.current) {
+      // Close the WebSocket to signal cancellation to backend
+      solverWs.current.close();
+      solverWs.current = null;
+    }
+    // Reset solving state but keep logs for user reference if desired
+    setSolverState((prev) => ({
+      ...prev,
+      isSolving: false,
+      // Optionally clear logs or keep them; here we keep existing logs
+    }));
+    addSolverLog({ type: "system", content: "Solver stopped by user." });
   };
 
   const addSolverLog = (log: LogEntry) => {
@@ -1308,12 +1439,241 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     progress: null,
   });
 
+  // --- Chat Logic ---
+  const [chatState, setChatState] = useState<ChatState>({
+    sessionId: null,
+    messages: [],
+    isLoading: false,
+    selectedKb: "",
+    enableRag: false,
+    enableWebSearch: false,
+    currentStage: null,
+  });
+  const chatWs = useRef<WebSocket | null>(null);
+  // Use ref to always have the latest sessionId in WebSocket callbacks (avoid closure issues)
+  const sessionIdRef = useRef<string | null>(null);
+
+  const sendChatMessage = (message: string) => {
+    if (!message.trim() || chatState.isLoading) return;
+
+    // Add user message
+    setChatState((prev) => ({
+      ...prev,
+      isLoading: true,
+      currentStage: "connecting",
+      messages: [...prev.messages, { role: "user", content: message }],
+    }));
+
+    // Close existing connection if any
+    if (chatWs.current) {
+      chatWs.current.close();
+    }
+
+    const ws = new WebSocket(wsUrl("/api/v1/chat"));
+    chatWs.current = ws;
+
+    let assistantMessage = "";
+
+    ws.onopen = () => {
+      // Build history from current messages (excluding the one just added)
+      const history = chatState.messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
+      ws.send(
+        JSON.stringify({
+          message,
+          // Use ref to get the latest sessionId (avoids closure capturing stale state)
+          session_id: sessionIdRef.current,
+          history,
+          kb_name: chatState.selectedKb,
+          enable_rag: chatState.enableRag,
+          enable_web_search: chatState.enableWebSearch,
+        }),
+      );
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === "session") {
+        // Store session ID from backend - update both ref and state
+        sessionIdRef.current = data.session_id;
+        setChatState((prev) => ({
+          ...prev,
+          sessionId: data.session_id,
+        }));
+      } else if (data.type === "status") {
+        setChatState((prev) => ({
+          ...prev,
+          currentStage: data.stage || data.message,
+        }));
+      } else if (data.type === "stream") {
+        assistantMessage += data.content;
+        setChatState((prev) => {
+          const messages = [...prev.messages];
+          const lastMessage = messages[messages.length - 1];
+          if (lastMessage?.role === "assistant" && lastMessage?.isStreaming) {
+            // Update existing streaming message
+            messages[messages.length - 1] = {
+              ...lastMessage,
+              content: assistantMessage,
+            };
+          } else {
+            // Add new streaming message
+            messages.push({
+              role: "assistant",
+              content: assistantMessage,
+              isStreaming: true,
+            });
+          }
+          return { ...prev, messages, currentStage: "generating" };
+        });
+      } else if (data.type === "sources") {
+        setChatState((prev) => {
+          const messages = [...prev.messages];
+          const lastMessage = messages[messages.length - 1];
+          if (lastMessage?.role === "assistant") {
+            messages[messages.length - 1] = {
+              ...lastMessage,
+              sources: { rag: data.rag, web: data.web },
+            };
+          }
+          return { ...prev, messages };
+        });
+      } else if (data.type === "result") {
+        setChatState((prev) => {
+          const messages = [...prev.messages];
+          const lastMessage = messages[messages.length - 1];
+          if (lastMessage?.role === "assistant") {
+            messages[messages.length - 1] = {
+              ...lastMessage,
+              content: data.content,
+              isStreaming: false,
+            };
+          }
+          return {
+            ...prev,
+            messages,
+            isLoading: false,
+            currentStage: null,
+          };
+        });
+        ws.close();
+      } else if (data.type === "error") {
+        setChatState((prev) => ({
+          ...prev,
+          isLoading: false,
+          currentStage: null,
+          messages: [
+            ...prev.messages,
+            { role: "assistant", content: `Error: ${data.message}` },
+          ],
+        }));
+        ws.close();
+      }
+    };
+
+    ws.onerror = () => {
+      setChatState((prev) => ({
+        ...prev,
+        isLoading: false,
+        currentStage: null,
+        messages: [
+          ...prev.messages,
+          { role: "assistant", content: "Connection error. Please try again." },
+        ],
+      }));
+    };
+
+    ws.onclose = () => {
+      if (chatWs.current === ws) {
+        chatWs.current = null;
+      }
+      setChatState((prev) => ({
+        ...prev,
+        isLoading: false,
+        currentStage: null,
+      }));
+    };
+  };
+
+  const clearChatHistory = () => {
+    // Clear both ref and state
+    sessionIdRef.current = null;
+    setChatState((prev) => ({
+      ...prev,
+      sessionId: null,
+      messages: [],
+      currentStage: null,
+    }));
+  };
+
+  const newChatSession = () => {
+    // Close any existing WebSocket
+    if (chatWs.current) {
+      chatWs.current.close();
+      chatWs.current = null;
+    }
+    // Reset to new session - clear both ref and state
+    sessionIdRef.current = null;
+    setChatState((prev) => ({
+      ...prev,
+      sessionId: null,
+      messages: [],
+      isLoading: false,
+      currentStage: null,
+    }));
+  };
+
+  const loadChatSession = async (sessionId: string) => {
+    try {
+      const response = await fetch(
+        apiUrl(`/api/v1/chat/sessions/${sessionId}`),
+      );
+      if (!response.ok) {
+        throw new Error("Session not found");
+      }
+      const session = await response.json();
+
+      // Convert session messages to HomeChatMessage format
+      const messages: HomeChatMessage[] = session.messages.map((msg: any) => ({
+        role: msg.role,
+        content: msg.content,
+        sources: msg.sources,
+        isStreaming: false,
+      }));
+
+      // Restore session settings
+      const settings = session.settings || {};
+
+      // Update ref with loaded session ID for continued conversation
+      sessionIdRef.current = session.session_id;
+
+      setChatState((prev) => ({
+        ...prev,
+        sessionId: session.session_id,
+        messages,
+        selectedKb: settings.kb_name || prev.selectedKb,
+        enableRag: settings.enable_rag ?? prev.enableRag,
+        enableWebSearch: settings.enable_web_search ?? prev.enableWebSearch,
+        isLoading: false,
+        currentStage: null,
+      }));
+    } catch (error) {
+      console.error("Failed to load session:", error);
+      throw error;
+    }
+  };
+
   return (
     <GlobalContext.Provider
       value={{
         solverState,
         setSolverState,
         startSolver,
+        stopSolver,
         questionState,
         setQuestionState,
         startQuestionGen,
@@ -1324,8 +1684,19 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         startResearch,
         ideaGenState,
         setIdeaGenState,
+        chatState,
+        setChatState,
+        sendChatMessage,
+        clearChatHistory,
+        loadChatSession,
+        newChatSession,
         uiSettings,
         refreshSettings,
+        sidebarWidth,
+        setSidebarWidth,
+        sidebarCollapsed,
+        setSidebarCollapsed,
+        toggleSidebar,
       }}
     >
       {children}

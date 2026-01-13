@@ -12,18 +12,21 @@ project_root = Path(__file__).parent.parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from ..base_agent import BaseAgent
+from src.agents.base_agent import BaseAgent
 
 
 class PrecisionAnswerAgent(BaseAgent):
     """Staged precision answer"""
 
     def __init__(self, config: Dict[str, Any], api_key: str, base_url: str, token_tracker=None):
+        language = config.get("system", {}).get("language", "zh")
         super().__init__(
-            config=config,
+            module_name="solve",
+            agent_name="precision_answer_agent",
             api_key=api_key,
             base_url=base_url,
-            agent_name="precision_answer_agent",
+            language=language,
+            config=config,
             token_tracker=token_tracker,
         )
 

@@ -13,17 +13,28 @@ _project_root = Path(__file__).parent.parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from src.core.prompt_manager import get_prompt_manager
+from src.agents.base_agent import BaseAgent
+from src.services.prompt import get_prompt_manager
 
-from .base_idea_agent import BaseIdeaAgent
 
-
-class MaterialOrganizerAgent(BaseIdeaAgent):
+class MaterialOrganizerAgent(BaseAgent):
     """Material Organizer Agent - Extracts knowledge points"""
 
-    def __init__(self, language: str = "en", **kwargs):
-        super().__init__(**kwargs)
-        self.language = language
+    def __init__(
+        self,
+        language: str = "en",
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
+    ):
+        super().__init__(
+            module_name="ideagen",
+            agent_name="material_organizer",
+            api_key=api_key,
+            base_url=base_url,
+            model=model,
+            language=language,
+        )
         self._prompts = get_prompt_manager().load_prompts(
             module_name="ideagen",
             agent_name="material_organizer",

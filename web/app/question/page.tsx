@@ -144,7 +144,7 @@ export default function QuestionPage() {
   }, [questionState.step, totalQuestions]);
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col animate-fade-in overflow-hidden p-4">
+    <div className="h-screen flex flex-col animate-fade-in overflow-hidden p-4">
       {/* Main Panel */}
       <div className="flex-1 flex flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden min-h-0">
         {/* Header Row */}
@@ -994,11 +994,10 @@ export default function QuestionPage() {
                               <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">
                                 Correct Answer
                               </p>
-                              <div className="text-emerald-800 dark:text-emerald-200 text-base leading-relaxed [&_.katex]:text-emerald-800 dark:[&_.katex]:text-emerald-200 [&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto">
+                              <div className="text-emerald-800 dark:text-emerald-200 text-base leading-relaxed [&_.katex]:text-emerald-800 dark:[&_.katex]:text-emerald-200 [&_.katex-display]:my-3 [&_.katex-display]:overflow-x-auto prose prose-emerald dark:prose-invert max-w-none prose-p:my-2 prose-p:leading-relaxed">
                                 <ReactMarkdown
                                   remarkPlugins={[remarkMath]}
                                   rehypePlugins={[rehypeKatex]}
-                                  className="prose prose-emerald dark:prose-invert max-w-none prose-p:my-2 prose-p:leading-relaxed"
                                 >
                                   {processLatexContent(
                                     String(

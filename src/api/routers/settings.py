@@ -11,7 +11,9 @@ from typing import Any, Dict, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.core.core import get_embedding_config, get_llm_config, get_tts_config
+from src.services.embedding import get_embedding_config
+from src.services.llm import get_llm_config
+from src.services.tts import get_tts_config
 from src.utils.config_manager import ConfigManager
 
 router = APIRouter()
@@ -22,70 +24,79 @@ config_manager = ConfigManager()
 # These variables can be modified at runtime without restarting the server
 
 ENV_VAR_DEFINITIONS = {
-    # LLM Configuration
+    # LLM Mode Configuration
+    "LLM_MODE": {
+        "description": "LLM deployment mode: 'api' (cloud only), 'local' (self-hosted only), 'hybrid' (both, use active provider)",
+        "category": "llm",
+        "required": False,
+        "default": "hybrid",
+        "sensitive": False,
+    },
+    # LLM Configuration (supports both cloud and local)
     "LLM_BINDING": {
-        "description": "LLM service provider type (e.g., openai, azure_openai, ollama)",
+        "description": "LLM protocol type: openai (for OpenAI-compatible APIs including Ollama, vLLM), anthropic (for Claude)",
         "category": "llm",
         "required": False,
         "default": "openai",
         "sensitive": False,
     },
     "LLM_MODEL": {
-        "description": "LLM model name (e.g., gpt-4o, deepseek-chat, qwen-plus)",
+        "description": "Model name. Cloud: gpt-4o, deepseek-chat. Local: llama3.2, qwen2.5, mistral-nemo",
         "category": "llm",
         "required": True,
         "default": "",
         "sensitive": False,
     },
-    "LLM_BINDING_HOST": {
-        "description": "LLM API endpoint URL (e.g., https://api.openai.com/v1)",
+    "LLM_HOST": {
+        "description": "API endpoint. Cloud: https://api.openai.com/v1. Local: http://localhost:11434/v1 (Ollama), http://localhost:1234/v1 (LM Studio)",
         "category": "llm",
         "required": True,
         "default": "",
         "sensitive": False,
     },
-    "LLM_BINDING_API_KEY": {
-        "description": "LLM API authentication key",
+    "LLM_API_KEY": {
+        "description": "API key (required for cloud, optional for local - use 'ollama' or any string for Ollama)",
         "category": "llm",
         "required": True,
         "default": "",
         "sensitive": True,
     },
-    # Embedding Configuration
+    # Embedding Configuration (supports both cloud and local)
     "EMBEDDING_BINDING": {
-        "description": "Embedding service provider type (openai, ollama, lollms, azure_openai)",
+        "description": "Embedding provider: openai, ollama, lm_studio, azure_openai, jina, cohere, huggingface",
         "category": "embedding",
         "required": False,
         "default": "openai",
         "sensitive": False,
     },
     "EMBEDDING_MODEL": {
-        "description": "Embedding model name (e.g., text-embedding-3-large, text-embedding-ada-002)",
+        "description": "Model name. Cloud: text-embedding-3-large. Local: nomic-embed-text, mxbai-embed-large",
         "category": "embedding",
         "required": True,
         "default": "",
         "sensitive": False,
     },
-    "EMBEDDING_DIM": {
-        "description": "Embedding vector dimension (e.g., 3072 for text-embedding-3-large)",
+    "EMBEDDING_DIMENSION": {
+        "description": "Vector dimension: 3072 (text-embedding-3-large), 768 (nomic-embed-text), 1024 (mxbai)",
         "category": "embedding",
         "required": False,
         "default": "3072",
         "sensitive": False,
     },
-    "EMBEDDING_BINDING_HOST": {
-        "description": "Embedding API endpoint URL",
+    "EMBEDDING_HOST": {
+        "description": "API endpoint. Cloud: https://api.openai.com/v1. Local: http://localhost:11434 (Ollama)",
         "category": "embedding",
         "required": True,
         "default": "",
         "sensitive": False,
     },
-    "EMBEDDING_BINDING_API_KEY": {
-        "description": "Embedding API authentication key",
+    "EMBEDDING_API_KEY": {
+        "description": "API key (required for cloud providers, not needed for Ollama/local)",
         "category": "embedding",
-        "required": True,
+        "required": False,
         "default": "",
         "sensitive": True,
+        "conditional": "Required for cloud providers (OpenAI, Jina, Cohere, etc.). Not needed for Ollama or local models.",
     },
     # TTS Configuration (OpenAI compatible API)
     "TTS_MODEL": {
@@ -124,49 +135,29 @@ ENV_VAR_DEFINITIONS = {
         "default": "",
         "sensitive": True,
     },
-    # System Configuration
-    "DISABLE_SSL_VERIFY": {
-        "description": "Disable SSL certificate verification (set 'true' for self-signed certs)",
-        "category": "system",
-        "required": False,
-        "default": "false",
-        "sensitive": False,
-    },
-    "RAG_TOOL_MODULE_LOG_LEVEL": {
-        "description": "Log level for RAG tool module (DEBUG, INFO, WARNING, ERROR)",
-        "category": "system",
-        "required": False,
-        "default": "INFO",
-        "sensitive": False,
-    },
 }
 
 # Categories for organizing the UI
 ENV_CATEGORIES = {
     "llm": {
         "name": "LLM Configuration",
-        "description": "Large Language Model settings for AI reasoning and generation",
+        "description": "LLM settings for AI reasoning. Supports cloud APIs (OpenAI, DeepSeek) and local servers (Ollama, LM Studio).",
         "icon": "brain",
     },
     "embedding": {
         "name": "Embedding Configuration",
-        "description": "Text embedding model settings for semantic search and RAG",
+        "description": "Embedding settings for RAG. Supports cloud (OpenAI) and local (Ollama with nomic-embed-text).",
         "icon": "database",
     },
     "tts": {
         "name": "TTS Configuration",
-        "description": "Text-to-Speech settings. Currently only supports Alibaba Cloud DashScope.",
+        "description": "Text-to-Speech settings (OpenAI-compatible API).",
         "icon": "volume",
     },
     "search": {
         "name": "Web Search Configuration",
-        "description": "External search API settings",
+        "description": "External search API settings (Perplexity)",
         "icon": "search",
-    },
-    "system": {
-        "name": "System Configuration",
-        "description": "General system settings",
-        "icon": "settings",
     },
 }
 
@@ -457,22 +448,86 @@ async def get_env_var(key: str):
     }
 
 
+def _update_dot_env(updates: Dict[str, str], removals: list[str]):
+    """Update variables in .env file preserving comments and structure."""
+    env_path = Path(__file__).parent.parent.parent.parent / ".env"
+
+    if not env_path.exists():
+        # Create new if doesn't exist
+        with open(env_path, "w", encoding="utf-8") as f:
+            for k, v in updates.items():
+                if " " in v or "#" in v:
+                    f.write(f'{k}="{v}"\n')
+                else:
+                    f.write(f"{k}={v}\n")
+        return
+
+    # Read existing
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except Exception as e:
+        print(f"Error reading .env: {e}")
+        return
+
+    new_lines = []
+    processed_keys = set()
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            new_lines.append(line)
+            continue
+
+        # Parse key
+        if "=" in stripped:
+            key = stripped.split("=")[0].strip()
+
+            if key in removals:
+                continue  # Skip/Remove this line
+
+            if key in updates:
+                # Update this line
+                val = updates[key]
+                # Simple quoting suggestion
+                if " " in val or "#" in val or '"' in val or "'" in val:
+                    # minimal escape of double quotes
+                    val = val.replace('"', '\\"')
+                    new_lines.append(f'{key}="{val}"\n')
+                else:
+                    new_lines.append(f"{key}={val}\n")
+                processed_keys.add(key)
+                continue
+
+        new_lines.append(line)
+
+    # Append new keys that weren't found
+    for k, v in updates.items():
+        if k not in processed_keys and k not in removals:
+            if " " in v or "#" in v or '"' in v or "'" in v:
+                val = v.replace('"', '\\"')
+                new_lines.append(f'\n{k}="{val}"\n')
+            else:
+                new_lines.append(f"\n{k}={v}\n")
+
+    # Write back
+    try:
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+    except Exception as e:
+        print(f"Error writing .env: {e}")
+
+
 @router.put("/env")
 async def update_env_config(update: EnvConfigUpdate):
     """
-    Update environment variables at runtime.
-
-    This updates the process environment variables immediately.
-    The system will use the new values for subsequent operations.
-
-    Note: These changes are NOT persisted to .env file.
-    On system restart, values will be loaded from .env again.
-
-    Returns:
-        Updated variables configuration
+    Update environment variables at runtime and persist to .env.
     """
     updated_vars = []
     errors = []
+
+    env_updates = {}
+    env_removals = []
 
     for var_update in update.variables:
         key = var_update.key
@@ -493,11 +548,17 @@ async def update_env_config(update: EnvConfigUpdate):
         # Update the environment variable
         if value:
             os.environ[key] = value
+            env_updates[key] = value
         elif key in os.environ:
             # If value is empty and variable exists, remove it
             del os.environ[key]
+            env_removals.append(key)
 
         updated_vars.append(key)
+
+    # Persist to .env
+    if env_updates or env_removals:
+        _update_dot_env(env_updates, env_removals)
 
     if errors:
         raise HTTPException(status_code=400, detail={"errors": errors, "updated": updated_vars})
@@ -506,7 +567,7 @@ async def update_env_config(update: EnvConfigUpdate):
     return {
         "success": True,
         "updated": updated_vars,
-        "message": f"Updated {len(updated_vars)} environment variables. Changes are active immediately but not persisted to .env file.",
+        "message": f"Updated {len(updated_vars)} environment variables.",
     }
 
 
@@ -529,13 +590,15 @@ async def update_single_env_var(key: str, value: str):
     # Update the environment variable
     if value:
         os.environ[key] = value
+        _update_dot_env({key: value}, [])
     elif key in os.environ:
         del os.environ[key]
+        _update_dot_env({}, [key])
 
     return {
         "success": True,
         "key": key,
-        "message": f"Environment variable {key} updated. Changes are active immediately.",
+        "message": f"Environment variable {key} updated.",
     }
 
 
@@ -555,7 +618,7 @@ async def test_env_config():
     # Test LLM configuration
     try:
         llm_config = get_llm_config()
-        results["llm"]["model"] = llm_config.get("model")
+        results["llm"]["model"] = llm_config.model
         results["llm"]["status"] = "configured"
     except ValueError as e:
         results["llm"]["status"] = "not_configured"
@@ -567,7 +630,7 @@ async def test_env_config():
     # Test Embedding configuration
     try:
         embedding_config = get_embedding_config()
-        results["embedding"]["model"] = embedding_config.get("model")
+        results["embedding"]["model"] = embedding_config.model
         results["embedding"]["status"] = "configured"
     except ValueError as e:
         results["embedding"]["status"] = "not_configured"
@@ -589,3 +652,125 @@ async def test_env_config():
         results["tts"]["error"] = str(e)
 
     return results
+
+
+@router.post("/env/test/{service}")
+async def test_single_service(service: Literal["llm", "embedding", "tts"]):
+    """
+    Test a single service configuration with actual API call.
+
+    Args:
+        service: The service to test (llm, embedding, tts)
+
+    Returns:
+        Test result with status, model info, and response time.
+    """
+    import time
+
+    result = {
+        "status": "unknown",
+        "model": None,
+        "error": None,
+        "response_time_ms": None,
+        "message": None,
+    }
+
+    start_time = time.time()
+
+    if service == "llm":
+        try:
+            from src.services.llm import complete as llm_complete
+
+            llm_config = get_llm_config()
+            result["model"] = llm_config.model
+
+            # Actually test the LLM with a simple prompt
+            response = await llm_complete(
+                model=llm_config.model,
+                prompt="Say 'OK' if you can hear me.",
+                system_prompt="You are a test assistant. Reply with just 'OK'.",
+                api_key=llm_config.api_key,
+                base_url=llm_config.base_url,
+                binding=llm_config.binding,
+                max_tokens=10,
+            )
+            result["status"] = "success"
+            result["message"] = (
+                f"Response: {response[:50]}..." if len(response) > 50 else f"Response: {response}"
+            )
+        except ValueError as e:
+            result["status"] = "not_configured"
+            result["error"] = str(e)
+        except Exception as e:
+            result["status"] = "error"
+            result["error"] = str(e)
+
+    elif service == "embedding":
+        try:
+            from src.services.embedding import get_embedding_client
+
+            embedding_config = get_embedding_config()
+            result["model"] = embedding_config.model
+
+            # Actually test embedding with a simple text
+            embedding_client = get_embedding_client()
+            embeddings = await embedding_client.embed(["Test embedding"])
+            if embeddings and len(embeddings) > 0:
+                result["status"] = "success"
+                result["message"] = f"Dimension: {len(embeddings[0])}"
+            else:
+                result["status"] = "error"
+                result["error"] = "Empty embedding returned"
+        except ValueError as e:
+            result["status"] = "not_configured"
+            result["error"] = str(e)
+        except Exception as e:
+            result["status"] = "error"
+            result["error"] = str(e)
+
+    elif service == "tts":
+        try:
+            tts_config = get_tts_config()
+            result["model"] = tts_config.get("model")
+
+            # For TTS, just check if config is valid (actual audio test is expensive)
+            if tts_config.get("model") and tts_config.get("base_url"):
+                result["status"] = "success"
+                result["message"] = f"Voice: {tts_config.get('voice', 'alloy')}"
+            else:
+                result["status"] = "not_configured"
+                result["error"] = "Missing model or base_url"
+        except ValueError as e:
+            result["status"] = "not_configured"
+            result["error"] = str(e)
+        except Exception as e:
+            result["status"] = "error"
+            result["error"] = str(e)
+
+    result["response_time_ms"] = int((time.time() - start_time) * 1000)
+    return result
+
+
+# ==================== RAG Provider Configuration ====================
+
+
+@router.get("/rag/providers")
+async def get_rag_providers():
+    """
+    Get list of available RAG providers.
+
+    Returns:
+        {
+            "providers": [...],
+            "current": "lightrag"
+        }
+    """
+    try:
+        from src.tools.rag_tool import get_available_providers, get_current_provider
+
+        providers = get_available_providers()
+        current = get_current_provider()
+
+        return {"providers": providers, "current": current}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get RAG providers: {str(e)}")

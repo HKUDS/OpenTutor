@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Incremental Document Addition Usage Example
 
@@ -26,8 +27,8 @@ async def example_add_single_document():
     adder = DocumentAdder(
         kb_name="ai_textbook",
         base_dir="./data/knowledge_bases",
-        api_key=os.getenv("LLM_BINDING_API_KEY"),
-        base_url=os.getenv("LLM_BINDING_HOST"),
+        api_key=os.getenv("LLM_API_KEY"),
+        base_url=os.getenv("LLM_HOST"),
     )
 
     # Add documents
@@ -46,7 +47,7 @@ async def example_add_single_document():
         # Update metadata
         adder.update_metadata(len(new_files))
 
-        print("\n✅ Completed!")
+        print("\n✓ Completed!")
 
 
 async def example_add_multiple_documents():
@@ -58,8 +59,8 @@ async def example_add_multiple_documents():
     adder = DocumentAdder(
         kb_name="math2211",
         base_dir="./data/knowledge_bases",
-        api_key=os.getenv("LLM_BINDING_API_KEY"),
-        base_url=os.getenv("LLM_BINDING_HOST"),
+        api_key=os.getenv("LLM_API_KEY"),
+        base_url=os.getenv("LLM_HOST"),
     )
 
     # Add multiple documents
@@ -85,7 +86,7 @@ async def example_add_multiple_documents():
         # Update metadata
         adder.update_metadata(len(new_files))
 
-        print("\n✅ Completed!")
+        print("\n✓ Completed!")
 
 
 async def example_add_from_directory():
@@ -97,8 +98,8 @@ async def example_add_from_directory():
     adder = DocumentAdder(
         kb_name="ai_textbook",
         base_dir="./data/knowledge_bases",
-        api_key=os.getenv("LLM_BINDING_API_KEY"),
-        base_url=os.getenv("LLM_BINDING_HOST"),
+        api_key=os.getenv("LLM_API_KEY"),
+        base_url=os.getenv("LLM_HOST"),
     )
 
     # Collect all documents in directory
@@ -123,7 +124,7 @@ async def example_add_from_directory():
         # Update metadata
         adder.update_metadata(len(new_files))
 
-        print("\n✅ Completed!")
+        print("\n✓ Completed!")
 
 
 async def example_add_only_no_processing():
@@ -135,8 +136,8 @@ async def example_add_only_no_processing():
     adder = DocumentAdder(
         kb_name="ai_textbook",
         base_dir="./data/knowledge_bases",
-        api_key=os.getenv("LLM_BINDING_API_KEY"),
-        base_url=os.getenv("LLM_BINDING_HOST"),
+        api_key=os.getenv("LLM_API_KEY"),
+        base_url=os.getenv("LLM_HOST"),
     )
 
     # Only add files to raw directory
@@ -174,14 +175,14 @@ def example_with_error_handling():
         adder = DocumentAdder(
             kb_name="ai_textbook",
             base_dir="./data/knowledge_bases",
-            api_key=os.getenv("LLM_BINDING_API_KEY"),
-            base_url=os.getenv("LLM_BINDING_HOST"),
+            api_key=os.getenv("LLM_API_KEY"),
+            base_url=os.getenv("LLM_HOST"),
         )
 
         # Check if file exists
         source_file = Path("./new_chapter.pdf")
         if not source_file.exists():
-            print(f"❌ Error: Source file does not exist: {source_file}")
+            print(f"✗ Error: Source file does not exist: {source_file}")
             return
 
         # Add documents
@@ -199,14 +200,14 @@ def example_with_error_handling():
 
         asyncio.run(process())
 
-        print("\n✅ Successfully added documents!")
+        print("\n✓ Successfully added documents!")
 
     except ValueError as e:
-        print(f"❌ Configuration error: {e}")
+        print(f"✗ Configuration error: {e}")
     except FileNotFoundError as e:
-        print(f"❌ File error: {e}")
+        print(f"✗ File error: {e}")
     except Exception as e:
-        print(f"❌ Unknown error: {e}")
+        print(f"✗ Unknown error: {e}")
         import traceback
 
         traceback.print_exc()

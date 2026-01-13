@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 DR-in-KG 2.0 - Main Entry
 Deep research system based on dynamic topic queue
@@ -16,7 +17,7 @@ from dotenv import load_dotenv
 import yaml
 
 from src.agents.research.research_pipeline import ResearchPipeline
-from src.core.core import get_llm_config
+from src.services.llm import get_llm_config
 
 
 def load_config(config_path: str = None, preset: str = None) -> dict:
@@ -32,7 +33,7 @@ def load_config(config_path: str = None, preset: str = None) -> dict:
     """
     if config_path is None:
         project_root = Path(__file__).parent.parent.parent.parent
-        from src.core.core import load_config_with_main
+        from src.services.config import load_config_with_main
 
         config = load_config_with_main("research_config.yaml", project_root)
     else:
@@ -129,18 +130,18 @@ Examples:
     try:
         llm_config = get_llm_config()
     except ValueError as e:
-        print(f"❌ Error: {e}")
+        print(f"✗ Error: {e}")
         print("Please configure in .env or DeepTutor.env file:")
         print("  LLM_MODEL=gpt-4o")
-        print("  LLM_BINDING_API_KEY=your_api_key_here")
-        print("  LLM_BINDING_HOST=https://api.openai.com/v1")
+        print("  LLM_API_KEY=your_api_key_here")
+        print("  LLM_HOST=https://api.openai.com/v1")
         sys.exit(1)
 
     # Load configuration
     try:
         config = load_config(args.config, args.preset)
     except Exception as e:
-        print(f"❌ Failed to load configuration: {e!s}")
+        print(f"✗ Failed to load configuration: {e!s}")
         sys.exit(1)
 
     # Override configuration (command line arguments take priority)
@@ -153,7 +154,7 @@ Examples:
 
     # Create research pipeline
     pipeline = ResearchPipeline(
-        config=config, api_key=llm_config["api_key"], base_url=llm_config["base_url"]
+        config=config, api_key=llm_config.api_key, base_url=llm_config.base_url
     )
 
     # Execute research
@@ -161,7 +162,7 @@ Examples:
         result = await pipeline.run(topic=args.topic)
 
         print("\n" + "=" * 70)
-        print("✅ Research completed!")
+        print("✓ Research completed!")
         print("=" * 70)
         print(f"Research ID: {result['research_id']}")
         print(f"Topic: {result['topic']}")
@@ -172,7 +173,7 @@ Examples:
         print("\n\n⚠️  Research interrupted by user")
         sys.exit(0)
     except Exception as e:
-        print(f"\n\n❌ Research failed: {e!s}")
+        print(f"\n\n✗ Research failed: {e!s}")
         import traceback
 
         traceback.print_exc()

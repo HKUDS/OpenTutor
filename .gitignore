@@ -9,9 +9,8 @@
 data/user/
 data/knowledge_bases/
 run_code_workspace/
-config/bench_config.yaml
-develop/
 src/agents/question/reference_papers/
+tests/
 
 # ============================================
 # Python Related

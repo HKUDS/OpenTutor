@@ -18,8 +18,8 @@ from src.api.utils.task_id_manager import TaskIDManager
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.core.core import load_config_with_main
-from src.core.logging import get_logger
+from src.logging import get_logger
+from src.services.config import load_config_with_main
 
 # Setup module logger with unified logging system (from config)
 project_root = Path(__file__).parent.parent.parent.parent

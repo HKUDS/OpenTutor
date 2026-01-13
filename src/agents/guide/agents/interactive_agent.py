@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 InteractiveAgent - Agent for generating interactive HTML pages
 Converts knowledge points into visual, interactive learning pages
@@ -7,15 +8,19 @@ Converts knowledge points into visual, interactive learning pages
 import re
 from typing import Any
 
-from .base_guide_agent import BaseGuideAgent
+from src.agents.base_agent import BaseAgent
 
 
-class InteractiveAgent(BaseGuideAgent):
+class InteractiveAgent(BaseAgent):
     """Interactive page generation agent"""
 
-    def __init__(self, api_key: str, base_url: str, language: str = "zh"):
+    def __init__(self, api_key: str, base_url: str, language: str = "zh", binding: str = "openai"):
         super().__init__(
-            api_key=api_key, base_url=base_url, agent_name="interactive_agent", language=language
+            module_name="guide",
+            agent_name="interactive_agent",
+            api_key=api_key,
+            base_url=base_url,
+            language=language,
         )
 
     def _extract_html(self, response: str) -> str:

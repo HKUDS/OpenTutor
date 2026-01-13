@@ -3,7 +3,8 @@
 DR-in-KG 2.0 Agents Module
 """
 
-from .base_agent import BaseAgent
+from src.agents.base_agent import BaseAgent
+
 from .decompose_agent import DecomposeAgent
 from .manager_agent import ManagerAgent
 from .note_agent import NoteAgent

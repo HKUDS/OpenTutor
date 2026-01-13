@@ -161,8 +161,8 @@ DASHSCOPE_TTS_MODEL=sambert-zhichu-v1  # or other TTS model
 Required for EditAgent (same as other modules):
 
 ```bash
-LLM_BINDING_API_KEY=your_api_key
-LLM_BINDING_HOST=https://api.openai.com/v1
+LLM_API_KEY=your_api_key
+LLM_HOST=https://api.openai.com/v1
 LLM_MODEL=gpt-4o
 ```
 

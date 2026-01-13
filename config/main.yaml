@@ -1,6 +1,3 @@
-server:
-  backend_port: 8001
-  frontend_port: 3782
 system:
   language: en
 paths:
@@ -20,8 +17,8 @@ tools:
   run_code:
     workspace: ./data/user/run_code_workspace
     allowed_roots:
-      - ./data/user
-      - ./src/tools
+    - ./data/user
+    - ./src/tools
   web_search:
     enabled: true
   query_item:

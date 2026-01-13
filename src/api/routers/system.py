@@ -4,59 +4,17 @@ Manages system status checks and model connection tests
 """
 
 from datetime import datetime
-import re
 import time
 
 from fastapi import APIRouter
-from lightrag.llm.openai import openai_complete_if_cache, openai_embed
 from pydantic import BaseModel
 
-from src.core.core import get_embedding_config, get_llm_config, get_tts_config
+from src.services.embedding import get_embedding_client, get_embedding_config
+from src.services.llm import complete as llm_complete
+from src.services.llm import get_llm_config, get_token_limit_kwargs
+from src.services.tts import get_tts_config
 
 router = APIRouter()
-
-
-def _uses_max_completion_tokens(model: str) -> bool:
-    """
-    Check if the model uses max_completion_tokens instead of max_tokens.
-
-    Newer OpenAI models (o1, o3, gpt-4o, gpt-5.x, etc.) require max_completion_tokens
-    while older models use max_tokens.
-    """
-    model_lower = model.lower()
-
-    # Models that require max_completion_tokens:
-    # - o1, o3 series (reasoning models)
-    # - gpt-4o series
-    # - gpt-5.x and later
-    patterns = [
-        r"^o[13]",  # o1, o3 models
-        r"^gpt-4o",  # gpt-4o models
-        r"^gpt-[5-9]",  # gpt-5.x and later
-        r"^gpt-\d{2,}",  # gpt-10+ (future proofing)
-    ]
-
-    for pattern in patterns:
-        if re.match(pattern, model_lower):
-            return True
-
-    return False
-
-
-def _get_token_limit_kwargs(model: str, max_tokens: int) -> dict:
-    """
-    Get the appropriate token limit parameter for the model.
-
-    Args:
-        model: The model name
-        max_tokens: The desired token limit
-
-    Returns:
-        Dictionary with either max_tokens or max_completion_tokens
-    """
-    if _uses_max_completion_tokens(model):
-        return {"max_completion_tokens": max_tokens}
-    return {"max_tokens": max_tokens}
 
 
 class TestResponse(BaseModel):
@@ -88,7 +46,7 @@ async def get_system_status():
     # Check LLM configuration
     try:
         llm_config = get_llm_config()
-        result["llm"]["model"] = llm_config.get("model")
+        result["llm"]["model"] = llm_config.model
         result["llm"]["status"] = "configured"
     except ValueError as e:
         result["llm"]["status"] = "not_configured"
@@ -100,7 +58,7 @@ async def get_system_status():
     # Check Embeddings configuration
     try:
         embedding_config = get_embedding_config()
-        result["embeddings"]["model"] = embedding_config.get("model")
+        result["embeddings"]["model"] = embedding_config.model
         result["embeddings"]["status"] = "configured"
     except ValueError as e:
         result["embeddings"]["status"] = "not_configured"
@@ -124,7 +82,7 @@ async def get_system_status():
     return result
 
 
-@router.post("/test/llm", response_model=TestResponse)
+@router.post("/test/llm/", response_model=TestResponse)
 async def test_llm_connection():
     """
     Test LLM model connection by sending a simple completion request
@@ -136,8 +94,8 @@ async def test_llm_connection():
 
     try:
         llm_config = get_llm_config()
-        model = llm_config["model"]
-        base_url = llm_config["base_url"].rstrip("/")
+        model = llm_config.model
+        base_url = llm_config.base_url.rstrip("/")
 
         # Sanitize Base URL (remove /chat/completions suffix if present)
         for suffix in ["/chat/completions", "/completions"]:
@@ -145,21 +103,23 @@ async def test_llm_connection():
                 base_url = base_url[: -len(suffix)]
 
         # Handle API Key (inject dummy if missing for local LLMs)
-        api_key = llm_config["api_key"]
+        api_key = llm_config.api_key
         if not api_key:
             api_key = "sk-no-key-required"
 
         # Send a minimal test request with a prompt that guarantees output
-        test_prompt = "Say 'OK' to confirm you are working."
-        token_kwargs = _get_token_limit_kwargs(model, max_tokens=20)
-        response = await openai_complete_if_cache(
+        test_prompt = "Say 'OK' to confirm you are working. Do not produce long output."
+        token_kwargs = get_token_limit_kwargs(model, max_tokens=200)
+
+        response = await llm_complete(
             model=model,
             prompt=test_prompt,
             system_prompt="You are a helpful assistant. Respond briefly.",
+            binding=llm_config.binding,
             api_key=api_key,
             base_url=base_url,
             temperature=0.1,
-            **token_kwargs,  # Use appropriate token param for model
+            **token_kwargs,
         )
 
         response_time = (time.time() - start_time) * 1000
@@ -190,7 +150,7 @@ async def test_llm_connection():
         )
 
 
-@router.post("/test/embeddings", response_model=TestResponse)
+@router.post("/test/embeddings/", response_model=TestResponse)
 async def test_embeddings_connection():
     """
     Test Embeddings model connection by sending a simple embedding request
@@ -202,30 +162,21 @@ async def test_embeddings_connection():
 
     try:
         embedding_config = get_embedding_config()
-        model = embedding_config["model"]
-        base_url = embedding_config["base_url"].rstrip("/")
+        embedding_client = get_embedding_client()
 
-        # Sanitize Base URL (remove /embeddings suffix if present, though less common)
-        # OpenAI client handles /embeddings automatically
+        model = embedding_config.model
+        binding = embedding_config.binding
 
-        # Handle API Key
-        api_key = embedding_config["api_key"]
-        if not api_key:
-            api_key = "sk-no-key-required"
-
-        # Send a minimal test request
+        # Send a minimal test request using unified client
         test_texts = ["test"]
-        # openai_embed returns a coroutine, so we need to await it
-        embeddings = await openai_embed(
-            texts=test_texts, model=model, api_key=api_key, base_url=base_url
-        )
+        embeddings = await embedding_client.embed(test_texts)
 
         response_time = (time.time() - start_time) * 1000
 
         if embeddings is not None and len(embeddings) > 0 and len(embeddings[0]) > 0:
             return TestResponse(
                 success=True,
-                message="Embeddings connection successful",
+                message=f"Embeddings connection successful ({binding} provider)",
                 model=model,
                 response_time_ms=round(response_time, 2),
             )
@@ -250,7 +201,7 @@ async def test_embeddings_connection():
         )
 
 
-@router.post("/test/tts", response_model=TestResponse)
+@router.post("/test/tts/", response_model=TestResponse)
 async def test_tts_connection():
     """
     Test TTS model connection by checking configuration

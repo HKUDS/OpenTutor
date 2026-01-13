@@ -789,10 +789,10 @@ ${html}
   const rightWidthPercent = sidebarCollapsed ? 100 : sidebarWide ? 25 : 75;
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex gap-4 animate-fade-in relative">
+    <div className="h-screen flex gap-0 p-4 animate-fade-in relative">
       {/* LEFT PANEL: Chat & Control */}
       <div
-        className={`flex flex-col gap-4 h-full transition-all duration-300 flex-shrink-0 ${sidebarCollapsed ? "overflow-hidden" : ""}`}
+        className={`flex flex-col gap-4 h-full transition-all duration-300 flex-shrink-0 mr-4 ${sidebarCollapsed ? "overflow-hidden" : ""}`}
         style={{
           width: sidebarCollapsed ? 0 : `${leftWidthPercent}%`,
           minWidth: sidebarCollapsed

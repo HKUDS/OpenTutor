@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 ManagerAgent - Queue management Agent
 Responsible for managing DynamicTopicQueue state and task distribution
@@ -12,17 +13,22 @@ from typing import Any
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+from src.agents.base_agent import BaseAgent
 from src.agents.research.data_structures import DynamicTopicQueue, TopicBlock
-
-from .base_agent import BaseAgent
 
 
 class ManagerAgent(BaseAgent):
     """Queue management Agent"""
 
     def __init__(self, config: dict[str, Any], api_key: str = None, base_url: str = None):
+        language = config.get("system", {}).get("language", "zh")
         super().__init__(
-            config=config, api_key=api_key, base_url=base_url, agent_name="manager_agent"
+            module_name="research",
+            agent_name="manager_agent",
+            api_key=api_key,
+            base_url=base_url,
+            language=language,
+            config=config,
         )
         self.queue: DynamicTopicQueue | None = None
         self.primary_topic: str | None = None
@@ -70,7 +76,7 @@ class ManagerAgent(BaseAgent):
 
         success = self.queue.mark_completed(block_id)
         if success:
-            print(f"✅ ManagerAgent: Task {block_id} completed")
+            print(f"✓ ManagerAgent: Task {block_id} completed")
 
         return success
 
@@ -141,7 +147,7 @@ class ManagerAgent(BaseAgent):
 
         success = self.queue.mark_failed(block_id)
         if success:
-            print(f"❌ ManagerAgent: Task {block_id} failed")
+            print(f"✗ ManagerAgent: Task {block_id} failed")
             if reason:
                 print(f"   Reason: {reason}")
 
@@ -169,7 +175,7 @@ class ManagerAgent(BaseAgent):
             return None
 
         block = self.queue.add_block(normalized, overview)
-        print(f"➕ ManagerAgent: Added new topic {block.block_id}")
+        print(f"✓ ManagerAgent: Added new topic {block.block_id}")
         print(f"   Topic: {sub_topic}")
 
         return block

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 ToolAgent - Tool executor
 Responsible for reading tool calls in solve-chain, actually executing tools and producing summary
@@ -14,11 +15,11 @@ project_root = Path(__file__).parent.parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+from src.agents.base_agent import BaseAgent
 from src.tools.code_executor import run_code
 from src.tools.rag_tool import rag_search
 from src.tools.web_search import web_search
 
-from ..base_agent import BaseAgent
 from ..memory import CitationMemory, SolveChainStep, SolveMemory
 from ..memory.solve_memory import ToolCallRecord
 
@@ -27,11 +28,14 @@ class ToolAgent(BaseAgent):
     """Execute tool calls and generate summary"""
 
     def __init__(self, config: dict[str, Any], api_key: str, base_url: str, token_tracker=None):
+        language = config.get("system", {}).get("language", "zh")
         super().__init__(
-            config=config,
+            module_name="solve",
+            agent_name="tool_agent",
             api_key=api_key,
             base_url=base_url,
-            agent_name="tool_agent",
+            language=language,
+            config=config,
             token_tracker=token_tracker,
         )
 

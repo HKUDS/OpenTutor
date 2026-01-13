@@ -15,12 +15,13 @@ project_root = Path(__file__).parent.parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from src.agents.guide.agents.base_guide_agent import BaseGuideAgent
+from src.agents.base_agent import BaseAgent
 from src.agents.guide.guide_manager import GuideManager
 from src.api.utils.notebook_manager import notebook_manager
 from src.api.utils.task_id_manager import TaskIDManager
-from src.core.core import get_llm_config, load_config_with_main
-from src.core.logging import get_logger
+from src.logging import get_logger
+from src.services.config import load_config_with_main
+from src.services.llm import get_llm_config
 
 router = APIRouter()
 
@@ -68,12 +69,15 @@ def get_guide_manager():
     """Get GuideManager instance"""
     try:
         llm_config = get_llm_config()
-        api_key = llm_config["api_key"]
-        base_url = llm_config["base_url"]
+        api_key = llm_config.api_key
+        base_url = llm_config.base_url
+        binding = llm_config.binding
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM config error: {e!s}")
 
-    return GuideManager(api_key=api_key, base_url=base_url, language=None)  # Read from config file
+    return GuideManager(
+        api_key=api_key, base_url=base_url, language=None, binding=binding
+    )  # Read from config file
 
 
 # === REST API Endpoints ===
@@ -112,7 +116,7 @@ async def create_session(request: CreateSessionRequest):
             raise HTTPException(status_code=400, detail="No available records")
 
         # Reset LLM stats for new session
-        BaseGuideAgent.reset_stats()
+        BaseAgent.reset_stats("guide")
 
         manager = get_guide_manager()
         result = await manager.create_session(
@@ -160,7 +164,7 @@ async def next_knowledge(request: NextKnowledgeRequest):
 
         # Print stats if learning completed
         if result.get("learning_complete", False):
-            BaseGuideAgent.print_stats()
+            BaseAgent.print_stats("guide")
 
         return result
     except Exception as e:

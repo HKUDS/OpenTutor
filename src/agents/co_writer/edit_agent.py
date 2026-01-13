@@ -16,11 +16,11 @@ _project_root = Path(__file__).parent.parent.parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from lightrag.llm.openai import openai_complete_if_cache
-
-from src.core.core import get_agent_params, get_llm_config, load_config_with_main
-from src.core.logging import LLMStats, get_logger
-from src.core.prompt_manager import get_prompt_manager
+from src.logging import LLMStats, get_logger
+from src.services.config import get_agent_params, load_config_with_main
+from src.services.llm import complete as llm_complete
+from src.services.llm import get_llm_config
+from src.services.prompt import get_prompt_manager
 from src.tools.rag_tool import rag_search
 from src.tools.web_search import web_search
 
@@ -138,6 +138,12 @@ class EditAgent:
                 - edited_text: Edited text
                 - operation_id: Operation ID
         """
+        # Always refresh LLM config before starting to avoid stale credentials
+        try:
+            self.llm_config = get_llm_config()
+        except Exception as e:
+            logger.error(f"Failed to refresh LLM config: {e}")
+
         if not self.llm_config:
             raise ValueError("LLM configuration not available")
 
@@ -225,13 +231,14 @@ class EditAgent:
 
         # 3. Call LLM
         logger.info(f"Calling LLM for {action}...")
-        model = self.llm_config["model"]
-        response = await openai_complete_if_cache(
+        model = self.llm_config.model
+        response = await llm_complete(
+            binding=self.llm_config.binding,
             model=model,
             prompt=user_prompt,
             system_prompt=system_prompt,
-            api_key=self.llm_config["api_key"],
-            base_url=self.llm_config["base_url"],
+            api_key=self.llm_config.api_key,
+            base_url=self.llm_config.base_url,
             temperature=self._agent_params["temperature"],
             max_tokens=self._agent_params["max_tokens"],
         )
@@ -253,7 +260,7 @@ class EditAgent:
             "input": {"original_text": text, "instruction": instruction},
             "output": {"edited_text": response},
             "tool_call_file": tool_call_file,
-            "model": self.llm_config["model"],
+            "model": self.llm_config.model,
         }
         history.append(operation_record)
         save_history(history)
@@ -271,6 +278,12 @@ class EditAgent:
                 - marked_text: Text with annotations
                 - operation_id: Operation ID
         """
+        # Always refresh LLM config before starting to avoid stale credentials
+        try:
+            self.llm_config = get_llm_config()
+        except Exception as e:
+            logger.error(f"Failed to refresh LLM config: {e}")
+
         if not self.llm_config:
             raise ValueError("LLM configuration not available")
 
@@ -283,13 +296,14 @@ class EditAgent:
         user_prompt = user_template.format(text=text)
 
         logger.info("Calling LLM for auto-mark...")
-        model = self.llm_config["model"]
-        response = await openai_complete_if_cache(
+        model = self.llm_config.model
+        response = await llm_complete(
+            binding=self.llm_config.binding,
             model=model,
             prompt=user_prompt,
             system_prompt=system_prompt,
-            api_key=self.llm_config["api_key"],
-            base_url=self.llm_config["base_url"],
+            api_key=self.llm_config.api_key,
+            base_url=self.llm_config.base_url,
             temperature=self._agent_params["temperature"],
             max_tokens=self._agent_params["max_tokens"],
         )
@@ -311,7 +325,7 @@ class EditAgent:
             "input": {"original_text": text, "instruction": "AI Auto Mark"},
             "output": {"edited_text": response},
             "tool_call_file": None,
-            "model": self.llm_config["model"],
+            "model": self.llm_config.model,
         }
         history.append(operation_record)
         save_history(history)

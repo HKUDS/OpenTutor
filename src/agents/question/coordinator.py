@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
 Agent coordinator responsible for managing collaboration between the question-generation agent
 and the validation workflow.
@@ -21,8 +22,8 @@ from .validation_workflow import QuestionValidationWorkflow
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.core.core import load_config_with_main
-from src.core.logging import Logger, get_logger
+from src.logging import Logger, get_logger
+from src.services.config import load_config_with_main
 from src.tools.rag_tool import rag_search
 
 
@@ -247,6 +248,29 @@ class AgentCoordinator:
             logging.getLogger(logger_name).propagate = False
         self._logging_suppressed = True
 
+    def _extract_json_from_markdown(self, content: str) -> str:
+        """Extract JSON from markdown code blocks.
+
+        LLMs often wrap JSON in ```json ... ``` blocks. This method strips
+        the markdown formatting and any surrounding text.
+        """
+        if not content:
+            return content
+
+        # Remove leading explanatory text (look for the first ```json or ```)
+        import re
+
+        # Try to find JSON code block
+        json_block_pattern = r"```(?:json)?\s*\n?(.*?)```"
+        matches = re.findall(json_block_pattern, content, re.DOTALL)
+
+        if matches:
+            # Return the content inside the first code block
+            return matches[0].strip()
+
+        # If no code blocks found, return as-is (might already be valid JSON)
+        return content.strip()
+
     async def _call_llm(
         self,
         system_prompt: str,
@@ -265,14 +289,55 @@ class AgentCoordinator:
                 {"role": "user", "content": user_prompt},
             ],
             "temperature": 0.2,
+            "timeout": 180.0,  # Add timeout to prevent hanging
         }
         if response_format:
             kwargs["response_format"] = response_format
 
-        response = await client.chat.completions.create(**kwargs)
+        # Log the request details for debugging
+        self.logger.debug(
+            f"[{stage or 'coordinator'}] Calling LLM: model={model}, "
+            f"system_prompt_len={len(system_prompt)}, user_prompt_len={len(user_prompt)}, "
+            f"response_format={response_format}"
+        )
 
-        # Extract response content
+        try:
+            response = await client.chat.completions.create(**kwargs)
+        except Exception as e:
+            self.logger.error(
+                f"[{stage or 'coordinator'}] LLM API call failed: {type(e).__name__}: {e}"
+            )
+            self.logger.error(f"Request kwargs: {kwargs}")
+            raise RuntimeError(f"LLM call failed in stage '{stage}': {e}") from e
+
+        # Extract response content with validation
+        if not response or not response.choices:
+            error_msg = f"[{stage or 'coordinator'}] LLM returned empty response or no choices"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
         response_content = response.choices[0].message.content
+
+        # Validate content is not None or empty
+        if response_content is None:
+            error_msg = (
+                f"[{stage or 'coordinator'}] LLM returned None content. Response: {response}"
+            )
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        if not response_content.strip():
+            error_msg = (
+                f"[{stage or 'coordinator'}] LLM returned empty string. Response object: {response}"
+            )
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        # Log successful response
+        self.logger.debug(
+            f"[{stage or 'coordinator'}] LLM response received: "
+            f"length={len(response_content)}, preview={response_content[:200]}..."
+        )
 
         # Track token usage
         input_tokens = 0
@@ -330,13 +395,13 @@ class AgentCoordinator:
             f"The user's question generation requirement is:\n{requirement_text}\n\n"
             f"Please extract {num_queries} pure knowledge point names from it for knowledge base retrieval.\n\n"
             "Correct examples:\n"
-            "✅ Taylor theorem\n"
-            "✅ Lagrange multipliers  \n"
-            "✅ critical points\n\n"
+            "✓ Taylor theorem\n"
+            "✓ Lagrange multipliers  \n"
+            "✓ critical points\n\n"
             "Incorrect examples (do not generate):\n"
-            "❌ Apply Taylor's Theorem to approximate f(x,y)=... (This is a question)\n"
-            "❌ Find and classify critical points (This is a task)\n"
-            "❌ Use Lagrange multipliers to find maximum (This is an instruction)\n\n"
+            "✗ Apply Taylor's Theorem to approximate f(x,y)=... (This is a question)\n"
+            "✗ Find and classify critical points (This is a task)\n"
+            "✗ Use Lagrange multipliers to find maximum (This is an instruction)\n\n"
             f'Return in JSON format: {{"queries": ["knowledge point 1", "knowledge point 2", ...]}}, containing exactly {num_queries} knowledge point names.'
         )
 
@@ -1646,6 +1711,9 @@ class AgentCoordinator:
             "2. Be distinct from other focuses (different scenarios, applications, or perspectives)\n"
             "3. Match the specified difficulty level\n"
             "4. Be achievable with the provided background knowledge\n\n"
+            "CRITICAL: Return ONLY valid JSON. Do not wrap in markdown code blocks (```json). "
+            "Do not include any explanatory text before or after the JSON. "
+            "Your response must start with { and end with }.\n\n"
             'Output JSON with key "focuses" containing an array of objects, each with:\n'
             '- "id": string like "q_1", "q_2", etc.\n'
             '- "focus": string describing what specific aspect this question will test\n'
@@ -1665,10 +1733,24 @@ class AgentCoordinator:
             content = await self._call_llm(
                 system_prompt=system_prompt, user_prompt=user_prompt, stage="generate_question_plan"
             )
-            parsed = json.loads(content)
-            focuses = parsed.get("focuses", [])
-            if not isinstance(focuses, list):
+
+            # Validate content before JSON parsing
+            if not content or content.strip() == "":
+                self.logger.error("LLM returned empty content for question plan generation")
+                self.logger.error(f"Response content: {repr(content)}")
                 focuses = []
+            else:
+                try:
+                    # Extract JSON from markdown code blocks if present
+                    json_content = self._extract_json_from_markdown(content)
+                    parsed = json.loads(json_content)
+                    focuses = parsed.get("focuses", [])
+                    if not isinstance(focuses, list):
+                        focuses = []
+                except json.JSONDecodeError as json_err:
+                    self.logger.error(f"JSON parsing failed for question plan: {json_err}")
+                    self.logger.error(f"Response content (first 500 chars): {content[:500]}")
+                    focuses = []
         except Exception as e:
             self.logger.warning(f"Failed to generate question plan: {e}")
             focuses = []
@@ -1829,7 +1911,10 @@ class AgentCoordinator:
             "1. The question must align with the specified focus\n"
             "2. Use the background knowledge to ensure accuracy\n"
             "3. Match the difficulty level\n"
-            "4. Provide a detailed explanation\n"
+            "4. Provide a detailed explanation\n\n"
+            "CRITICAL: Return ONLY valid JSON. Do not wrap in markdown code blocks (```json). "
+            "Do not include any explanatory text before or after the JSON. "
+            "Your response must start with { and end with }.\n"
         )
 
         if question_type == "choice":
@@ -1865,12 +1950,32 @@ class AgentCoordinator:
                 user_prompt=user_prompt,
                 stage=f"generate_question_{question_id}",
             )
-            question = json.loads(content)
-            question["knowledge_point"] = knowledge_point
-            return {
-                "success": True,
-                "question": question,
-            }
+
+            # Validate content before JSON parsing
+            if not content or content.strip() == "":
+                self.logger.error(f"LLM returned empty content for question {question_id}")
+                self.logger.error(f"Response content: {repr(content)}")
+                return {
+                    "success": False,
+                    "error": "LLM returned empty response",
+                }
+
+            try:
+                # Extract JSON from markdown code blocks if present
+                json_content = self._extract_json_from_markdown(content)
+                question = json.loads(json_content)
+                question["knowledge_point"] = knowledge_point
+                return {
+                    "success": True,
+                    "question": question,
+                }
+            except json.JSONDecodeError as json_err:
+                self.logger.error(f"JSON parsing failed for question {question_id}: {json_err}")
+                self.logger.error(f"Response content (first 500 chars): {content[:500]}")
+                return {
+                    "success": False,
+                    "error": f"Invalid JSON response: {str(json_err)}",
+                }
         except Exception as e:
             self.logger.error(f"Failed to generate question {question_id}: {e}")
             return {

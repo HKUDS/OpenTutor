@@ -81,7 +81,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
 
-      - name: Check core module imports
+      - name: Check module imports
         run: |
           python -c "from src.core.core import get_llm_config, load_config_with_main; print('✅ Core imports OK')"
           python -c "from src.api.routers.knowledge import router; print('✅ API router imports OK')"

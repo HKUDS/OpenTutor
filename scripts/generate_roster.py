@@ -21,6 +21,27 @@ ssl_context.check_hostname = False
 ssl_context.verify_mode = ssl.CERT_NONE
 
 
+def fetch_repo_stats(owner: str, repo: str, token: str = None) -> dict:
+    """Fetch repository statistics (accurate counts) from GitHub API."""
+    headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "Repo-Roster-Generator"}
+    if token:
+        headers["Authorization"] = f"token {token}"
+
+    url = f"https://api.github.com/repos/{owner}/{repo}"
+    req = urllib.request.Request(url, headers=headers)
+
+    try:
+        with urllib.request.urlopen(req, timeout=30, context=ssl_context) as response:
+            data = json.loads(response.read().decode())
+            return {
+                "stargazers_count": data.get("stargazers_count", 0),
+                "forks_count": data.get("forks_count", 0),
+            }
+    except Exception as e:
+        print(f"Error fetching repo stats: {e}")
+        return {"stargazers_count": 0, "forks_count": 0}
+
+
 def fetch_github_api(url: str, token: str = None, count_only: bool = False) -> tuple:
     """Fetch data from GitHub API with pagination. Returns (users, total_count)."""
     headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "Repo-Roster-Generator"}
@@ -257,20 +278,27 @@ def main():
     # Create output directory
     os.makedirs(args.output, exist_ok=True)
 
-    # Fetch stargazers
+    # Fetch accurate counts from repo API
+    print(f"Fetching repo stats for {args.repo}...")
+    repo_stats = fetch_repo_stats(owner, repo, args.token)
+    stargazers_total = repo_stats["stargazers_count"]
+    forks_total = repo_stats["forks_count"]
+    print(f"Repo stats: {stargazers_total:,} stars, {forks_total:,} forks")
+
+    # Fetch stargazers (only need latest ones for avatars)
     print(f"Fetching stargazers for {args.repo}...")
     stargazers_url = f"https://api.github.com/repos/{owner}/{repo}/stargazers"
-    stargazers, stargazers_total = fetch_github_api(stargazers_url, args.token)
-    print(f"Found {stargazers_total} stargazers")
+    stargazers, _ = fetch_github_api(stargazers_url, args.token)
+    print(f"Fetched {len(stargazers)} stargazer records for avatars")
 
-    # Fetch forkers
+    # Fetch forkers (only need latest ones for avatars)
     print(f"Fetching forkers for {args.repo}...")
     forks_url = f"https://api.github.com/repos/{owner}/{repo}/forks"
-    forks, forks_total = fetch_github_api(forks_url, args.token)
+    forks, _ = fetch_github_api(forks_url, args.token)
     forkers = [
         {"login": f["owner"]["login"], "avatar_url": f["owner"]["avatar_url"]} for f in forks
     ]
-    print(f"Found {forks_total} forkers")
+    print(f"Fetched {len(forkers)} forker records for avatars")
 
     # Generate stargazers SVG
     print("Generating stargazers SVG...")

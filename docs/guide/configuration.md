@@ -1,143 +1,81 @@
 # Configuration
 
-DeepTutor uses YAML configuration files for easy customization.
-
-## 📁 Configuration Files
-
-```
-config/
-├── main.yaml              # Main system configuration (all module settings)
-├── agents.yaml            # Unified agent parameters (temperature, max_tokens)
-└── README.md              # Full documentation
-```
+## Config Files
 
 | File | Purpose |
-|------|---------|
-| `config/main.yaml` | Server ports, paths, tools, module settings |
-| `config/agents.yaml` | LLM parameters for each agent module |
-| `.env` | API keys and secrets |
+|:-----|:--------|
+| `.env` | API keys, ports, providers |
+| `config/agents.yaml` | LLM parameters (temperature, max_tokens) |
+| `config/main.yaml` | Paths, tools, module settings |
 
-## 🔧 Server Configuration
+## Environment Variables
 
-Edit `config/main.yaml`:
-
-```yaml
-server:
-  backend_port: 8001
-  frontend_port: 3782
-
-system:
-  language: en  # "zh" or "en"
-```
-
-## 🤖 Agent LLM Configuration
-
-Each module has unified LLM settings in `config/agents.yaml`:
-
-```yaml
-# Solve Module - Problem solving agents
-solve:
-  temperature: 0.3
-  max_tokens: 8192
-
-# Research Module - Deep research agents
-research:
-  temperature: 0.5
-  max_tokens: 12000
-
-# Question Module - Question generation agents
-question:
-  temperature: 0.7
-  max_tokens: 4096
-
-# Guide Module - Learning guidance agents
-guide:
-  temperature: 0.5
-  max_tokens: 8192
-
-# IdeaGen Module - Idea generation agents
-ideagen:
-  temperature: 0.7
-  max_tokens: 4096
-
-# CoWriter Module - Collaborative writing agents
-co_writer:
-  temperature: 0.7
-  max_tokens: 4096
-```
-
-## 🔑 Environment Variables
-
-Create a `.env` file based on `.env.example`:
+### Required
 
 ```bash
-# ============================================================================
-# LLM (Large Language Model) Configuration - Required
-# ============================================================================
-LLM_BINDING=openai                        # Options: openai, azure_openai, ollama
-LLM_MODEL=gpt-4o                          # e.g., gpt-4o, deepseek-chat, qwen-plus
-LLM_BINDING_HOST=https://api.openai.com/v1
-LLM_BINDING_API_KEY=your_api_key
+# LLM
+LLM_MODEL=gpt-4o
+LLM_API_KEY=your_api_key
+LLM_HOST=https://api.openai.com/v1
 
-# ============================================================================
-# Embedding Model Configuration - Required for Knowledge Base
-# ============================================================================
-EMBEDDING_BINDING=openai
-EMBEDDING_MODEL=text-embedding-3-large    # e.g., text-embedding-3-large, text-embedding-3-small
-EMBEDDING_DIM=3072                        # Important !! Must match model dimensions
-EMBEDDING_BINDING_HOST=https://api.openai.com/v1
-EMBEDDING_BINDING_API_KEY=your_api_key
+# Embedding
+EMBEDDING_MODEL=text-embedding-3-large
+EMBEDDING_API_KEY=your_api_key
+EMBEDDING_HOST=https://api.openai.com/v1
+EMBEDDING_DIMENSION=3072
+```
 
-# ============================================================================
-# Optional Features
-# ============================================================================
-# Web Search (Perplexity API)
-PERPLEXITY_API_KEY=your_perplexity_key
+### Optional
 
-# TTS (Text-to-Speech) for Co-Writer narration
+```bash
+# Server ports (defaults: 8001/3782)
+BACKEND_PORT=8001
+FRONTEND_PORT=3782
+
+# Remote access
+NEXT_PUBLIC_API_BASE=http://your-server-ip:8001
+
+# Web search
+SEARCH_PROVIDER=perplexity  # or: baidu
+PERPLEXITY_API_KEY=your_key
+
+# TTS
 TTS_MODEL=
 TTS_URL=
 TTS_API_KEY=
 ```
 
-> **Note**: Please make sure you have configured the right dimensions. Currently our RAG module uses RAG-Anything, you could further check [its repo](https://github.com/HKUDS/RAG-Anything) for more questions.
+## Agent Parameters
 
-## 🛠️ Tool Configuration
-
-Configure tool availability in `config/main.yaml`:
+Edit `config/agents.yaml`:
 
 ```yaml
-tools:
-  rag_tool:
-    kb_base_dir: ./data/knowledge_bases
-    default_kb: ai_textbook
-  run_code:
-    workspace: ./data/user/run_code_workspace
-  web_search:
-    enabled: true  # Global switch for web search
-  query_item:
-    enabled: true
-    max_results: 5
+solve:
+  temperature: 0.3
+  max_tokens: 8192
+
+research:
+  temperature: 0.5
+  max_tokens: 12000
+
+question:
+  temperature: 0.7
+  max_tokens: 4096
 ```
 
-## 📂 Data Storage
-
-All user content and system data are stored in the `data/` directory:
+## Data Locations
 
 ```
 data/
-├── knowledge_bases/              # Knowledge base storage
-└── user/                         # User activity data
-    ├── solve/                    # Problem solving results
-    ├── question/                 # Generated questions
-    ├── research/                 # Research reports and cache
-    ├── co-writer/                # Interactive IdeaGen documents
-    ├── notebook/                 # Notebook records
-    ├── guide/                    # Guided learning sessions
-    ├── logs/                     # System logs
-    └── run_code_workspace/       # Code execution workspace
+├── knowledge_bases/    # Your uploaded documents
+└── user/
+    ├── solve/          # Problem solving outputs
+    ├── question/       # Generated questions
+    ├── research/       # Research reports
+    ├── guide/          # Learning sessions
+    └── logs/           # System logs
 ```
 
-## 🔗 Advanced Configuration
+---
 
-For the full configuration reference, see [config/README.md](https://github.com/HKUDS/DeepTutor/tree/main/config).
+📖 **Full reference**: [config/README.md](https://github.com/HKUDS/DeepTutor/tree/main/config)

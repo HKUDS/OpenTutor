@@ -229,11 +229,11 @@ cp .env.example .env
 | Variável | Obrigatório | Descrição |
 |:---|:---:|:---|
 | `LLM_MODEL` | **Sim** | Nome do modelo (ex: `gpt-4o`) |
-| `LLM_BINDING_API_KEY` | **Sim** | Sua chave API LLM |
-| `LLM_BINDING_HOST` | **Sim** | URL do endpoint da API |
+| `LLM_API_KEY` | **Sim** | Sua chave API LLM |
+| `LLM_HOST` | **Sim** | URL do endpoint da API |
 | `EMBEDDING_MODEL` | **Sim** | Nome do modelo de incorporação |
-| `EMBEDDING_BINDING_API_KEY` | **Sim** | Chave API de incorporação |
-| `EMBEDDING_BINDING_HOST` | **Sim** | Endpoint da API de incorporação |
+| `EMBEDDING_API_KEY` | **Sim** | Chave API de incorporação |
+| `EMBEDDING_HOST` | **Sim** | Endpoint da API de incorporação |
 | `BACKEND_PORT` | Não | Porta do backend (padrão: `8001`) |
 | `FRONTEND_PORT` | Não | Porta do frontend (padrão: `3782`) |
 | `TTS_*` | Não | Configurações de texto para voz |
@@ -291,11 +291,11 @@ cp .env.example .env
 docker run -d --name deeptutor \
   -p 8001:8001 -p 3782:3782 \
   -e LLM_MODEL=gpt-4o \
-  -e LLM_BINDING_API_KEY=your-api-key \
-  -e LLM_BINDING_HOST=https://api.openai.com/v1 \
+  -e LLM_API_KEY=your-api-key \
+  -e LLM_HOST=https://api.openai.com/v1 \
   -e EMBEDDING_MODEL=text-embedding-3-large \
-  -e EMBEDDING_BINDING_API_KEY=your-api-key \
-  -e EMBEDDING_BINDING_HOST=https://api.openai.com/v1 \
+  -e EMBEDDING_API_KEY=your-api-key \
+  -e EMBEDDING_HOST=https://api.openai.com/v1 \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/config:/app/config:ro \
   ghcr.io/hkuds/deeptutor:latest

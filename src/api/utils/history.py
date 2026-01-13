@@ -8,6 +8,7 @@ class ActivityType(str, Enum):
     SOLVE = "solve"
     QUESTION = "question"
     RESEARCH = "research"
+    CHAT = "chat"
 
 
 class HistoryManager:

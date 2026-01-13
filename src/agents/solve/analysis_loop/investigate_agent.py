@@ -14,9 +14,9 @@ sys.path.insert(0, str(project_root))
 
 import json
 
+from src.agents.base_agent import BaseAgent
 from src.tools import query_numbered_item, rag_search, web_search
 
-from ..base_agent import BaseAgent
 from ..memory import CitationMemory, InvestigateMemory, KnowledgeItem
 from ..utils.json_utils import extract_json_from_text
 
@@ -25,11 +25,14 @@ class InvestigateAgent(BaseAgent):
     """Investigator Agent - Generates queries and calls tools"""
 
     def __init__(self, config: dict[str, Any], api_key: str, base_url: str, token_tracker=None):
+        language = config.get("system", {}).get("language", "zh")
         super().__init__(
-            config=config,
+            module_name="solve",
+            agent_name="investigate_agent",
             api_key=api_key,
             base_url=base_url,
-            agent_name="investigate_agent",
+            language=language,
+            config=config,
             token_tracker=token_tracker,
         )
         # Read web_search enabled config from tools.web_search.enabled

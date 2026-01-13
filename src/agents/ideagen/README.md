@@ -206,8 +206,8 @@ markdown = await workflow.generate_markdown(filtered_points, ideas_map)
 Required environment variables (same as other modules):
 
 ```bash
-LLM_BINDING_API_KEY=your_api_key
-LLM_BINDING_HOST=https://api.openai.com/v1
+LLM_API_KEY=your_api_key
+LLM_HOST=https://api.openai.com/v1
 LLM_MODEL=gpt-4o
 ```
 

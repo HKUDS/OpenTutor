@@ -7,10 +7,7 @@ import yaml
 
 
 class ConfigManager:
-    """
-    Thread-safe manager for reading and writing configuration files.
-    Primarily manages config/main.yaml and reads .env.
-    """
+    """Thread-safe manager for config/main.yaml and .env."""
 
     _instance = None
     _lock = Lock()
@@ -34,10 +31,7 @@ class ConfigManager:
         self._initialized = True
 
     def load_config(self, force_reload: bool = False) -> Dict[str, Any]:
-        """
-        Load configuration from main.yaml.
-        Uses caching based on file modification time.
-        """
+        """Load config/main.yaml with file-mtime caching."""
         if not self.config_path.exists():
             return {}
 
@@ -53,24 +47,13 @@ class ConfigManager:
                     print(f"Error loading config: {e}")
                     return {}
 
-        return self._config_cache.copy()  # Return copy to prevent direct mutation
+        return self._config_cache.copy()
 
     def save_config(self, config: Dict[str, Any]) -> bool:
-        """
-        Save configuration to main.yaml.
-        Merges provided config with existing one to ensure partial updates work if needed,
-        though usually we expect full section replacements.
-        """
+        """Save config to main.yaml with deep merge."""
         try:
-            # First, load current to ensure we have latest structure
             current_config = self.load_config(force_reload=True)
 
-            # recursive update strategy could be implemented here if granular updates are needed,
-            # but for now we expect the caller to provide structurally correct data or we just save what's given.
-            # To be safe against partial updates killing unrelated sections, we should assume 'config'
-            # might just contain the sections to update.
-
-            # Simple recursive update helper
             def deep_update(target, source):
                 for key, value in source.items():
                     if isinstance(value, dict) and key in target and isinstance(target[key], dict):
@@ -80,7 +63,6 @@ class ConfigManager:
 
             deep_update(current_config, config)
 
-            # Ensure directory exists
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
 
             with self._lock:
@@ -93,7 +75,6 @@ class ConfigManager:
                         sort_keys=False,
                     )
 
-                # Update cache
                 self._config_cache = current_config
                 self._last_mtime = self.config_path.stat().st_mtime
 
@@ -104,12 +85,27 @@ class ConfigManager:
 
     def get_env_info(self) -> Dict[str, str]:
         """
-        Read relevant environment variables.
-        """
-        # Reload env vars from file could be done here using python-dotenv if needed,
-        # but usually os.environ is populated at startup.
-        # For dynamic .env reading, we might want to read the file directly.
+        Get actual LLM and Embedding configuration.
 
+        Strategy:
+        1. Try initialized services (most accurate)
+        2. Fallback to .env file parsing
+        3. Last resort: os.environ
+        """
+        env_vars = self._read_env_file()
+        llm_config = self._get_safe_llm_config(env_vars)
+        emb_config = self._get_safe_embedding_config(env_vars)
+
+        return {
+            "llm_model": llm_config["model"],
+            "llm_binding": llm_config["binding"],
+            "embedding_model": emb_config["model"],
+            "embedding_binding": emb_config["binding"],
+            "embedding_dim": str(emb_config["dim"]),
+        }
+
+    def _read_env_file(self) -> Dict[str, str]:
+        """Parse .env file directly."""
         env_vars = {}
         env_path = self.project_root / ".env"
 
@@ -123,15 +119,50 @@ class ConfigManager:
                         if "=" in line:
                             key, val = line.split("=", 1)
                             env_vars[key.strip()] = val.strip().strip('"').strip("'")
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Warning: Error reading .env: {e}")
 
-        # Fallback to os.environ for values not in .env file but set in environment
-        # Specific keys we care about
-        keys_of_interest = ["LLM_MODEL", "OPENAI_API_KEY", "GOOGLE_API_KEY"]  # Add others as needed
+        return env_vars
 
-        # We might want to mask keys, but returning model name is safe.
-        return {
-            "model": env_vars.get("LLM_MODEL", os.environ.get("LLM_MODEL", "Pro/Flash")),
-            # Add other non-sensitive info if needed
-        }
+    def _get_safe_llm_config(self, env_vars: Dict[str, str]) -> Dict[str, str]:
+        """Get LLM config with fallback chain."""
+        try:
+            from src.services.llm import get_llm_config
+
+            cfg = get_llm_config()
+            return {"model": cfg.model, "binding": cfg.binding}
+        except Exception as e:
+            # Fallback to env_vars (parsed from .env file)
+            model = env_vars.get("LLM_MODEL") or os.environ.get("LLM_MODEL", "unknown")
+            binding = env_vars.get("LLM_BINDING") or os.environ.get("LLM_BINDING", "openai")
+            return {"model": model, "binding": binding}
+
+    def _get_safe_embedding_config(self, env_vars: Dict[str, str]) -> Dict[str, Any]:
+        """Get Embedding config with fallback chain."""
+        try:
+            from src.services.embedding import get_embedding_config
+
+            cfg = get_embedding_config()
+            return {
+                "model": cfg.model,
+                "binding": cfg.binding,
+                "dim": cfg.dim,
+            }
+        except Exception as e:
+            # Fallback to env_vars (parsed from .env file)
+            dim_str = env_vars.get("EMBEDDING_DIM") or os.environ.get("EMBEDDING_DIM", "1536")
+            try:
+                dim = int(dim_str)
+            except (ValueError, TypeError):
+                dim = 1536
+
+            model = env_vars.get("EMBEDDING_MODEL") or os.environ.get("EMBEDDING_MODEL", "unknown")
+            binding = env_vars.get("EMBEDDING_BINDING") or os.environ.get(
+                "EMBEDDING_BINDING", "openai"
+            )
+
+            return {
+                "model": model,
+                "binding": binding,
+                "dim": dim,
+            }

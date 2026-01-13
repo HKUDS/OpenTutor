@@ -33,8 +33,9 @@ from src.knowledge.progress_tracker import ProgressStage, ProgressTracker
 
 _project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(_project_root))
-from src.core.core import get_llm_config, load_config_with_main
-from src.core.logging import get_logger
+from src.logging import get_logger
+from src.services.config import load_config_with_main
+from src.services.llm import get_llm_config
 
 # Initialize logger with config
 project_root = Path(__file__).parent.parent.parent.parent
@@ -457,8 +458,8 @@ async def upload_files(
 
         try:
             llm_config = get_llm_config()
-            api_key = llm_config["api_key"]
-            base_url = llm_config["base_url"]
+            api_key = llm_config.api_key
+            base_url = llm_config.base_url
         except ValueError as e:
             raise HTTPException(status_code=500, detail=f"LLM config error: {e!s}")
 
@@ -504,8 +505,8 @@ async def create_knowledge_base(
 
         try:
             llm_config = get_llm_config()
-            api_key = llm_config["api_key"]
-            base_url = llm_config["base_url"]
+            api_key = llm_config.api_key
+            base_url = llm_config.base_url
         except ValueError as e:
             raise HTTPException(status_code=500, detail=f"LLM config error: {e!s}")
 
