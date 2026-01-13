@@ -6,9 +6,11 @@ import {
   Database,
   FileText,
   FolderOpen,
+  FolderSync,
   Image as ImageIcon,
   Layers,
   Link,
+  LinkOff,
   MoreVertical,
   Plus,
   Search,
@@ -17,6 +19,8 @@ import {
   Loader2,
   X,
   RefreshCw,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import { apiUrl, wsUrl } from "@/lib/api";
 
@@ -51,6 +55,13 @@ interface LinkedFolder {
   path: string;
   added_at: string;
   file_count: number;
+  last_sync?: string;
+}
+
+interface FolderChanges {
+  has_changes: boolean;
+  new_count: number;
+  modified_count: number;
 }
 
 export default function KnowledgePage() {
@@ -71,6 +82,13 @@ export default function KnowledgePage() {
   const [linkFolderModalOpen, setLinkFolderModalOpen] = useState(false);
   const [folderPath, setFolderPath] = useState("");
   const [linking, setLinking] = useState(false);
+  const [linkedFoldersMap, setLinkedFoldersMap] = useState<
+    Record<string, LinkedFolder[]>
+  >({});
+  const [folderChangesMap, setFolderChangesMap] = useState<
+    Record<string, FolderChanges>
+  >({});
+  const [syncingFolders, setSyncingFolders] = useState<Set<string>>(new Set());
   // Use ref only for WebSocket connections (no need for state as it's not used in render)
   const wsConnectionsRef = useRef<Record<string, WebSocket>>({});
   const kbsNamesRef = useRef<string[]>([]);
@@ -618,6 +636,7 @@ export default function KnowledgePage() {
       setLinkFolderModalOpen(false);
       setFolderPath("");
       await fetchKnowledgeBases();
+      await fetchLinkedFolders(targetKb);
 
       alert(
         `Folder linked successfully! Found ${folderInfo.file_count} documents. Processing started in background.`,
@@ -629,6 +648,122 @@ export default function KnowledgePage() {
       setLinking(false);
     }
   };
+
+  // Fetch linked folders for a knowledge base
+  const fetchLinkedFolders = useCallback(async (kbName: string) => {
+    try {
+      const res = await fetch(
+        apiUrl(`/api/v1/knowledge/${kbName}/linked-folders`),
+      );
+      if (res.ok) {
+        const folders: LinkedFolder[] = await res.json();
+        setLinkedFoldersMap((prev) => ({ ...prev, [kbName]: folders }));
+
+        // Check for changes in each folder
+        for (const folder of folders) {
+          try {
+            const changesRes = await fetch(
+              apiUrl(
+                `/api/v1/knowledge/${kbName}/linked-folders/${folder.id}/changes`,
+              ),
+            );
+            if (changesRes.ok) {
+              const changes: FolderChanges = await changesRes.json();
+              setFolderChangesMap((prev) => ({
+                ...prev,
+                [`${kbName}:${folder.id}`]: changes,
+              }));
+            }
+          } catch (e) {
+            console.warn(`Failed to check changes for folder ${folder.id}:`, e);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`Failed to fetch linked folders for ${kbName}:`, err);
+    }
+  }, []);
+
+  // Sync a linked folder (process new/modified files)
+  const handleSyncFolder = async (kbName: string, folderId: string) => {
+    const syncKey = `${kbName}:${folderId}`;
+    setSyncingFolders((prev) => new Set(prev).add(syncKey));
+
+    try {
+      const res = await fetch(
+        apiUrl(`/api/v1/knowledge/${kbName}/sync-folder/${folderId}`),
+        { method: "POST" },
+      );
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.detail || "Sync failed");
+      }
+
+      const result = await res.json();
+      await fetchKnowledgeBases();
+      await fetchLinkedFolders(kbName);
+
+      if (result.file_count === 0) {
+        alert("No new or modified files to sync.");
+      } else {
+        alert(
+          `Syncing ${result.file_count} files (${result.new_files || 0} new, ${result.modified_files || 0} modified). Processing in background.`,
+        );
+      }
+    } catch (err: any) {
+      console.error("Sync error:", err);
+      alert(`Sync failed: ${err.message}`);
+    } finally {
+      setSyncingFolders((prev) => {
+        const next = new Set(prev);
+        next.delete(syncKey);
+        return next;
+      });
+    }
+  };
+
+  // Unlink a folder from a knowledge base
+  const handleUnlinkFolder = async (
+    kbName: string,
+    folderId: string,
+    folderPath: string,
+  ) => {
+    if (
+      !confirm(
+        `Are you sure you want to unlink "${folderPath}"?\n\nNote: This will only remove the folder link. Documents already processed will remain in the knowledge base.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        apiUrl(`/api/v1/knowledge/${kbName}/linked-folders/${folderId}`),
+        { method: "DELETE" },
+      );
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.detail || "Failed to unlink folder");
+      }
+
+      await fetchLinkedFolders(kbName);
+      alert("Folder unlinked successfully.");
+    } catch (err: any) {
+      console.error("Unlink error:", err);
+      alert(`Failed to unlink folder: ${err.message}`);
+    }
+  };
+
+  // Fetch linked folders when KBs are loaded
+  useEffect(() => {
+    if (kbs.length > 0) {
+      kbs.forEach((kb) => {
+        fetchLinkedFolders(kb.name);
+      });
+    }
+  }, [kbs, fetchLinkedFolders]);
 
   return (
     <div className="animate-fade-in h-screen overflow-y-auto p-6">
@@ -902,6 +1037,113 @@ export default function KnowledgePage() {
                     return null;
                   })()}
                 </div>
+
+                {/* Linked Folders Section */}
+                {linkedFoldersMap[kb.name] &&
+                  linkedFoldersMap[kb.name].length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+                      <div className="flex items-center gap-1.5 mb-3">
+                        <FolderOpen className="w-3.5 h-3.5 text-emerald-500" />
+                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                          Linked Folders
+                        </span>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                          ({linkedFoldersMap[kb.name].length})
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {linkedFoldersMap[kb.name].map((folder) => {
+                          const syncKey = `${kb.name}:${folder.id}`;
+                          const changes = folderChangesMap[syncKey];
+                          const isSyncing = syncingFolders.has(syncKey);
+                          const hasChanges =
+                            changes?.has_changes &&
+                            (changes.new_count > 0 ||
+                              changes.modified_count > 0);
+
+                          return (
+                            <div
+                              key={folder.id}
+                              className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-2.5 group/folder"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                    <FolderOpen className="w-3 h-3 flex-shrink-0 text-slate-400" />
+                                    <span
+                                      className="truncate"
+                                      title={folder.path}
+                                    >
+                                      {folder.path.length > 30
+                                        ? `...${folder.path.slice(-27)}`
+                                        : folder.path}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                                      {folder.file_count} files
+                                    </span>
+                                    {hasChanges && (
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                                        <AlertCircle className="w-2.5 h-2.5" />
+                                        {changes.new_count > 0 &&
+                                          `${changes.new_count} new`}
+                                        {changes.new_count > 0 &&
+                                          changes.modified_count > 0 &&
+                                          ", "}
+                                        {changes.modified_count > 0 &&
+                                          `${changes.modified_count} modified`}
+                                      </span>
+                                    )}
+                                    {!hasChanges && folder.last_sync && (
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-600 dark:text-emerald-400">
+                                        <CheckCircle2 className="w-2.5 h-2.5" />
+                                        Synced
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1 opacity-0 group-hover/folder:opacity-100 transition-opacity">
+                                  <button
+                                    onClick={() =>
+                                      handleSyncFolder(kb.name, folder.id)
+                                    }
+                                    disabled={isSyncing}
+                                    className={`p-1.5 rounded-md transition-colors ${
+                                      isSyncing
+                                        ? "bg-blue-100 dark:bg-blue-900/40 text-blue-500"
+                                        : "hover:bg-blue-100 dark:hover:bg-blue-900/40 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
+                                    }`}
+                                    title="Sync folder"
+                                  >
+                                    <RefreshCw
+                                      className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`}
+                                    />
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleUnlinkFolder(
+                                        kb.name,
+                                        folder.id,
+                                        folder.path,
+                                      )
+                                    }
+                                    className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-md text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                                    title="Unlink folder"
+                                  >
+                                    <LinkOff className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 italic">
+                        💡 Hover to see sync/unlink actions
+                      </p>
+                    </div>
+                  )}
               </div>
             </div>
           ))}
@@ -1109,7 +1351,8 @@ export default function KnowledgePage() {
               <span className="font-semibold text-slate-700 dark:text-slate-200">
                 {targetKb}
               </span>
-              . Documents will be synced to the knowledge base.
+              . Documents in the folder will be processed and added to this
+              knowledge base.
             </p>
 
             <form onSubmit={handleLinkFolder} className="space-y-4">
@@ -1125,19 +1368,35 @@ export default function KnowledgePage() {
                   id="folder-path"
                   value={folderPath}
                   onChange={(e) => setFolderPath(e.target.value)}
-                  placeholder="~/Documents/my-folder"
+                  placeholder="Paste or type the full folder path"
                   className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 />
-                <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
-                  Examples: ~/Documents, /Users/name/folder,
-                  C:\Users\name\folder
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                    <strong>macOS/Linux:</strong> ~/Documents/papers or
+                    /Users/name/folder
+                  </p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                    <strong>Windows:</strong> C:\Users\name\Documents\papers
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3">
+                <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+                  📄 Supported files: PDF, DOCX, TXT, MD
+                </p>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                  New and modified files will be automatically detected when you
+                  sync.
                 </p>
               </div>
 
               <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3 border border-emerald-100 dark:border-emerald-800">
                 <p className="text-xs text-emerald-700 dark:text-emerald-400">
-                  <strong>Tip:</strong> This folder can be synced with Google
-                  Drive, SharePoint, OneDrive, or Dropbox for automatic updates.
+                  <strong>💡 Tip:</strong> Use folders synced with Google Drive,
+                  OneDrive, SharePoint, or Dropbox for automatic cloud
+                  integration.
                 </p>
               </div>
 
