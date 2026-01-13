@@ -387,8 +387,8 @@ async def sync_folder(kb_name: str, folder_id: str, background_tasks: Background
         # Get LLM config
         try:
             llm_config = get_llm_config()
-            api_key = llm_config["api_key"]
-            base_url = llm_config["base_url"]
+            api_key = llm_config.api_key
+            base_url = llm_config.base_url
         except ValueError as e:
             raise HTTPException(status_code=500, detail=f"LLM config error: {e!s}")
 
