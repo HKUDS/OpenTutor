@@ -336,6 +336,58 @@ class KnowledgeBaseManager:
         print(f"✓ RAG storage cleaned for '{kb_name}'")
         return True
 
+    def get_kb_content(self, kb_name: str) -> dict:
+        """
+        Get detailed content list (documents and images) for a knowledge base.
+
+        Args:
+            kb_name: Knowledge base name
+
+        Returns:
+            Dict with 'documents' and 'images' lists containing file metadata
+        """
+        if kb_name not in self.list_knowledge_bases():
+            raise ValueError(f"Knowledge base not found: {kb_name}")
+
+        kb_dir = self.base_dir / kb_name
+        raw_dir = kb_dir / "raw"
+        images_dir = kb_dir / "images"
+
+        content = {"documents": [], "images": []}
+
+        # Scan raw documents
+        if raw_dir.exists():
+            for f in raw_dir.iterdir():
+                if f.is_file() and not f.name.startswith("."):
+                    stat = f.stat()
+                    content["documents"].append(
+                        {
+                            "name": f.name,
+                            "path": str(f),
+                            "size": stat.st_size,
+                            "last_modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        }
+                    )
+
+        # Scan images
+        if images_dir.exists():
+            for f in images_dir.iterdir():
+                if f.is_file() and not f.name.startswith("."):
+                    stat = f.stat()
+                    content["images"].append(
+                        {
+                            "name": f.name,
+                            "path": str(f),
+                            "size": stat.st_size,
+                            "last_modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                        }
+                    )
+
+        return content
+
+    # Local Folder Integration
+    # ============================================================
+
 
 def main():
     # ============================================================

@@ -136,7 +136,12 @@ async def run_initialization_task(initializer: KnowledgeBaseInitializer):
 
 
 async def run_upload_processing_task(
-    kb_name: str, base_dir: str, api_key: str, base_url: str, uploaded_file_paths: list[str]
+    kb_name: str,
+    base_dir: str,
+    api_key: str,
+    base_url: str,
+    uploaded_file_paths: list[str],
+    folder_id: str | None = None,  # Optional: for folder sync state tracking
 ):
     """Background task for processing uploaded files"""
     task_manager = TaskIDManager.get_instance()
@@ -176,6 +181,18 @@ async def run_upload_processing_task(
             adder.extract_numbered_items_for_new_docs(processed_files, batch_size=20)
 
         adder.update_metadata(len(new_files))
+
+        # Update folder sync state if this was a folder sync operation
+        if folder_id:
+            try:
+                manager = get_kb_manager()
+                processed_paths_str = [str(p) for p in processed_files]
+                manager.mark_folder_synced(kb_name, folder_id, processed_paths_str)
+                logger.info(
+                    f"[{task_id}] Updated sync state for folder {folder_id}: {len(processed_files)} files"
+                )
+            except Exception as e:
+                logger.warning(f"[{task_id}] Failed to update folder sync state: {e}")
 
         progress_tracker.update(
             ProgressStage.COMPLETED,
@@ -581,6 +598,20 @@ async def websocket_progress(websocket: WebSocket, kb_name: str):
             await websocket.close()
         except:
             pass
+
+
+
+@router.get("/{kb_name}/content")
+async def get_kb_content(kb_name: str):
+    """Get list of content (documents and images) in a knowledge base"""
+    try:
+        manager = get_kb_manager()
+        return manager.get_kb_content(kb_name)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error getting KB content: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/{kb_name}/link-folder", response_model=LinkedFolderInfo)
