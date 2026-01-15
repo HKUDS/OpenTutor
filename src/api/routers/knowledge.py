@@ -142,6 +142,7 @@ async def run_upload_processing_task(
     base_url: str,
     uploaded_file_paths: list[str],
     rag_provider: str = None,
+    folder_id: str | None = None,  # For folder sync state tracking
 ):
     """Background task for processing uploaded files"""
     task_manager = TaskIDManager.get_instance()
@@ -179,18 +180,37 @@ async def run_upload_processing_task(
                 current=0,
                 total=len(processed_files),
             )
+
+            # Update sync state with SOURCE paths (not destination) for proper change detection
+            if folder_id:
+                try:
+                    manager = get_kb_manager()
+                    # Map processed files back to their source paths by matching filenames
+                    processed_basenames = {p.name for p in processed_files}
+                    synced_source_paths = [
+                        src for src in uploaded_file_paths if Path(src).name in processed_basenames
+                    ]
+                    manager.update_folder_sync_state(kb_name, folder_id, synced_source_paths)
+                    logger.info(
+                        f"Updated sync state for {len(synced_source_paths)} source files in folder {folder_id}"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to update folder sync state: {e}")
+
             adder.extract_numbered_items_for_new_docs(processed_files, batch_size=20)
 
         adder.update_metadata(len(new_files))
 
         progress_tracker.update(
             ProgressStage.COMPLETED,
-            f"Successfully processed {len(processed_files)} files!",
-            current=len(processed_files),
-            total=len(processed_files),
+            f"Successfully processed {len(processed_files) if processed_files else 0} files!",
+            current=len(processed_files) if processed_files else 0,
+            total=len(processed_files) if processed_files else len(new_files),
         )
 
-        logger.success(f"[{task_id}] Processed {len(processed_files)} files to KB '{kb_name}'")
+        logger.success(
+            f"[{task_id}] Processed {len(processed_files) if processed_files else 0} files to KB '{kb_name}'"
+        )
         task_manager.update_task_status(task_id, "completed")
     except Exception as e:
         error_msg = f"Upload processing failed (KB '{kb_name}'): {e}"
