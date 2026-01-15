@@ -33,16 +33,44 @@ config = load_config_with_main("solve_config.yaml", project_root)  # Use any con
 log_dir = config.get("paths", {}).get("user_log_dir") or config.get("logging", {}).get("log_dir")
 logger = get_logger("CoWriter", level="INFO", log_dir=log_dir)
 
-agent = EditAgent()
+# Get system language for agent
+_system_language = config.get("system", {}).get("language", "en")
 
-# Lazy load NarratorAgent (because TTS config may not exist)
-_narrator_agent = None
+# Singleton agent instances - use refresh_config() before each request
+# to pick up any configuration changes from Settings
+_edit_agent: EditAgent | None = None
+_narrator_agent: NarratorAgent | None = None
 
 
-def get_narrator_agent():
+def get_edit_agent() -> EditAgent:
+    """
+    Get the singleton EditAgent instance with refreshed configuration.
+
+    Uses a singleton pattern with refresh_config() to ensure:
+    1. Efficient reuse of the agent instance
+    2. Latest LLM configuration from Settings is always used
+    """
+    global _edit_agent
+    if _edit_agent is None:
+        _edit_agent = EditAgent(language=_system_language)
+    # Refresh config to pick up any changes from Settings
+    _edit_agent.refresh_config()
+    return _edit_agent
+
+
+def get_narrator_agent() -> NarratorAgent:
+    """
+    Get the singleton NarratorAgent instance with refreshed configuration.
+
+    Uses a singleton pattern with refresh_config() to ensure:
+    1. Efficient reuse of the agent instance
+    2. Latest LLM configuration from Settings is always used
+    """
     global _narrator_agent
     if _narrator_agent is None:
-        _narrator_agent = NarratorAgent()
+        _narrator_agent = NarratorAgent(language=_system_language)
+    # Refresh config to pick up any changes from Settings
+    _narrator_agent.refresh_config()
     return _narrator_agent
 
 
@@ -71,6 +99,9 @@ class AutoMarkResponse(BaseModel):
 @router.post("/edit", response_model=EditResponse)
 async def edit_text(request: EditRequest):
     try:
+        # Get agent with refreshed LLM configuration from Settings
+        agent = get_edit_agent()
+
         result = await agent.process(
             text=request.text,
             instruction=request.instruction,
@@ -93,6 +124,9 @@ async def edit_text(request: EditRequest):
 async def auto_mark_text(request: AutoMarkRequest):
     """AI auto-mark text"""
     try:
+        # Get agent with refreshed LLM configuration from Settings
+        agent = get_edit_agent()
+
         result = await agent.auto_mark(text=request.text)
 
         # Print token stats

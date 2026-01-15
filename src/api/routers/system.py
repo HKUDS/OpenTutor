@@ -82,7 +82,7 @@ async def get_system_status():
     return result
 
 
-@router.post("/test/llm/", response_model=TestResponse)
+@router.post("/test/llm", response_model=TestResponse)
 async def test_llm_connection():
     """
     Test LLM model connection by sending a simple completion request
@@ -150,7 +150,7 @@ async def test_llm_connection():
         )
 
 
-@router.post("/test/embeddings/", response_model=TestResponse)
+@router.post("/test/embeddings", response_model=TestResponse)
 async def test_embeddings_connection():
     """
     Test Embeddings model connection by sending a simple embedding request
@@ -201,7 +201,7 @@ async def test_embeddings_connection():
         )
 
 
-@router.post("/test/tts/", response_model=TestResponse)
+@router.post("/test/tts", response_model=TestResponse)
 async def test_tts_connection():
     """
     Test TTS model connection by checking configuration

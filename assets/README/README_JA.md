@@ -255,7 +255,8 @@ cp .env.example .env
 | `BACKEND_PORT` | いいえ | バックエンドポート（デフォルト：`8001`） |
 | `FRONTEND_PORT` | いいえ | フロントエンドポート（デフォルト：`3782`） |
 | `TTS_*` | いいえ | テキスト読み上げ設定 |
-| `PERPLEXITY_API_KEY` | いいえ | ウェブ検索用 |
+| `SEARCH_PROVIDER` | いいえ | 検索プロバイダー（オプション：`perplexity`, `tavily`, `serper`, `jina`, `exa`, `baidu`、デフォルト：`perplexity`）|
+| `SEARCH_API_KEY` | いいえ | 統一検索APIキー |
 
 </details>
 
@@ -382,9 +383,11 @@ source venv/bin/activate
 **依存関係をインストール**：
 
 ```bash
-bash scripts/install_all.sh
+# ワンクリックインストール（推奨）
+python scripts/install_all.py
+# または: bash scripts/install_all.sh
 
-# または手動：
+# または手動インストール
 pip install -r requirements.txt
 npm install --prefix web
 ```

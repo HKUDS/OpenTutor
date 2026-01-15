@@ -1,17 +1,18 @@
 """
 Question Generation Agents
-Agent modules for question generation and validation
+
+Specialized agents for question generation workflow:
+- RetrieveAgent: Knowledge retrieval from KB
+- GenerateAgent: Question generation
+- RelevanceAnalyzer: Question-KB relevance analysis
 """
 
-from .base_agent import Action, BaseAgent, Message, Observation
-from .generation_agent import QuestionGenerationAgent
-from .validation_agent import QuestionValidationAgent
+from .generate_agent import GenerateAgent
+from .relevance_analyzer import RelevanceAnalyzer
+from .retrieve_agent import RetrieveAgent
 
 __all__ = [
-    "BaseAgent",
-    "Action",
-    "Observation",
-    "Message",
-    "QuestionGenerationAgent",
-    "QuestionValidationAgent",
+    "RetrieveAgent",
+    "GenerateAgent",
+    "RelevanceAnalyzer",
 ]

@@ -9,12 +9,11 @@ from src.api.routers import (
     agent_config,
     chat,
     co_writer,
+    config,
     dashboard,
-    embedding_provider,
     guide,
     ideagen,
     knowledge,
-    llm_provider,
     notebook,
     question,
     research,
@@ -136,7 +135,16 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutdown")
 
 
-app = FastAPI(title="DeepTutor API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="DeepTutor API",
+    version="1.0.0",
+    lifespan=lifespan,
+    # Disable automatic trailing slash redirects to prevent protocol downgrade issues
+    # when deployed behind HTTPS reverse proxies (e.g., nginx).
+    # Without this, FastAPI's 307 redirects may change HTTPS to HTTP.
+    # See: https://github.com/HKUDS/DeepTutor/issues/112
+    redirect_slashes=False,
+)
 
 # Configure CORS
 app.add_middleware(
@@ -179,9 +187,8 @@ app.include_router(guide.router, prefix="/api/v1/guide", tags=["guide"])
 app.include_router(ideagen.router, prefix="/api/v1/ideagen", tags=["ideagen"])
 app.include_router(settings.router, prefix="/api/v1/settings", tags=["settings"])
 app.include_router(system.router, prefix="/api/v1/system", tags=["system"])
-app.include_router(llm_provider.router, prefix="/api/v1/config/llm", tags=["config"])
-app.include_router(embedding_provider.router, prefix="/api/v1/config/embedding", tags=["config"])
-app.include_router(agent_config.router, prefix="/api/v1/config", tags=["config"])
+app.include_router(config.router, prefix="/api/v1/config", tags=["config"])
+app.include_router(agent_config.router, prefix="/api/v1/agent-config", tags=["agent-config"])
 
 
 @app.get("/")

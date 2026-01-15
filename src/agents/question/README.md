@@ -1,176 +1,196 @@
 # Question Generation System
 
-Intelligent question generation system with **dual-mode architecture** supporting both knowledge base-driven custom generation and reference exam paper mimicking.
+Intelligent question generation system with **modular agent architecture** supporting both knowledge base-driven custom generation and reference exam paper mimicking.
 
 ## 📁 Directory Structure
 
 ```
 question/
 ├── __init__.py                    # Module exports
-├── agents/                        # Agent classes
+├── agents/                        # Specialized agents
 │   ├── __init__.py
-│   ├── base_agent.py             # Base agent class (ReAct paradigm)
-│   ├── generation_agent.py       # Question generation agent
-│   └── validation_agent.py       # Question validation agent (deprecated)
-├── tools/                         # Tools and utilities
-│   ├── __init__.py
-│   ├── pdf_parser.py             # PDF parsing with MinerU
-│   ├── question_extractor.py     # Extract questions from exams
-│   └── exam_mimic.py             # Reference-based question generation
+│   ├── retrieve_agent.py          # Knowledge retrieval from KB
+│   ├── generate_agent.py          # Question generation
+│   └── relevance_analyzer.py      # Question-KB relevance analysis
 ├── prompts/                       # Bilingual prompts (YAML)
-│   ├── zh/                       # Chinese prompts
-│   │   ├── generation_agent.yaml
-│   │   ├── validation_workflow.yaml
+│   ├── zh/                        # Chinese prompts
+│   │   ├── retrieve_agent.yaml
+│   │   ├── generate_agent.yaml
+│   │   ├── relevance_analyzer.yaml
 │   │   └── coordinator.yaml
-│   └── en/                       # English prompts
+│   └── en/                        # English prompts
 │       └── (same structure)
-├── coordinator.py                # Agent coordinator
-├── validation_workflow.py        # Validation workflow
-├── example.py                    # Usage examples
+├── coordinator.py                 # Workflow orchestration
+├── example.py                     # Usage examples
 └── README.md
+
+# Tools moved to src/tools/question/
+src/tools/question/
+├── __init__.py
+├── pdf_parser.py                  # PDF parsing with MinerU
+├── question_extractor.py          # Extract questions from exams
+└── exam_mimic.py                  # Reference-based question generation
 ```
 
 ## 🚀 Core Features
 
 ### Custom Mode (Knowledge Base-Driven)
-- ✅ **Intelligent Search Query Generation** - Generates configurable number of RAG queries (from `config/main.yaml`)
-- ✅ **Background Knowledge Acquisition** - Retrieves relevant knowledge using naive mode RAG
-- ✅ **Question Planning** - Creates comprehensive plan with question IDs, focuses, and types
-- ✅ **Single-Pass Validation** - Analyzes question relevance without iterative refinement
-- ✅ **Complete File Persistence** - Saves background knowledge, plan, and individual results
+- ✅ **Intelligent Search Query Generation** - Generates configurable number of RAG queries
+- ✅ **Background Knowledge Acquisition** - Retrieves relevant knowledge using RAG
+- ✅ **Question Planning** - Creates comprehensive plan with question IDs and focuses
+- ✅ **Single-Pass Relevance Analysis** - Analyzes question relevance (no iteration/rejection)
+- ✅ **Complete File Persistence** - Saves knowledge, plan, and individual results
 
 ### Mimic Mode (Reference Exam-Based)
 - ✅ **PDF Parsing** - Automatic PDF extraction using MinerU
 - ✅ **Question Extraction** - Identifies and extracts reference questions from exams
 - ✅ **Style Mimicking** - Generates similar questions based on reference structure
 - ✅ **Batch Organization** - All outputs saved to timestamped folders
-- ✅ **Progress Tracking** - Real-time updates for parsing, extracting, and generating stages
 
 ### Common Features
-- ✅ **Multimodal Content Support** - Correctly parses text, equations, images, and tables
-- ✅ **Batch Question Generation** - Handles multiple questions in parallel
-- ✅ **Bilingual Prompts** - Supports both Chinese and English prompts via YAML configuration
+- ✅ **Unified BaseAgent** - All agents inherit from `src/agents/base_agent.py`
+- ✅ **No Iteration Loops** - Single-pass generation + analysis
+- ✅ **Bilingual Prompts** - Supports both Chinese and English via YAML
 - ✅ **Real-time WebSocket Streaming** - Live progress updates to frontend
 
 ## System Architecture
 
-### Custom Mode Architecture
+### Modular Agent Architecture
+
 ```
 User Requirement
     ↓
-Generate RAG Queries (configurable count)
+┌─────────────────────────────────────────────────┐
+│ AgentCoordinator                                │
+│                                                 │
+│  1. RetrieveAgent                               │
+│     ├── Generate RAG queries (LLM)              │
+│     └── Execute RAG searches (parallel)         │
+│                                                 │
+│  2. Plan Generation (in coordinator)            │
+│     └── Create focuses for each question        │
+│                                                 │
+│  3. GenerateAgent (per question)                │
+│     └── Generate question from knowledge+focus  │
+│                                                 │
+│  4. RelevanceAnalyzer (per question)            │
+│     └── Analyze KB relevance (high/partial)     │
+│                                                 │
+└─────────────────────────────────────────────────┘
     ↓
-Retrieve Background Knowledge (naive mode)
-    ↓
-Create Question Plan (IDs, focuses, types)
-    ↓
-For each question:
-    GenerationAgent → ValidationWorkflow
-    ↓                     ↓
-  [retrieve]         [analyze_relevance]
-  [generate]         (single-pass, no rejection)
-    ↓
-Save: background_knowledge.json
-      question_plan.json
-      question_X_result.json
+Save Results:
+  - knowledge.json (queries + retrievals)
+  - plan.json (focuses)
+  - q_1/result.json, q_1/question.md
+  - q_2/result.json, q_2/question.md
+  - summary.json
 ```
 
 ### Mimic Mode Architecture
+
 ```
 PDF Upload / Parsed Directory
     ↓
-Parse PDF with MinerU
+Parse PDF with MinerU (tools/pdf_parser.py)
     ↓
-Extract Reference Questions
+Extract Reference Questions (tools/question_extractor.py)
     ↓
 For each reference question (parallel):
-    GenerationAgent → ValidationWorkflow
+    AgentCoordinator.generate_question(with_reference=True)
+    ├── RetrieveAgent
+    ├── GenerateAgent (with reference)
+    └── RelevanceAnalyzer
     ↓
-Save to: mimic_YYYYMMDD_HHMMSS_{pdf_name}/
-    ├── {pdf_name}.pdf
-    ├── auto/{pdf_name}.md
-    ├── {pdf_name}_questions.json
-    └── {pdf_name}_generated_questions.json
+Save to timestamped folder
 ```
 
 ## Core Components
 
-### 1. BaseAgent (Base Agent Class)
+### 1. RetrieveAgent
 
-Located in `agents/base_agent.py`. Implements ReAct loop: **Think → Act → Observe**
+Located in `agents/retrieve_agent.py`. Inherits from `src/agents/base_agent.py`.
 
-### 2. QuestionGenerationAgent
+**Responsibilities:**
+- Generate semantic search queries from requirements
+- Execute RAG searches in parallel
+- Merge and summarize retrieval results
 
-Located in `agents/generation_agent.py`. Generates questions based on knowledge base content or reference questions.
+```python
+retrieve_agent = RetrieveAgent(kb_name="math2211", language="en")
+result = await retrieve_agent.process(requirement, num_queries=3)
+# Returns: {"queries": [...], "retrievals": [...], "summary": "...", "has_content": True}
+```
 
-**Available Actions** (Custom Mode):
-- `retrieve`: Retrieve relevant knowledge from knowledge base
-- `generate_question`: Generate questions based on retrieved knowledge
-- `refine_question`: Modify questions based on validation feedback
-- `submit_question`: Submit question to validation workflow
+### 2. GenerateAgent
 
-**Key Changes**:
-- ❌ Removed `reject_task` action - no longer rejects tasks
-- ✅ Focuses on generation and refinement only
+Located in `agents/generate_agent.py`. Generates questions based on knowledge context.
 
-### 3. QuestionValidationWorkflow
+**Responsibilities:**
+- Generate custom questions from requirements + knowledge
+- Generate mimic questions from reference + knowledge
+- Output structured question JSON
 
-Located in `validation_workflow.py`. Validates question quality using single-pass analysis.
+```python
+generate_agent = GenerateAgent(language="en")
+result = await generate_agent.process(
+    requirement={"knowledge_point": "...", "difficulty": "medium"},
+    knowledge_context="...",
+    focus={"focus": "...", "type": "written"},
+    reference_question=None  # or "reference text" for mimic mode
+)
+# Returns: {"success": True, "question": {...}}
+```
 
-**Custom Mode Workflow**:
-- `retrieve` → `validate` → `analyze_relevance` → `return`
+### 3. RelevanceAnalyzer
 
-**Validation Output**:
-- `decision`: "approve" (always, no rejection)
-- `relevance`: "highly_relevant" | "partially_relevant"
-- `kb_coverage`: Detailed analysis of knowledge base content tested
-- `extension_points`: Explanation of extensions beyond KB (if applicable)
-- `issues`: List of quality issues (if any)
-- `suggestions`: Improvement suggestions (for refinement)
+Located in `agents/relevance_analyzer.py`. Replaces old validation workflow.
 
-**Mimic Mode Workflow**:
-- Similar structure, but validates against reference question style and knowledge base sufficiency
+**Key difference from old ValidationWorkflow:**
+- **NO rejection**: all questions are accepted
+- **NO iteration**: single-pass analysis
+- Output: relevance level (high/partial) with explanations
+
+```python
+analyzer = RelevanceAnalyzer(language="en")
+result = await analyzer.process(question={"question": "..."}, knowledge_context="...")
+# Returns: {"relevance": "high", "kb_coverage": "...", "extension_points": ""}
+```
 
 ### 4. AgentCoordinator
 
-Located in `coordinator.py`. Manages question generation workflows for both custom and mimic modes.
+Located in `coordinator.py`. Orchestrates the workflow using specialized agents.
 
-**Custom Mode Methods**:
-- `generate_questions_custom()`: Full pipeline from requirement text to final questions
-- `_generate_search_queries_from_text()`: Creates RAG queries (count from config)
-- `_create_question_plan()`: Generates question plan based on requirements
-- `generate_question()`: Single question generation with validation
-
-**Mimic Mode**:
-- Handled by `tools/exam_mimic.py` with coordinator for individual question generation
+**Methods:**
+- `generate_question()`: Single question generation (used by Mimic mode)
+- `generate_questions_custom()`: Batch generation from requirement
 
 ## Usage
 
-### Custom Mode - Full Pipeline
+### Custom Mode - Batch Generation
 
 ```python
 import asyncio
 from src.agents.question import AgentCoordinator
 
 async def main():
-    # Create coordinator
     coordinator = AgentCoordinator(
-        max_rounds=10,
         kb_name="math2211",
-        output_dir="data/user/question"
+        output_dir="data/user/question",
+        language="en"
     )
 
-    # Full pipeline from text requirement
     result = await coordinator.generate_questions_custom(
-        requirement_text="Generate 3 medium-difficulty questions about multivariable limits",
-        difficulty="medium",
-        question_type="choice",
-        count=3
+        requirement={
+            "knowledge_point": "Multivariable limits",
+            "difficulty": "medium",
+            "question_type": "choice"
+        },
+        num_questions=3
     )
 
     print(f"✅ Generated {result['completed']}/{result['requested']} questions")
-    for q in result['results']:
-        print(f"- {q['question']['question'][:50]}...")
+    for r in result['results']:
+        print(f"- [{r['analysis']['relevance']}] {r['question']['question'][:50]}...")
 
 asyncio.run(main())
 ```
@@ -178,29 +198,24 @@ asyncio.run(main())
 ### Custom Mode - Single Question
 
 ```python
-# Define question requirement
 requirement = {
-    "knowledge_point": "Limits and continuity of multivariable functions",
+    "knowledge_point": "Limits and continuity",
     "difficulty": "medium",
-    "question_type": "choice",
-    "focus": "Test path-dependent limits at (0,0)"
+    "question_type": "choice"
 }
 
-# Generate single question
 result = await coordinator.generate_question(requirement)
 
 if result["success"]:
-    print(f"✅ Generated in {result['rounds']} rounds")
     print(f"Question: {result['question']['question']}")
     print(f"Relevance: {result['validation']['relevance']}")
-else:
-    print(f"❌ Failed: {result['error']}")
+    print(f"KB Coverage: {result['validation']['kb_coverage']}")
 ```
 
 ### Mimic Mode - PDF Upload
 
 ```python
-from src.agents.question.tools.exam_mimic import mimic_exam_questions
+from src.tools.question import mimic_exam_questions
 
 result = await mimic_exam_questions(
     pdf_path="exams/midterm.pdf",
@@ -210,121 +225,47 @@ result = await mimic_exam_questions(
 )
 
 print(f"✅ Generated {result['successful_generations']} questions")
-print(f"Output: {result['output_file']}")
 ```
 
 ### Mimic Mode - Parsed Directory
 
 ```python
-# If you already have MinerU parsed results
 result = await mimic_exam_questions(
     paper_dir="data/parsed_exams/exam_20240101",
-    kb_name="math2211",
-    max_questions=None  # Generate for all reference questions
+    kb_name="math2211"
 )
-```
-
-## Prompts Configuration
-
-Prompts are stored in YAML files under `prompts/` directory with bilingual support:
-
-- `prompts/en/` - English prompts
-- `prompts/zh/` - Chinese prompts
-
-Each agent loads prompts based on the `language` parameter (default: "en").
-
-### YAML Format Example
-
-```yaml
-system: |
-  You are a professional Question Generation Agent...
-
-generate: |
-  Generate a question based on the following information:
-  Requirements: {requirements}
-  Retrieved knowledge: {knowledge}
-  ...
-
-refine: |
-  Please modify the question based on validation feedback:
-  ...
 ```
 
 ## Configuration
 
-### Environment Variables
+### `config/main.yaml`
 
-```bash
-# LLM API Configuration
-LLM_API_KEY=your_api_key_here
-LLM_HOST=https://api.openai.com/v1
-LLM_MODEL=gpt-4o
-```
-
-### Configuration Files
-
-**`config/main.yaml`** - RAG query count:
 ```yaml
 question:
-  rag_query_count: 3  # Number of RAG queries for background knowledge
+  # Refactored: no iteration loops (max_rounds removed)
+  rag_query_count: 3
+  max_parallel_questions: 1
+  rag_mode: naive
+  agents:
+    retrieve:
+      top_k: 30
+    generate:
+      max_retries: 2
+    relevance_analyzer:
+      enabled: true
 ```
 
-**`config/agents.yaml`** - Agent parameters:
+### `config/agents.yaml`
+
 ```yaml
 question:
   temperature: 0.7
   max_tokens: 4000
 ```
 
-## Tools
-
-### PDF Parsing (`tools/pdf_parser.py`)
-
-Uses MinerU for high-quality PDF extraction with formula and table support.
-
-```python
-from src.agents.question.tools import parse_pdf_with_mineru
-
-# Parse PDF to markdown
-success = await parse_pdf_with_mineru(
-    pdf_path="/path/to/exam.pdf",
-    output_base_dir="data/user/question/mimic_papers"
-)
-```
-
-### Question Extraction (`tools/question_extractor.py`)
-
-Extracts structured questions from parsed exam papers.
-
-```python
-from src.agents.question.tools import extract_questions_from_paper
-
-questions = await extract_questions_from_paper(
-    paper_dir="data/mimic_papers/exam_20241211",
-    output_dir="data/mimic_papers"
-)
-# Returns: [{"question_number": "1", "question_text": "...", "images": []}, ...]
-```
-
-### Exam Mimicking (`tools/exam_mimic.py`)
-
-Complete pipeline for reference-based question generation.
-
-```python
-from src.agents.question.tools import mimic_exam_questions
-
-result = await mimic_exam_questions(
-    pdf_path="exams/midterm.pdf",  # Or use paper_dir for parsed
-    kb_name="math2211",
-    output_dir="data/user/question/mimic_papers",
-    max_questions=5,
-    ws_callback=None  # Optional: async callback for progress updates
-)
-```
-
 ## Return Format
 
-### Custom Mode - Single Question
+### Single Question Result
 
 ```python
 {
@@ -338,56 +279,35 @@ result = await mimic_exam_questions(
         "knowledge_point": "Topic name"
     },
     "validation": {
-        "decision": "approve",  # Always approve, no rejection
-        "relevance": "highly_relevant",  # or "partially_relevant"
-        "kb_coverage": "This question tests...",  # For highly relevant
-        "extension_points": "This question extends...",  # For partially relevant
-        "issues": [],  # Quality issues if any
-        "suggestions": []  # Improvement suggestions
+        "decision": "approve",  # Always approve
+        "relevance": "high",    # or "partial"
+        "kb_coverage": "This question tests...",
+        "extension_points": ""  # Only if relevance is "partial"
     },
-    "rounds": 1  # Number of generation rounds (typically 1-2)
+    "rounds": 1  # Always 1 (no iteration)
 }
 ```
 
-### Custom Mode - Batch Generation
+### Batch Generation Result
 
 ```python
 {
-    "completed": 3,
+    "success": True,
     "requested": 3,
+    "completed": 3,
     "failed": 0,
+    "search_queries": ["query1", "query2", "query3"],
+    "plan": {"focuses": [...]},
     "results": [
         {
+            "question_id": "q_1",
+            "focus": {"focus": "...", "type": "written"},
             "question": {...},
-            "validation": {...},
-            "rounds": 1
-        },
-        ...
-    ]
-}
-```
-
-### Mimic Mode - Output
-
-```python
-{
-    "reference_paper": "exam_name",
-    "kb_name": "math2211",
-    "total_reference_questions": 5,
-    "successful_generations": 5,
-    "failed_generations": 0,
-    "generated_questions": [
-        {
-            "success": True,
-            "reference_question_number": "1",
-            "reference_question_text": "Original question...",
-            "generated_question": {...},
-            "validation": {...},
-            "rounds": 2
+            "analysis": {"relevance": "high", "kb_coverage": "..."}
         },
         ...
     ],
-    "output_file": "data/user/question/mimic_papers/mimic_20241211_120000_exam/..."
+    "failures": []
 }
 ```
 
@@ -396,131 +316,83 @@ result = await mimic_exam_questions(
 ### Custom Mode Directory Structure
 
 ```
-data/user/question/custom_YYYYMMDD_HHMMSS/
-├── background_knowledge.json       # RAG retrieval results
-│   {
-│     "queries": ["query1", "query2", "query3"],
-│     "knowledge": {
-│       "query1": {"chunks": [...], "entities": [...], "relations": [...]},
-│       ...
-│     }
-│   }
-│
-├── question_plan.json              # Question planning
-│   {
-│     "focuses": [
-│       {"id": "q_1", "focus": "...", "type": "choice"},
-│       {"id": "q_2", "focus": "...", "type": "written"},
-│       ...
-│     ]
-│   }
-│
-├── question_1_result.json          # Individual question + validation
-├── question_2_result.json
-└── ...
+data/user/question/batch_YYYYMMDD_HHMMSS/
+├── knowledge.json       # RAG queries and retrievals
+├── plan.json            # Question focuses
+├── q_1/
+│   ├── result.json      # Question + analysis
+│   └── question.md      # Human-readable format
+├── q_2/
+│   ├── result.json
+│   └── question.md
+└── summary.json         # Overall summary
 ```
 
 ### Mimic Mode Directory Structure
 
 ```
-data/user/question/mimic_papers/
-└── mimic_YYYYMMDD_HHMMSS_{pdf_name}/
-    ├── {pdf_name}.pdf                                      # Original PDF
-    ├── auto/{pdf_name}.md                                  # MinerU parsed markdown
-    ├── {pdf_name}_YYYYMMDD_HHMMSS_questions.json          # Extracted reference questions
-    │   {
-    │     "total_questions": 4,
-    │     "questions": [
-    │       {"question_number": "1", "question_text": "...", "images": []},
-    │       ...
-    │     ]
-    │   }
-    │
-    └── {pdf_name}_YYYYMMDD_HHMMSS_generated_questions.json # Generated questions
-        {
-          "reference_paper": "...",
-          "kb_name": "...",
-          "total_reference_questions": 4,
-          "successful_generations": 4,
-          "generated_questions": [
-            {
-              "reference_question_text": "...",
-              "generated_question": {...},
-              "validation": {...}
-            },
-            ...
-          ]
-        }
+data/user/question/mimic_papers/{paper_name}/
+├── auto/{paper_name}.md                              # MinerU parsed markdown
+├── {paper_name}_YYYYMMDD_HHMMSS_questions.json       # Extracted reference questions
+└── {paper_name}_YYYYMMDD_HHMMSS_generated.json       # Generated questions
 ```
 
 ## Key Changes from Previous Version
 
-### ✅ What's New
+### ✅ Architecture Changes
 
-1. **Dual-Mode Architecture**
-   - Custom mode: Knowledge base-driven generation
-   - Mimic mode: Reference exam paper mimicking
+1. **Unified BaseAgent**
+   - All agents now inherit from `src/agents/base_agent.py`
+   - Automatic LLM config, prompt loading, token tracking
+   - No more separate ReAct base class
 
-2. **Simplified Validation**
-   - Single-pass validation (no iterative refinement)
-   - Always approves questions (no rejection)
-   - Analyzes relevance: `highly_relevant` vs `partially_relevant`
+2. **Specialized Agents**
+   - `RetrieveAgent`: Knowledge retrieval only
+   - `GenerateAgent`: Question generation only
+   - `RelevanceAnalyzer`: Relevance analysis only (replaces ValidationWorkflow)
 
-3. **Enhanced File Persistence**
-   - All intermediate files saved (background knowledge, plan)
-   - Mimic mode: Timestamped batch folders
-   - Complete traceability for debugging
+3. **No Iteration/Rejection**
+   - Removed `max_rounds` from config
+   - Single-pass generation + analysis
+   - All questions accepted with relevance classification
 
-4. **Configurable RAG Queries**
-   - `rag_query_count` in `config/main.yaml`
-   - Previously hardcoded to 3
+4. **Tools Moved**
+   - `src/agents/question/tools/` → `src/tools/question/`
+   - Import via `from src.tools.question import ...`
 
-5. **Real-time Progress Tracking**
-   - WebSocket streaming for live updates
-   - Mimic mode stages: uploading → parsing → extracting → generating
+### ❌ Removed
 
-### ❌ What's Removed
+1. **Old ReAct Architecture**
+   - `agents/base_agent.py` (ReAct paradigm)
+   - `agents/generation_agent.py` (ReAct-based)
+   - `agents/validation_agent.py` (deprecated)
+   - `validation_workflow.py` (replaced by RelevanceAnalyzer)
 
-1. **Task Rejection Logic**
-   - Removed `reject_task` action from generation agent
-   - Questions always proceed to validation
-   - Validation analyzes relevance instead of rejecting
+2. **Iteration Logic**
+   - No more validation loops
+   - No more task rejection
+   - No more request_modification/request_regeneration
 
-2. **Iterative Refinement**
-   - No multi-round validation loop
-   - Single-pass generation + validation
-   - Reduces LLM calls and cost
-
-3. **Standalone Validation Agent**
-   - Merged into `ValidationWorkflow`
-   - Simplified architecture
+3. **Message Queue**
+   - Agent communication simplified
+   - Direct method calls instead of message passing
 
 ## Migration Notes
 
-If upgrading from the old structure:
-
-**File Structure Changes:**
-- `base_agent.py` → `agents/base_agent.py`
-- `question_generation_agent.py` → `agents/generation_agent.py`
-- `question_validation_agent.py` → `agents/validation_agent.py` (deprecated)
-- `question_tools/retrieve.py` → Removed (use RAG tool directly)
-- `parse_pdf_with_mineru.py` → `tools/pdf_parser.py`
-- `extract_questions_from_paper.py` → `tools/question_extractor.py`
-- `mimic_exam_paper.py` → `tools/exam_mimic.py`
-- `question_validation_workflow.py` → `validation_workflow.py`
-
 **Import Path Updates:**
+
 ```python
 # Old
-from .base_agent import BaseAgent
-from .question_tools import retrieve
+from src.agents.question import BaseAgent, QuestionGenerationAgent
+from src.tools.question import mimic_exam_questions
 
 # New
-from .agents import BaseAgent
-from src.tools import rag_search  # Use RAG tool directly
+from src.agents.question import RetrieveAgent, GenerateAgent, RelevanceAnalyzer
+from src.tools.question import mimic_exam_questions
 ```
 
 **API Changes:**
+
 ```python
 # Old - with rejection handling
 result = await coordinator.generate_question(requirement)
@@ -530,9 +402,8 @@ if result.get("error") == "task_rejected":
 # New - always generates, check relevance
 result = await coordinator.generate_question(requirement)
 if result["success"]:
-    relevance = result["validation"]["relevance"]
-    if relevance == "highly_relevant":
-        print(result["validation"]["kb_coverage"])
+    if result["validation"]["relevance"] == "high":
+        print("Fully covered by KB:", result["validation"]["kb_coverage"])
     else:
-        print(result["validation"]["extension_points"])
+        print("Extension question:", result["validation"]["extension_points"])
 ```

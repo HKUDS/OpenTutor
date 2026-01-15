@@ -4,7 +4,7 @@ LLM Factory - Central Hub for LLM Calls
 
 This module serves as the central hub for all LLM calls in DeepTutor.
 It provides a unified interface for agents to call LLMs, routing requests
-to the appropriate provider (cloud or local) based on configuration.
+to the appropriate provider (cloud or local) based on URL detection.
 
 Architecture:
     Agents (ChatAgent, GuideAgent, etc.)
@@ -20,10 +20,9 @@ CloudProvider      LocalProvider
               ↓                   ↓
 OpenAI/DeepSeek/etc    LM Studio/Ollama/etc
 
-Deployment Modes (LLM_MODE env var):
-- api: Only use cloud API providers
-- local: Only use local/self-hosted LLM servers
-- hybrid: Use whatever is active (default)
+Routing:
+- Automatically routes to local_provider for local URLs (localhost, 127.0.0.1, etc.)
+- Routes to cloud_provider for all other URLs
 
 Retry Mechanism:
 - Automatic retry with exponential backoff for transient errors
@@ -32,8 +31,6 @@ Retry Mechanism:
 """
 
 import asyncio
-from enum import Enum
-import os
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import tenacity
@@ -48,7 +45,6 @@ from .exceptions import (
     LLMRateLimitError,
     LLMTimeoutError,
 )
-from .provider import provider_manager
 from .utils import is_local_llm_server
 
 # Initialize logger
@@ -103,96 +99,17 @@ def _is_retriable_error(error: Exception) -> bool:
     return True
 
 
-class LLMMode(str, Enum):
-    """LLM deployment mode."""
-
-    API = "api"  # Cloud API only
-    LOCAL = "local"  # Local/self-hosted only
-    HYBRID = "hybrid"  # Both, use active provider
-
-
-def get_llm_mode() -> LLMMode:
-    """
-    Get the current LLM deployment mode from environment.
-
-    Returns:
-        LLMMode: Current deployment mode (defaults to hybrid)
-    """
-    mode = os.getenv("LLM_MODE", "hybrid").lower()
-    if mode == "api":
-        return LLMMode.API
-    elif mode == "local":
-        return LLMMode.LOCAL
-    return LLMMode.HYBRID
-
-
 def _should_use_local(base_url: Optional[str]) -> bool:
     """
-    Determine if we should use the local provider based on URL and mode.
+    Determine if we should use the local provider based on URL.
 
     Args:
         base_url: The base URL to check
 
     Returns:
-        True if local provider should be used
+        True if local provider should be used (localhost, 127.0.0.1, etc.)
     """
-    mode = get_llm_mode()
-
-    if mode == LLMMode.API:
-        return False
-    elif mode == LLMMode.LOCAL:
-        return True
-    else:  # HYBRID
-        return is_local_llm_server(base_url) if base_url else False
-
-
-def get_mode_info() -> Dict[str, Any]:
-    """
-    Get information about the current LLM configuration mode.
-
-    Returns:
-        Dict containing:
-        - mode: Current deployment mode
-        - active_provider: Active provider info (if any)
-        - env_configured: Whether env vars are properly configured
-        - effective_source: Which config source is being used
-    """
-    mode = get_llm_mode()
-    active_provider = provider_manager.get_active_provider()
-
-    try:
-        env_config = get_llm_config()
-        env_configured = bool(env_config.model and (env_config.base_url or env_config.api_key))
-    except ValueError:
-        env_config = None
-        env_configured = False
-
-    # Determine effective source
-    effective_source = "env"
-    if active_provider:
-        provider_is_local = active_provider.provider_type == "local"
-        if mode == LLMMode.HYBRID:
-            effective_source = "provider"
-        elif mode == LLMMode.API and not provider_is_local:
-            effective_source = "provider"
-        elif mode == LLMMode.LOCAL and provider_is_local:
-            effective_source = "provider"
-
-    return {
-        "mode": mode.value,
-        "active_provider": (
-            {
-                "name": active_provider.name,
-                "model": active_provider.model,
-                "provider_type": active_provider.provider_type,
-                "binding": active_provider.binding,
-            }
-            if active_provider
-            else None
-        ),
-        "env_configured": env_configured,
-        "effective_source": effective_source,
-    }
+    return is_local_llm_server(base_url) if base_url else False
 
 
 async def complete(
@@ -520,9 +437,6 @@ def get_provider_presets() -> Dict[str, Any]:
 
 
 __all__ = [
-    "LLMMode",
-    "get_llm_mode",
-    "get_mode_info",
     "complete",
     "stream",
     "fetch_models",

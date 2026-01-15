@@ -104,6 +104,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    bash \
     supervisor \
     libgl1 \
     libglib2.0-0 \
@@ -156,7 +157,7 @@ RUN mkdir -p \
 # Log output goes to stdout/stderr so docker logs can capture them
 RUN mkdir -p /etc/supervisor/conf.d
 
-COPY <<EOF /etc/supervisor/conf.d/deeptutor.conf
+RUN cat > /etc/supervisor/conf.d/deeptutor.conf <<'EOF'
 [supervisord]
 nodaemon=true
 logfile=/dev/null
@@ -187,8 +188,10 @@ stderr_logfile_maxbytes=0
 environment=NODE_ENV="production"
 EOF
 
+RUN sed -i 's/\r$//' /etc/supervisor/conf.d/deeptutor.conf
+
 # Create backend startup script
-COPY <<'EOF' /app/start-backend.sh
+RUN cat > /app/start-backend.sh <<'EOF'
 #!/bin/bash
 set -e
 
@@ -202,11 +205,11 @@ echo "[Backend]  🚀 Starting FastAPI backend on port ${BACKEND_PORT}..."
 exec python -m uvicorn src.api.main:app --host 0.0.0.0 --port ${BACKEND_PORT}
 EOF
 
-RUN chmod +x /app/start-backend.sh
+RUN sed -i 's/\r$//' /app/start-backend.sh && chmod +x /app/start-backend.sh
 
 # Create frontend startup script
 # This script handles runtime environment variable injection for Next.js
-COPY <<'EOF' /app/start-frontend.sh
+RUN cat > /app/start-frontend.sh <<'EOF'
 #!/bin/bash
 set -e
 
@@ -247,10 +250,10 @@ echo "NEXT_PUBLIC_API_BASE=${API_BASE}" > /app/web/.env.local
 cd /app/web && exec node node_modules/next/dist/bin/next start -H 0.0.0.0 -p ${FRONTEND_PORT}
 EOF
 
-RUN chmod +x /app/start-frontend.sh
+RUN sed -i 's/\r$//' /app/start-frontend.sh && chmod +x /app/start-frontend.sh
 
 # Create entrypoint script
-COPY <<'EOF' /app/entrypoint.sh
+RUN cat > /app/entrypoint.sh <<'EOF'
 #!/bin/bash
 set -e
 
@@ -298,7 +301,7 @@ echo "============================================"
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/deeptutor.conf
 EOF
 
-RUN chmod +x /app/entrypoint.sh
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Expose ports
 EXPOSE 8001 3782
@@ -329,7 +332,7 @@ RUN pip install --no-cache-dir \
 
 # Override supervisord config for development (with reload)
 # Log output goes to stdout/stderr so docker logs can capture them
-COPY <<EOF /etc/supervisor/conf.d/deeptutor.conf
+RUN cat > /etc/supervisor/conf.d/deeptutor.conf <<'EOF'
 [supervisord]
 nodaemon=true
 logfile=/dev/null
@@ -359,6 +362,8 @@ stderr_logfile=/dev/fd/2
 stderr_logfile_maxbytes=0
 environment=NODE_ENV="development"
 EOF
+
+RUN sed -i 's/\r$//' /etc/supervisor/conf.d/deeptutor.conf
 
 # Development ports
 EXPOSE 8001 3782

@@ -19,7 +19,7 @@ CloudProvider      LocalProvider
 Features:
 - Unified interface for all LLM providers (cloud + local)
 - Automatic retry with exponential backoff
-- Smart routing based on URL/configuration
+- Smart routing based on URL detection
 - Provider capability detection
 
 Usage:
@@ -43,15 +43,8 @@ Usage:
     from src.services.llm import get_llm_config, LLMConfig
     config = get_llm_config()
 
-    # Provider management
-    from src.services.llm import provider_manager, LLMProvider
-    providers = provider_manager.list_providers()
-
     # URL utilities for local LLM servers
     from src.services.llm import sanitize_url, is_local_llm_server
-
-    # Mode information
-    from src.services.llm import LLMMode, get_llm_mode, get_mode_info
 """
 
 # Also expose the providers for direct access if needed
@@ -91,19 +84,10 @@ from .factory import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_RETRY_DELAY,
     LOCAL_PROVIDER_PRESETS,
-    LLMMode,
     complete,
     fetch_models,
-    get_llm_mode,
-    get_mode_info,
     get_provider_presets,
     stream,
-)
-from .provider import (
-    LLMProvider,
-    LLMProviderManager,
-    ProviderType,
-    provider_manager,
 )
 from .utils import (
     build_auth_headers,
@@ -145,9 +129,6 @@ __all__ = [
     "LLMAuthenticationError",
     "LLMModelNotFoundError",
     # Factory (main API)
-    "LLMMode",
-    "get_llm_mode",
-    "get_mode_info",
     "complete",
     "stream",
     "fetch_models",
@@ -161,11 +142,6 @@ __all__ = [
     # Providers
     "cloud_provider",
     "local_provider",
-    # Provider Management
-    "ProviderType",
-    "LLMProvider",
-    "LLMProviderManager",
-    "provider_manager",
     # Utils
     "sanitize_url",
     "is_local_llm_server",

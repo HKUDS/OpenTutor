@@ -141,7 +141,7 @@ async def run_upload_processing_task(
     api_key: str,
     base_url: str,
     uploaded_file_paths: list[str],
-    folder_id: str | None = None,  # Optional: for folder sync state tracking
+    rag_provider: str = None,
 ):
     """Background task for processing uploaded files"""
     task_manager = TaskIDManager.get_instance()
@@ -166,6 +166,7 @@ async def run_upload_processing_task(
             api_key=api_key,
             base_url=base_url,
             progress_tracker=progress_tracker,
+            rag_provider=rag_provider,
         )
 
         new_files = [Path(path) for path in uploaded_file_paths]
@@ -181,18 +182,6 @@ async def run_upload_processing_task(
             adder.extract_numbered_items_for_new_docs(processed_files, batch_size=20)
 
         adder.update_metadata(len(new_files))
-
-        # Update folder sync state if this was a folder sync operation
-        if folder_id:
-            try:
-                manager = get_kb_manager()
-                processed_paths_str = [str(p) for p in processed_files]
-                manager.mark_folder_synced(kb_name, folder_id, processed_paths_str)
-                logger.info(
-                    f"[{task_id}] Updated sync state for folder {folder_id}: {len(processed_files)} files"
-                )
-            except Exception as e:
-                logger.warning(f"[{task_id}] Failed to update folder sync state: {e}")
 
         progress_tracker.update(
             ProgressStage.COMPLETED,
@@ -231,6 +220,105 @@ async def health_check():
         }
     except Exception as e:
         return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+
+
+@router.get("/rag-providers")
+async def get_rag_providers():
+    """Get list of available RAG providers."""
+    try:
+        from src.services.rag.service import RAGService
+
+        providers = RAGService.list_providers()
+        return {"providers": providers}
+    except Exception as e:
+        logger.error(f"Error getting RAG providers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/configs")
+async def get_all_kb_configs():
+    """Get all knowledge base configurations from centralized config file."""
+    try:
+        from src.services.config import get_kb_config_service
+
+        service = get_kb_config_service()
+        return service.get_all_configs()
+    except Exception as e:
+        logger.error(f"Error getting KB configs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{kb_name}/config")
+async def get_kb_config(kb_name: str):
+    """Get configuration for a specific knowledge base."""
+    try:
+        from src.services.config import get_kb_config_service
+
+        service = get_kb_config_service()
+        config = service.get_kb_config(kb_name)
+        return {"kb_name": kb_name, "config": config}
+    except Exception as e:
+        logger.error(f"Error getting config for KB '{kb_name}': {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{kb_name}/config")
+async def update_kb_config(kb_name: str, config: dict):
+    """Update configuration for a specific knowledge base."""
+    try:
+        from src.services.config import get_kb_config_service
+
+        service = get_kb_config_service()
+        service.set_kb_config(kb_name, config)
+        return {"status": "success", "kb_name": kb_name, "config": service.get_kb_config(kb_name)}
+    except Exception as e:
+        logger.error(f"Error updating config for KB '{kb_name}': {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/configs/sync")
+async def sync_configs_from_metadata():
+    """Sync all KB configurations from their metadata.json files to centralized config."""
+    try:
+        from src.services.config import get_kb_config_service
+
+        service = get_kb_config_service()
+        service.sync_all_from_metadata(_kb_base_dir)
+        return {"status": "success", "message": "Configurations synced from metadata files"}
+    except Exception as e:
+        logger.error(f"Error syncing configs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/default")
+async def get_default_kb():
+    """Get the default knowledge base."""
+    try:
+        manager = get_kb_manager()
+        default_kb = manager.get_default()
+        return {"default_kb": default_kb}
+    except Exception as e:
+        logger.error(f"Error getting default KB: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/default/{kb_name}")
+async def set_default_kb(kb_name: str):
+    """Set the default knowledge base."""
+    try:
+        manager = get_kb_manager()
+
+        # Verify KB exists
+        if kb_name not in manager.list_knowledge_bases():
+            raise HTTPException(status_code=404, detail=f"Knowledge base '{kb_name}' not found")
+
+        manager.set_default(kb_name)
+        return {"status": "success", "default_kb": kb_name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error setting default KB: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/list", response_model=list[KnowledgeBaseInfo])
@@ -333,7 +421,10 @@ async def delete_knowledge_base(kb_name: str):
 
 @router.post("/{kb_name}/upload")
 async def upload_files(
-    kb_name: str, background_tasks: BackgroundTasks, files: list[UploadFile] = File(...)
+    kb_name: str,
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] = File(...),
+    rag_provider: str = Form(None),
 ):
     """Upload files to a knowledge base and process them in background."""
     try:
@@ -405,6 +496,7 @@ async def upload_files(
             api_key=api_key,
             base_url=base_url,
             uploaded_file_paths=uploaded_file_paths,
+            rag_provider=rag_provider,
         )
 
         return {
@@ -421,7 +513,10 @@ async def upload_files(
 
 @router.post("/create")
 async def create_knowledge_base(
-    background_tasks: BackgroundTasks, name: str = Form(...), files: list[UploadFile] = File(...)
+    background_tasks: BackgroundTasks,
+    name: str = Form(...),
+    files: list[UploadFile] = File(...),
+    rag_provider: str = Form("raganything"),
 ):
     """Create a new knowledge base and initialize it with files."""
     try:
@@ -450,6 +545,7 @@ async def create_knowledge_base(
             api_key=api_key,
             base_url=base_url,
             progress_tracker=progress_tracker,
+            rag_provider=rag_provider,
         )
 
         initializer.create_directory_structure()
@@ -598,20 +694,6 @@ async def websocket_progress(websocket: WebSocket, kb_name: str):
             await websocket.close()
         except:
             pass
-
-
-
-@router.get("/{kb_name}/content")
-async def get_kb_content(kb_name: str):
-    """Get list of content (documents and images) in a knowledge base"""
-    try:
-        manager = get_kb_manager()
-        return manager.get_kb_content(kb_name)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error getting KB content: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/{kb_name}/link-folder", response_model=LinkedFolderInfo)

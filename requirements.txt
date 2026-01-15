@@ -10,12 +10,14 @@
 python-dotenv>=1.0.0
 PyYAML>=6.0
 tiktoken>=0.5.0
+jinja2>=3.1.0              # Template engine for search consolidation
 
 # ============================================
 # HTTP and API clients
 # ============================================
 requests>=2.32.2
 openai>=1.30.0
+anthropic>=0.30.0          # Anthropic Claude API
 perplexityai>=0.1.0
 dashscope>=1.14.0
 aiohttp>=3.9.4
@@ -44,6 +46,11 @@ lightrag-hku>=1.0.0
 raganything>=0.1.0
 
 # ============================================
+# LlamaIndex
+# ============================================
+llama-index>=0.14.12
+
+# ============================================
 # Academic and research tools
 # ============================================
 arxiv>=2.0.0
@@ -64,21 +71,9 @@ PyMuPDF>=1.26.0      # For PDF text extraction (fast and reliable)
 # faiss-gpu>=1.7.4   # Uncomment if you have GPU and want GPU acceleration
 
 # ============================================
-# Development tools
+# Development and testing tools
 # ============================================
+pytest>=7.0.0              # Testing framework
 pre-commit>=3.0.0
-safety>=2.4.0,<3.0.0  # Pin to stable 2.x version, 3.0.0 is broken
+safety<3.0.0               # Pin to stable 2.x version, 3.0.0 is broken
 bandit>=1.8.0
-llama-cloud==0.1.35
-llama-cloud-services==0.6.54
-llama-index==0.14.12
-llama-index-cli==0.5.3
-llama-index-core==0.14.12
-llama-index-embeddings-openai==0.5.1
-llama-index-indices-managed-llama-cloud==0.9.4
-llama-index-instrumentation==0.4.2
-llama-index-llms-openai==0.6.12
-llama-index-readers-file==0.5.6
-llama-index-readers-llama-parse==0.5.1
-llama-index-workflows==2.11.6
-llama-parse==0.6.54

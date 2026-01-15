@@ -38,19 +38,18 @@ logging:
     logger_names:
       knowledge_init: LightRAG-Init
       rag_tool: LightRAG
-tts:
-  default_voice: alloy
 question:
-  max_rounds: 10
+  # Refactored: no iteration loops (max_rounds removed)
   rag_query_count: 3
   max_parallel_questions: 1
   rag_mode: naive
   agents:
-    question_generation:
-      max_iterations: 5
-      retrieve_top_k: 30
-    question_validation:
-      strict_mode: true
+    retrieve:
+      top_k: 30
+    generate:
+      max_retries: 2
+    relevance_analyzer:
+      enabled: true
 solve:
   max_solve_correction_iterations: 3
   enable_citations: true

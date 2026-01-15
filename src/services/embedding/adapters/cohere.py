@@ -116,9 +116,12 @@ class CohereEmbeddingAdapter(BaseEmbeddingAdapter):
 
     def get_model_info(self) -> Dict[str, Any]:
         model_info = self.MODELS_INFO.get(self.model, {})
+        dimensions_list = model_info.get("dimensions", [])
         return {
             "model": self.model,
             "dimensions": model_info.get("default", self.dimensions),
-            "supports_variable_dimensions": len(model_info.get("dimensions", [])) > 1,
+            "supports_variable_dimensions": len(dimensions_list) > 1
+            if isinstance(dimensions_list, list)
+            else False,
             "provider": "cohere",
         }

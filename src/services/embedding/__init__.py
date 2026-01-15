@@ -27,11 +27,6 @@ from .adapters import (
 from .client import EmbeddingClient, get_embedding_client, reset_embedding_client
 from .config import EmbeddingConfig, get_embedding_config
 from .provider import get_embedding_provider_manager, reset_embedding_provider_manager
-from .provider_config import (
-    EmbeddingProvider,
-    EmbeddingProviderConfigManager,
-    embedding_provider_config_manager,
-)
 
 __all__ = [
     "EmbeddingClient",
@@ -41,9 +36,6 @@ __all__ = [
     "reset_embedding_client",
     "get_embedding_provider_manager",
     "reset_embedding_provider_manager",
-    "EmbeddingProvider",
-    "EmbeddingProviderConfigManager",
-    "embedding_provider_config_manager",
     "BaseEmbeddingAdapter",
     "EmbeddingRequest",
     "EmbeddingResponse",

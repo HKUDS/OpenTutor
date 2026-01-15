@@ -85,7 +85,7 @@ class ConfigManager:
         try:
             return AppConfig(**migrated).dict()
         except ValidationError as e:
-            raise ConfigError("Config validation failed", context={"errors": e.errors()})
+            raise ConfigError("Config validation failed", details={"errors": e.errors()})
 
     def load_config(self, force_reload: bool = False) -> Dict[str, Any]:
         """

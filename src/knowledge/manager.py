@@ -7,6 +7,7 @@ Manages multiple knowledge bases and provides utilities for accessing them.
 """
 
 from datetime import datetime
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -24,11 +25,21 @@ class KnowledgeBaseManager:
         self.config = self._load_config()
 
     def _load_config(self) -> dict:
-        """Load knowledge base configuration"""
+        """Load knowledge base configuration (kb_config.json only stores KB list)"""
         if self.config_file.exists():
             with open(self.config_file, encoding="utf-8") as f:
-                return json.load(f)
-        return {"knowledge_bases": {}, "default": None}
+                config = json.load(f)
+                # Migration: remove old "default" field if present
+                if "default" in config:
+                    del config["default"]
+                    # Save cleaned config
+                    try:
+                        with open(self.config_file, "w", encoding="utf-8") as wf:
+                            json.dump(config, wf, indent=2, ensure_ascii=False)
+                    except Exception:
+                        pass
+                return config
+        return {"knowledge_bases": {}}
 
     def _save_config(self):
         """Save knowledge base configuration"""
@@ -74,8 +85,9 @@ class KnowledgeBaseManager:
 
         self.config["knowledge_bases"][name] = {"path": name, "description": description}
 
-        if set_default or not self.config.get("default"):
-            self.config["default"] = name
+        # Only set default if explicitly requested
+        if set_default:
+            self.set_default(name)
 
         self._save_config()
 
@@ -116,16 +128,44 @@ class KnowledgeBaseManager:
         return kb_dir / "raw"
 
     def set_default(self, name: str):
-        """Set default knowledge base"""
+        """Set default knowledge base using centralized config service."""
         if name not in self.list_knowledge_bases():
             raise ValueError(f"Knowledge base not found: {name}")
 
-        self.config["default"] = name
-        self._save_config()
+        # Use centralized config service only (no longer stored in kb_config.json)
+        try:
+            from src.services.config import get_kb_config_service
+
+            kb_config_service = get_kb_config_service()
+            kb_config_service.set_default_kb(name)
+        except Exception as e:
+            print(f"Warning: Failed to save default to centralized config: {e}")
 
     def get_default(self) -> str | None:
-        """Get default knowledge base name"""
-        return self.config.get("default")
+        """
+        Get default knowledge base name.
+
+        Priority:
+        1. Centralized config service (knowledge_base_configs.json)
+        2. First knowledge base in the list (auto-fallback)
+        """
+        # Try centralized config first
+        try:
+            from src.services.config import get_kb_config_service
+
+            kb_config_service = get_kb_config_service()
+            default_kb = kb_config_service.get_default_kb()
+            if default_kb and default_kb in self.list_knowledge_bases():
+                return default_kb
+        except Exception:
+            pass
+
+        # Fallback to first knowledge base in sorted list
+        kb_list = self.list_knowledge_bases()
+        if kb_list:
+            return kb_list[0]
+
+        return None
 
     def get_metadata(self, name: str | None = None) -> dict:
         """Get knowledge base metadata"""
@@ -208,11 +248,14 @@ class KnowledgeBaseManager:
         except Exception:
             content_lists_count = 0
 
+        metadata = info["metadata"]
+        rag_provider = metadata.get("rag_provider") if isinstance(metadata, dict) else None
         info["statistics"] = {
             "raw_documents": raw_count,
             "images": images_count,
             "content_lists": content_lists_count,
             "rag_initialized": rag_storage_dir.exists() and rag_storage_dir.is_dir(),
+            "rag_provider": rag_provider,  # Add RAG provider info
         }
 
         # Try to get RAG statistics
@@ -256,7 +299,9 @@ class KnowledgeBaseManager:
                         pass
 
                 if rag_stats:
-                    info["statistics"]["rag"] = rag_stats
+                    statistics = info["statistics"]
+                    if isinstance(statistics, dict):
+                        statistics["rag"] = rag_stats
             except Exception:
                 pass
 
@@ -336,62 +381,6 @@ class KnowledgeBaseManager:
         print(f"✓ RAG storage cleaned for '{kb_name}'")
         return True
 
-    def get_kb_content(self, kb_name: str) -> dict:
-        """
-        Get detailed content list (documents and images) for a knowledge base.
-
-        Args:
-            kb_name: Knowledge base name
-
-        Returns:
-            Dict with 'documents' and 'images' lists containing file metadata
-        """
-        if kb_name not in self.list_knowledge_bases():
-            raise ValueError(f"Knowledge base not found: {kb_name}")
-
-        kb_dir = self.base_dir / kb_name
-        raw_dir = kb_dir / "raw"
-        images_dir = kb_dir / "images"
-
-        content = {"documents": [], "images": []}
-
-        # Scan raw documents
-        if raw_dir.exists():
-            for f in raw_dir.iterdir():
-                if f.is_file() and not f.name.startswith("."):
-                    stat = f.stat()
-                    content["documents"].append(
-                        {
-                            "name": f.name,
-                            "path": str(f),
-                            "size": stat.st_size,
-                            "last_modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                        }
-                    )
-
-        # Scan images
-        if images_dir.exists():
-            for f in images_dir.iterdir():
-                if f.is_file() and not f.name.startswith("."):
-                    stat = f.stat()
-                    content["images"].append(
-                        {
-                            "name": f.name,
-                            "path": str(f),
-                            "size": stat.st_size,
-                            "last_modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                        }
-                    )
-
-        return content
-
-    # Local Folder Integration
-    # ============================================================
-
-
-def main():
-    # ============================================================
-
     def link_folder(self, kb_name: str, folder_path: str) -> dict:
         """
         Link a local folder to a knowledge base.
@@ -419,24 +408,25 @@ def main():
 
         # Get supported files in folder
         supported_extensions = {".pdf", ".docx", ".doc", ".txt", ".md", ".markdown"}
-        files = []
+        files: list[Path] = []
         for ext in supported_extensions:
             files.extend(folder.glob(f"**/*{ext}"))
 
         # Generate folder ID
-        import hashlib
 
-        folder_id = hashlib.md5(str(folder).encode()).hexdigest()[:8]
+        folder_id = hashlib.md5(  # noqa: S324
+            str(folder).encode(), usedforsecurity=False
+        ).hexdigest()[:8]
 
         # Load existing linked folders from metadata
         kb_dir = self.base_dir / kb_name
         metadata_file = kb_dir / "metadata.json"
-        metadata = {}
+        metadata: dict = {}
 
         if metadata_file.exists():
             try:
-                with open(metadata_file, encoding="utf-8") as f:
-                    metadata = json.load(f)
+                with open(metadata_file, encoding="utf-8") as fp:
+                    metadata = json.load(fp)
             except Exception:
                 metadata = {}
 
@@ -444,13 +434,13 @@ def main():
             metadata["linked_folders"] = []
 
         # Check if already linked
-        existing_ids = [f["id"] for f in metadata.get("linked_folders", [])]
+        existing_ids = [item["id"] for item in metadata.get("linked_folders", [])]
         if folder_id in existing_ids:
             # If already linked, treat as success (idempotent)
             # Find and return existing info
-            for f in metadata.get("linked_folders", []):
-                if f["id"] == folder_id:
-                    return f
+            for item in metadata.get("linked_folders", []):
+                if item["id"] == folder_id:
+                    return item
 
         # Add folder info
         folder_info = {
@@ -462,8 +452,8 @@ def main():
         metadata["linked_folders"].append(folder_info)
 
         # Save metadata
-        with open(metadata_file, "w", encoding="utf-8") as f:
-            json.dump(metadata, f, indent=2, ensure_ascii=False)
+        with open(metadata_file, "w", encoding="utf-8") as fp:
+            json.dump(metadata, fp, indent=2, ensure_ascii=False)
 
         return folder_info
 

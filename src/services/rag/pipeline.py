@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional
 from src.logging import get_logger
 
 from .components.base import Component
+from .components.routing import FileTypeRouter
+from .types import Document
 
 # Default knowledge base directory
 DEFAULT_KB_BASE_DIR = str(
@@ -86,6 +88,10 @@ class RAGPipeline:
         """
         Run full initialization pipeline.
 
+        Uses FileTypeRouter to classify files and route them appropriately:
+        - PDF/complex files -> configured parser (e.g., PDFParser)
+        - Text files -> direct text reading (fast path)
+
         Args:
             kb_name: Knowledge base name
             file_paths: List of file paths to process
@@ -99,12 +105,42 @@ class RAGPipeline:
         if not self._parser:
             raise ValueError("No parser configured. Use .parser() to set one")
 
-        # Stage 1: Parse documents
+        # Stage 1: Parse documents with file type routing
         self.logger.info("Stage 1: Parsing documents...")
+
+        # Classify files by type
+        classification = FileTypeRouter.classify_files(file_paths)
+        self.logger.info(
+            f"File classification: {len(classification.needs_mineru)} complex, "
+            f"{len(classification.text_files)} text, "
+            f"{len(classification.unsupported)} unsupported"
+        )
+
         documents = []
-        for path in file_paths:
+
+        # Process complex files (PDF, etc.) with configured parser
+        for path in classification.needs_mineru:
+            self.logger.info(f"Parsing (parser): {Path(path).name}")
             doc = await self._parser.process(path, **kwargs)
             documents.append(doc)
+
+        # Process text files directly (fast path)
+        for path in classification.text_files:
+            self.logger.info(f"Parsing (direct text): {Path(path).name}")
+            content = await FileTypeRouter.read_text_file(path)
+            doc = Document(
+                content=content,
+                file_path=str(path),
+                metadata={
+                    "filename": Path(path).name,
+                    "parser": "direct_text",
+                },
+            )
+            documents.append(doc)
+
+        # Log unsupported files
+        for path in classification.unsupported:
+            self.logger.warning(f"Skipped unsupported file: {Path(path).name}")
 
         # Stage 2: Chunk (sequential - later chunkers see earlier results)
         if self._chunkers:

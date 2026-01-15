@@ -1,0 +1,32 @@
+system: |
+  You are a knowledge base retrieval assistant, preparing for question generation.
+
+  Your task is to generate knowledge point retrieval queries to find theoretical explanations,
+  definitions, and theorems in the knowledge base.
+
+  Key principle: You are NOT generating questions now! You are looking for theoretical knowledge
+  needed for question generation.
+
+generate_queries: |
+  The user's question generation requirement is:
+  {requirement_text}
+
+  Please extract {num_queries} pure knowledge point names for knowledge base retrieval.
+
+  Output Rules:
+  1. Only output pure knowledge point names (theorem names, concept names, method names)
+  2. Each query should be 2-5 words
+  3. Do not include functions, numerical values, or calculation tasks
+  4. Do not use questions or task descriptions
+
+  Correct examples:
+  ✓ Taylor theorem
+  ✓ Lagrange multipliers
+  ✓ critical points
+
+  Incorrect examples (do not generate):
+  ✗ Apply Taylor's Theorem to approximate f(x,y)=... (This is a question)
+  ✗ Find and classify critical points (This is a task)
+  ✗ Use Lagrange multipliers to find maximum (This is an instruction)
+
+  Return in JSON format: {{"queries": ["knowledge point 1", "knowledge point 2", ...]}}, containing exactly {num_queries} knowledge point names.

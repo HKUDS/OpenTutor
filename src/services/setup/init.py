@@ -155,16 +155,18 @@ def init_user_directories(project_root: Path | None = None) -> None:
             except Exception as e:
                 logger.warning(f"Failed to create user_history.json: {e}")
 
-        # Create settings.json if it doesn't exist (default to English)
-        settings_file = user_data_dir / "settings.json"
-        if not settings_file.exists():
+        # Create interface.json in settings folder if it doesn't exist
+        settings_dir = user_data_dir / "settings"
+        settings_dir.mkdir(parents=True, exist_ok=True)
+        interface_file = settings_dir / "interface.json"
+        if not interface_file.exists():
             initial_settings = {"theme": "light", "language": "en", "output_language": "en"}
             try:
-                with open(settings_file, "w", encoding="utf-8") as f:
+                with open(interface_file, "w", encoding="utf-8") as f:
                     json.dump(initial_settings, f, indent=2, ensure_ascii=False)
-                logger.success("Created: settings.json")
+                logger.success("Created: settings/interface.json")
             except Exception as e:
-                logger.warning(f"Failed to create settings.json: {e}")
+                logger.warning(f"Failed to create settings/interface.json: {e}")
 
         logger.info("=" * 80)
         logger.success("User data directory initialization complete!")
@@ -197,12 +199,14 @@ def init_user_directories(project_root: Path | None = None) -> None:
             except Exception:
                 pass  # Silent fail if file creation fails but directory exists
 
-        # Ensure settings.json exists (default to English)
-        settings_file = user_data_dir / "settings.json"
-        if not settings_file.exists():
+        # Ensure interface.json exists in settings folder
+        settings_dir = user_data_dir / "settings"
+        settings_dir.mkdir(parents=True, exist_ok=True)
+        interface_file = settings_dir / "interface.json"
+        if not interface_file.exists():
             initial_settings = {"theme": "light", "language": "en", "output_language": "en"}
             try:
-                with open(settings_file, "w", encoding="utf-8") as f:
+                with open(interface_file, "w", encoding="utf-8") as f:
                     json.dump(initial_settings, f, indent=2, ensure_ascii=False)
             except Exception:
                 pass  # Silent fail if file creation fails but directory exists

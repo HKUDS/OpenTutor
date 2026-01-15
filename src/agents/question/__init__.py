@@ -1,28 +1,24 @@
 """
-Agent-based Question Generation System
+Question Generation System
 
-This is an autonomous question generation system based on the ReAct (Reasoning + Acting) paradigm.
-Two independent agents collaborate to complete question generation and validation.
+Modular question generation using specialized agents:
+- RetrieveAgent: Knowledge base retrieval
+- GenerateAgent: Question generation
+- RelevanceAnalyzer: Question-KB relevance analysis
+- AgentCoordinator: Workflow orchestration
+
+Tools (moved to src/tools/question):
+- parse_pdf_with_mineru
+- extract_questions_from_paper
+- mimic_exam_questions
 """
 
-from .agents import (
-    Action,
-    BaseAgent,
-    Message,
-    Observation,
-    QuestionGenerationAgent,
-    QuestionValidationAgent,
-)
+from .agents import GenerateAgent, RelevanceAnalyzer, RetrieveAgent
 from .coordinator import AgentCoordinator
-from .validation_workflow import QuestionValidationWorkflow
 
 __all__ = [
-    "BaseAgent",
-    "Action",
-    "Observation",
-    "Message",
-    "QuestionGenerationAgent",
-    "QuestionValidationAgent",
-    "QuestionValidationWorkflow",
+    "RetrieveAgent",
+    "GenerateAgent",
+    "RelevanceAnalyzer",
     "AgentCoordinator",
 ]

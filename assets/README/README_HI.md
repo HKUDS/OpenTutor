@@ -237,7 +237,8 @@ cp .env.example .env
 | `BACKEND_PORT` | नहीं | बैकएंड पोर्ट (डिफ़ॉल्ट: `8001`) |
 | `FRONTEND_PORT` | नहीं | फ्रंटएंड पोर्ट (डिफ़ॉल्ट: `3782`) |
 | `TTS_*` | नहीं | टेक्स्ट-टू-स्पीच सेटिंग्स |
-| `PERPLEXITY_API_KEY` | नहीं | वेब खोज के लिए |
+| `SEARCH_PROVIDER` | नहीं | खोज प्रदाता (विकल्प: `perplexity`, `tavily`, `serper`, `jina`, `exa`, `baidu`, डिफ़ॉल्ट: `perplexity`) |
+| `SEARCH_API_KEY` | नहीं | खोज के लिए एकीकृत API कुंजी |
 
 </details>
 
@@ -364,9 +365,11 @@ source venv/bin/activate
 **निर्भरताएं स्थापित करें**:
 
 ```bash
-bash scripts/install_all.sh
+# एक-क्लिक इंस्टॉलेशन (अनुशंसित)
+python scripts/install_all.py
+# या: bash scripts/install_all.sh
 
-# या मैन्युअल रूप से:
+# या मैन्युअल इंस्टॉलेशन
 pip install -r requirements.txt
 npm install --prefix web
 ```

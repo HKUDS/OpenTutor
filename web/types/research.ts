@@ -159,3 +159,104 @@ export interface ResearchEvent {
   research_id?: string;
   [key: string]: any; // Payload
 }
+
+// ============================================
+// Context-specific types (used in GlobalContext)
+// ============================================
+
+/**
+ * Active task info for parallel mode
+ */
+export interface ActiveTaskInfo {
+  block_id: string;
+  sub_topic: string;
+  status: string;
+  iteration: number;
+  max_iterations?: number;
+  current_tool?: string;
+  current_query?: string;
+  tools_used?: string[];
+}
+
+/**
+ * Query info for tracking all queries
+ */
+export interface QueryInfo {
+  query: string;
+  tool_type: string;
+  rationale?: string;
+  iteration: number;
+}
+
+/**
+ * Research progress for context state
+ */
+export interface ResearchProgress {
+  stage: "planning" | "researching" | "reporting" | null;
+  status: string;
+  executionMode?: "series" | "parallel";
+  totalBlocks?: number;
+  currentBlock?: number;
+  currentSubTopic?: string;
+  currentBlockId?: string;
+  iterations?: number;
+  maxIterations?: number;
+  toolsUsed?: string[];
+  currentTool?: string;
+  currentQuery?: string;
+  currentRationale?: string;
+  queriesUsed?: QueryInfo[];
+  activeTasks?: ActiveTaskInfo[];
+  activeCount?: number;
+  completedCount?: number;
+  keptBlocks?: number;
+  sections?: number;
+  wordCount?: number;
+  citations?: number;
+}
+
+/**
+ * Research context state (used in ResearchContext)
+ */
+export interface ResearchContextState {
+  status: "idle" | "running" | "completed";
+  logs: Array<{ type: string; content: string; timestamp?: number }>;
+  report: string | null;
+  topic: string;
+  selectedKb: string;
+  progress: ResearchProgress;
+}
+
+/**
+ * Initial research context state
+ */
+export const INITIAL_RESEARCH_CONTEXT_STATE: ResearchContextState = {
+  status: "idle",
+  logs: [],
+  report: null,
+  topic: "",
+  selectedKb: "",
+  progress: {
+    stage: null,
+    status: "",
+    executionMode: undefined,
+    totalBlocks: undefined,
+    currentBlock: undefined,
+    currentSubTopic: undefined,
+    currentBlockId: undefined,
+    iterations: undefined,
+    maxIterations: undefined,
+    toolsUsed: undefined,
+    currentTool: undefined,
+    currentQuery: undefined,
+    currentRationale: undefined,
+    queriesUsed: undefined,
+    activeTasks: undefined,
+    activeCount: undefined,
+    completedCount: undefined,
+    keptBlocks: undefined,
+    sections: undefined,
+    wordCount: undefined,
+    citations: undefined,
+  },
+};

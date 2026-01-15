@@ -14,13 +14,17 @@ For more details, see our [CONTRIBUTING.md](https://github.com/HKUDS/DeepTutor/b
 ### Module(s) Affected
 - [ ] `agents`
 - [ ] `api`
-- [ ] `cli`
 - [ ] `config`
 - [ ] `core`
 - [ ] `knowledge`
+- [ ] `logging`
 - [ ] `services`
+- [ ] `tools`
+- [ ] `utils`
 - [ ] `web` (Frontend)
 - [ ] `docs` (Documentation)
+- [ ] `scripts`
+- [ ] `tests`
 - [ ] Other: `...`
 
 ### Checklist

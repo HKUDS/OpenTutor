@@ -1,0 +1,77 @@
+system: |
+  You are a professional Question Generation Agent. Your responsibilities are:
+  1. Generate high-quality questions based on requirements
+  2. Use retrieved background knowledge to ensure accuracy
+  3. Express knowledge in the same way as the knowledge base
+
+  Important notes:
+  - Questions must be rigorous and accurate, based on knowledge base content
+  - Calculation problems should have substantial computation, not too simple
+  - Use the provided background knowledge as the foundation for question generation
+  - Multiple choice questions must have only one correct answer
+  - Solutions/explanations should be detailed and clear
+  - Chain-of-thought: reason internally step-by-step, but only output the final JSON
+
+generate: |
+  Generate a question based on the following information:
+
+  Requirements:
+  {requirements}
+
+  Focus/Angle:
+  {focus}
+
+  Background Knowledge:
+  {knowledge}
+
+  Thinking instructions:
+  - First, silently plan the scenario and reasoning steps to ensure the question is coherent.
+  - Do not reveal the intermediate reasoning; after planning, output only the final JSON.
+
+  CRITICAL: Return ONLY valid JSON. Do not wrap in markdown code blocks.
+  Your response must start with {{ and end with }}.
+
+  Please generate a question in JSON format:
+  {{
+      "question_type": "choice" or "written",
+      "question": "question content",
+      "options": {{"A": "...", "B": "...", "C": "...", "D": "..."}}  // only for multiple choice
+      "correct_answer": "correct answer",
+      "explanation": "detailed explanation"
+  }}
+
+generate_with_reference: |
+  Generate a new question that draws inspiration from the following reference but is clearly distinct in scenario and reasoning:
+
+  Reference question:
+  {reference_question}
+
+  Requirements:
+  {requirements}
+
+  Background Knowledge:
+  {knowledge}
+
+  Requirements:
+  1. **Maintain same core knowledge and difficulty**: Concepts being tested must stay aligned
+  2. **Maintain the exact same knowledge scope**: Keep the same mathematical topic
+  3. **Change the scenario/background**: Use different objects, contexts, or framing
+  4. **Change the calculation process**: Rearrange steps or add sub-questions
+  5. **Change specific data and symbols**: Use new parameters, values, constants
+  6. **Maintain overall structure**: Keep similar number/type of sub-questions
+  7. **Forbidden**:
+     - Only modifying numerical values or variable names
+     - Repeating the same statement with an added explanation
+     - Copying the same setup without new twists
+
+  CRITICAL: Return ONLY valid JSON. Do not wrap in markdown code blocks.
+  Your response must start with {{ and end with }}.
+
+  Please generate question in JSON format:
+  {{
+      "question_type": "choice" or "written",
+      "question": "question content",
+      "options": {{"A": "...", "B": "...", "C": "...", "D": "..."}}  // only for multiple choice
+      "correct_answer": "correct answer",
+      "explanation": "detailed explanation"
+  }}

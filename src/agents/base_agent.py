@@ -8,9 +8,7 @@ This is the single source of truth for agent base functionality across:
 - guide module
 - ideagen module
 - co_writer module
-
-Note: The question module uses a separate ReAct architecture and is intentionally
-not unified with this base class.
+- question module (unified in Jan 2026 refactor)
 """
 
 from abc import ABC, abstractmethod
@@ -212,6 +210,32 @@ class BaseAgent(ABC):
             Retry count
         """
         return self.agent_config.get("max_retries", settings.retry.max_retries)
+
+    def refresh_config(self) -> None:
+        """
+        Refresh LLM configuration from the current active settings.
+
+        This method reloads the LLM configuration from the unified config service,
+        allowing agents to pick up configuration changes made by users in Settings
+        without needing to restart the server or recreate the agent instance.
+
+        Call this method before processing requests if you want to ensure
+        the agent uses the latest user-configured LLM settings.
+        """
+        try:
+            llm_config = get_llm_config()
+            self.api_key = llm_config.api_key
+            self.base_url = llm_config.base_url
+            self.model = llm_config.model
+            self.api_version = getattr(llm_config, "api_version", None)
+            self.binding = getattr(llm_config, "binding", "openai")
+            self.logger.debug(
+                f"Config refreshed: model={self.model}, base_url={self.base_url[:30]}..."
+                if self.base_url
+                else f"Config refreshed: model={self.model}"
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to refresh config: {e}")
 
     # -------------------------------------------------------------------------
     # Token Tracking

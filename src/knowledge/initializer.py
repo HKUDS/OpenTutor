@@ -40,6 +40,7 @@ class KnowledgeBaseInitializer:
         api_key: str | None = None,
         base_url: str | None = None,
         progress_tracker: ProgressTracker | None = None,
+        rag_provider: str | None = None,
     ):
         self.kb_name = kb_name
         self.base_dir = Path(base_dir)
@@ -55,9 +56,10 @@ class KnowledgeBaseInitializer:
         self.base_url = base_url
         self.embedding_cfg = get_embedding_config()
         self.progress_tracker = progress_tracker or ProgressTracker(kb_name, self.base_dir)
+        self.rag_provider = rag_provider
 
     def _register_to_config(self):
-        """Register KB to kb_config.json."""
+        """Register KB to kb_config.json (only knowledge_bases list, no default)."""
         config_file = self.base_dir / "kb_config.json"
         if config_file.exists():
             try:
@@ -65,21 +67,22 @@ class KnowledgeBaseInitializer:
                     config = json.load(f)
             except Exception as e:
                 logger.warning(f"Failed to read config: {e}, creating new")
-                config = {"knowledge_bases": {}, "default": None}
+                config = {"knowledge_bases": {}}
         else:
-            config = {"knowledge_bases": {}, "default": None}
+            config = {"knowledge_bases": {}}
 
         if "knowledge_bases" not in config:
             config["knowledge_bases"] = {}
+
+        # Remove old "default" field if exists (migration)
+        if "default" in config:
+            del config["default"]
 
         if self.kb_name not in config.get("knowledge_bases", {}):
             config["knowledge_bases"][self.kb_name] = {
                 "path": self.kb_name,
                 "description": f"Knowledge base: {self.kb_name}",
             }
-
-            if not config.get("default"):
-                config["default"] = self.kb_name
 
             try:
                 with open(config_file, "w", encoding="utf-8") as f:
@@ -89,6 +92,37 @@ class KnowledgeBaseInitializer:
                 logger.warning(f"Failed to update config: {e}")
         else:
             logger.info("  ✓ Already registered in kb_config.json")
+
+    def _update_metadata_with_provider(self, provider: str):
+        """Update metadata.json and centralized config with the RAG provider used."""
+        metadata_file = self.kb_dir / "metadata.json"
+        try:
+            if metadata_file.exists():
+                with open(metadata_file, encoding="utf-8") as f:
+                    metadata = json.load(f)
+            else:
+                metadata = {}
+
+            metadata["rag_provider"] = provider
+            metadata["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            with open(metadata_file, "w", encoding="utf-8") as f:
+                json.dump(metadata, indent=2, ensure_ascii=False, fp=f)
+
+            logger.info(f"  ✓ Updated metadata with RAG provider: {provider}")
+
+            # Also save to centralized config file
+            try:
+                from src.services.config import get_kb_config_service
+
+                kb_config_service = get_kb_config_service()
+                kb_config_service.set_rag_provider(self.kb_name, provider)
+                logger.info("  ✓ Saved RAG provider to centralized config")
+            except Exception as config_err:
+                logger.warning(f"Failed to save to centralized config: {config_err}")
+
+        except Exception as e:
+            logger.warning(f"Failed to update metadata with provider: {e}")
 
     def create_directory_structure(self):
         """Create knowledge base directory structure"""
@@ -109,6 +143,7 @@ class KnowledgeBaseInitializer:
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "description": f"Knowledge base: {self.kb_name}",
             "version": "1.0",
+            "rag_provider": None,  # Will be set during document processing
         }
 
         metadata_file = self.kb_dir / "metadata.json"
@@ -140,7 +175,8 @@ class KnowledgeBaseInitializer:
 
     async def process_documents(self):
         """Process documents using RAGService with dynamic provider selection"""
-        provider = os.getenv("RAG_PROVIDER", "raganything")
+        # Use the provider passed during initialization, or fallback to env var
+        provider = self.rag_provider or os.getenv("RAG_PROVIDER", "raganything")
         logger.info(f"Processing documents with RAG provider: {provider}")
 
         self.progress_tracker.update(
@@ -191,6 +227,10 @@ class KnowledgeBaseInitializer:
 
             if success:
                 logger.info("✓ Document processing completed!")
+
+                # Update metadata with the RAG provider used
+                self._update_metadata_with_provider(provider)
+
                 self.progress_tracker.update(
                     ProgressStage.PROCESSING_DOCUMENTS,
                     "Documents processed successfully",
@@ -414,8 +454,19 @@ class KnowledgeBaseInitializer:
         logger.info(f"Extracted images: {len(image_files)}")
         logger.info(f"Content lists: {len(content_files)}")
 
-        # Check for RAG storage (different providers use different formats)
-        provider = os.getenv("RAG_PROVIDER", "raganything")
+        # Read provider from metadata instead of env var
+        provider = self.rag_provider or os.getenv("RAG_PROVIDER", "raganything")
+
+        # Try to read from metadata.json if available
+        metadata_file = self.kb_dir / "metadata.json"
+        if metadata_file.exists():
+            try:
+                with open(metadata_file, encoding="utf-8") as f:
+                    metadata = json.load(f)
+                    if "rag_provider" in metadata and metadata["rag_provider"]:
+                        provider = metadata["rag_provider"]
+            except Exception:
+                pass
 
         # RAGAnything/LightRAG format
         entities_file = self.rag_storage_dir / "kv_store_full_entities.json"
