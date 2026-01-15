@@ -286,8 +286,12 @@ class CodeExecutionEnvironment:
         timeout: int,
         assets_dir: Path | None,
     ) -> tuple[str, str, int, float]:
-        env = os.environ.copy()
-        env["PYTHONIOENCODING"] = "utf-8"
+        # Security fix: Prevent environment variable leaks that could expose credentials
+        safe_env = {
+            "PATH": os.environ.get("PATH", ""),
+            "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
+            "PYTHONIOENCODING": "utf-8"
+        }
 
         with self.workspace.create_temp_dir() as temp_dir:
             code_file = temp_dir / "code.py"
@@ -305,7 +309,7 @@ class CodeExecutionEnvironment:
                 errors="replace",
                 timeout=timeout,
                 cwd=str(work_dir),
-                env=env,
+                env=safe_env,
             )
 
             elapsed_ms = (time.time() - start_time) * 1000

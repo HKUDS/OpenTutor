@@ -113,6 +113,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user for security
+RUN groupadd -r deeptutor && useradd -r -g deeptutor -s /bin/bash -m deeptutor
+
 # Copy Node.js from frontend-builder stage (avoids re-downloading from NodeSource)
 COPY --from=frontend-builder /usr/local/bin/node /usr/local/bin/node
 COPY --from=frontend-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
@@ -137,6 +140,9 @@ COPY config/ ./config/
 COPY scripts/ ./scripts/
 COPY pyproject.toml ./
 COPY requirements.txt ./
+
+# Change ownership of /app directory to non-root user
+RUN chown -R deeptutor:deeptutor /app
 
 # Create necessary directories (these will be overwritten by volume mounts)
 RUN mkdir -p \
@@ -309,6 +315,9 @@ EXPOSE 8001 3782
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${BACKEND_PORT:-8001}/ || exit 1
+
+# Switch to non-root user for security
+USER deeptutor
 
 # Set entrypoint
 ENTRYPOINT ["/app/entrypoint.sh"]
