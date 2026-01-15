@@ -3,13 +3,17 @@ TTS Configuration
 =================
 
 Configuration management for Text-to-Speech services.
+Simplified version - loads from unified config service or falls back to .env.
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -26,7 +30,11 @@ def _strip_value(value: Optional[str]) -> Optional[str]:
 
 def get_tts_config() -> dict:
     """
-    Return complete environment configuration for TTS (Text-to-Speech).
+    Return complete configuration for TTS (Text-to-Speech).
+
+    Priority:
+    1. Active configuration from unified config service
+    2. Environment variables (.env)
 
     Returns:
         dict: Dictionary containing the following keys:
@@ -39,6 +47,26 @@ def get_tts_config() -> dict:
     Raises:
         ValueError: If required configuration is missing
     """
+    # 1. Try to get active config from unified config service
+    try:
+        from src.services.config import get_active_tts_config
+
+        config = get_active_tts_config()
+        if config and config.get("model"):
+            return {
+                "model": config["model"],
+                "api_key": config.get("api_key", ""),
+                "base_url": config.get("base_url", ""),
+                "api_version": config.get("api_version"),
+                "voice": config.get("voice", "alloy"),
+            }
+    except ImportError:
+        # Unified config service not yet available, fall back to env
+        pass
+    except Exception as e:
+        logger.warning(f"Failed to load from unified config: {e}")
+
+    # 2. Fallback to environment variables
     model = _strip_value(os.getenv("TTS_MODEL"))
     api_key = _strip_value(os.getenv("TTS_API_KEY"))
     base_url = _strip_value(os.getenv("TTS_URL"))
@@ -48,13 +76,15 @@ def get_tts_config() -> dict:
     # Validate required configuration
     if not model:
         raise ValueError(
-            "Error: TTS_MODEL not set, please configure it in .env file (e.g., tts-1 or tts-1-hd)"
+            "TTS_MODEL not set. Please configure it in .env file or add a configuration in Settings"
         )
     if not api_key:
-        raise ValueError("Error: TTS_API_KEY not set, please configure it in .env file")
+        raise ValueError(
+            "TTS_API_KEY not set. Please configure it in .env file or add a configuration in Settings"
+        )
     if not base_url:
         raise ValueError(
-            "Error: TTS_URL not set, please configure it in .env file (e.g., https://api.openai.com/v1)"
+            "TTS_URL not set. Please configure it in .env file or add a configuration in Settings"
         )
 
     return {

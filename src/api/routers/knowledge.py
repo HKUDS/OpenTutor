@@ -83,6 +83,21 @@ class KnowledgeBaseInfo(BaseModel):
     statistics: dict
 
 
+class LinkFolderRequest(BaseModel):
+    """Request model for linking a local folder to a KB."""
+
+    folder_path: str
+
+
+class LinkedFolderInfo(BaseModel):
+    """Response model for linked folder information."""
+
+    id: str
+    path: str
+    added_at: str
+    file_count: int
+
+
 async def run_initialization_task(initializer: KnowledgeBaseInitializer):
     """Background task for knowledge base initialization"""
     task_manager = TaskIDManager.get_instance()
@@ -121,7 +136,12 @@ async def run_initialization_task(initializer: KnowledgeBaseInitializer):
 
 
 async def run_upload_processing_task(
-    kb_name: str, base_dir: str, api_key: str, base_url: str, uploaded_file_paths: list[str]
+    kb_name: str,
+    base_dir: str,
+    api_key: str,
+    base_url: str,
+    uploaded_file_paths: list[str],
+    rag_provider: str = None,
 ):
     """Background task for processing uploaded files"""
     task_manager = TaskIDManager.get_instance()
@@ -146,6 +166,7 @@ async def run_upload_processing_task(
             api_key=api_key,
             base_url=base_url,
             progress_tracker=progress_tracker,
+            rag_provider=rag_provider,
         )
 
         new_files = [Path(path) for path in uploaded_file_paths]
@@ -199,6 +220,105 @@ async def health_check():
         }
     except Exception as e:
         return {"status": "error", "error": str(e), "traceback": traceback.format_exc()}
+
+
+@router.get("/rag-providers")
+async def get_rag_providers():
+    """Get list of available RAG providers."""
+    try:
+        from src.services.rag.service import RAGService
+
+        providers = RAGService.list_providers()
+        return {"providers": providers}
+    except Exception as e:
+        logger.error(f"Error getting RAG providers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/configs")
+async def get_all_kb_configs():
+    """Get all knowledge base configurations from centralized config file."""
+    try:
+        from src.services.config import get_kb_config_service
+
+        service = get_kb_config_service()
+        return service.get_all_configs()
+    except Exception as e:
+        logger.error(f"Error getting KB configs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{kb_name}/config")
+async def get_kb_config(kb_name: str):
+    """Get configuration for a specific knowledge base."""
+    try:
+        from src.services.config import get_kb_config_service
+
+        service = get_kb_config_service()
+        config = service.get_kb_config(kb_name)
+        return {"kb_name": kb_name, "config": config}
+    except Exception as e:
+        logger.error(f"Error getting config for KB '{kb_name}': {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{kb_name}/config")
+async def update_kb_config(kb_name: str, config: dict):
+    """Update configuration for a specific knowledge base."""
+    try:
+        from src.services.config import get_kb_config_service
+
+        service = get_kb_config_service()
+        service.set_kb_config(kb_name, config)
+        return {"status": "success", "kb_name": kb_name, "config": service.get_kb_config(kb_name)}
+    except Exception as e:
+        logger.error(f"Error updating config for KB '{kb_name}': {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/configs/sync")
+async def sync_configs_from_metadata():
+    """Sync all KB configurations from their metadata.json files to centralized config."""
+    try:
+        from src.services.config import get_kb_config_service
+
+        service = get_kb_config_service()
+        service.sync_all_from_metadata(_kb_base_dir)
+        return {"status": "success", "message": "Configurations synced from metadata files"}
+    except Exception as e:
+        logger.error(f"Error syncing configs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/default")
+async def get_default_kb():
+    """Get the default knowledge base."""
+    try:
+        manager = get_kb_manager()
+        default_kb = manager.get_default()
+        return {"default_kb": default_kb}
+    except Exception as e:
+        logger.error(f"Error getting default KB: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/default/{kb_name}")
+async def set_default_kb(kb_name: str):
+    """Set the default knowledge base."""
+    try:
+        manager = get_kb_manager()
+
+        # Verify KB exists
+        if kb_name not in manager.list_knowledge_bases():
+            raise HTTPException(status_code=404, detail=f"Knowledge base '{kb_name}' not found")
+
+        manager.set_default(kb_name)
+        return {"status": "success", "default_kb": kb_name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error setting default KB: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/list", response_model=list[KnowledgeBaseInfo])
@@ -301,7 +421,10 @@ async def delete_knowledge_base(kb_name: str):
 
 @router.post("/{kb_name}/upload")
 async def upload_files(
-    kb_name: str, background_tasks: BackgroundTasks, files: list[UploadFile] = File(...)
+    kb_name: str,
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] = File(...),
+    rag_provider: str = Form(None),
 ):
     """Upload files to a knowledge base and process them in background."""
     try:
@@ -373,6 +496,7 @@ async def upload_files(
             api_key=api_key,
             base_url=base_url,
             uploaded_file_paths=uploaded_file_paths,
+            rag_provider=rag_provider,
         )
 
         return {
@@ -389,7 +513,10 @@ async def upload_files(
 
 @router.post("/create")
 async def create_knowledge_base(
-    background_tasks: BackgroundTasks, name: str = Form(...), files: list[UploadFile] = File(...)
+    background_tasks: BackgroundTasks,
+    name: str = Form(...),
+    files: list[UploadFile] = File(...),
+    rag_provider: str = Form("raganything"),
 ):
     """Create a new knowledge base and initialize it with files."""
     try:
@@ -418,6 +545,7 @@ async def create_knowledge_base(
             api_key=api_key,
             base_url=base_url,
             progress_tracker=progress_tracker,
+            rag_provider=rag_provider,
         )
 
         initializer.create_directory_structure()
@@ -566,3 +694,128 @@ async def websocket_progress(websocket: WebSocket, kb_name: str):
             await websocket.close()
         except:
             pass
+
+
+@router.post("/{kb_name}/link-folder", response_model=LinkedFolderInfo)
+async def link_folder(kb_name: str, request: LinkFolderRequest):
+    """
+    Link a local folder to a knowledge base.
+
+    This allows syncing documents from a local folder (which can be
+    synced with SharePoint, Google Drive, OneLake, etc.) to the KB.
+
+    The folder path supports:
+    - Absolute paths: /Users/name/Documents or C:\\Users\\name\\Documents
+    - Home directory: ~/Documents
+    - Relative paths (resolved from server working directory)
+    """
+    try:
+        manager = get_kb_manager()
+        folder_info = manager.link_folder(kb_name, request.folder_path)
+        logger.info(f"Linked folder '{request.folder_path}' to KB '{kb_name}'")
+        return LinkedFolderInfo(**folder_info)
+    except ValueError as e:
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        raise HTTPException(status_code=400, detail=error_msg)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{kb_name}/linked-folders", response_model=list[LinkedFolderInfo])
+async def get_linked_folders(kb_name: str):
+    """Get list of linked folders for a knowledge base."""
+    try:
+        manager = get_kb_manager()
+        folders = manager.get_linked_folders(kb_name)
+        return [LinkedFolderInfo(**f) for f in folders]
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Knowledge base '{kb_name}' not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{kb_name}/linked-folders/{folder_id}")
+async def unlink_folder(kb_name: str, folder_id: str):
+    """Unlink a folder from a knowledge base."""
+    try:
+        manager = get_kb_manager()
+        success = manager.unlink_folder(kb_name, folder_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Folder '{folder_id}' not found")
+        logger.info(f"Unlinked folder '{folder_id}' from KB '{kb_name}'")
+        return {"message": "Folder unlinked successfully", "folder_id": folder_id}
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Knowledge base '{kb_name}' not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{kb_name}/sync-folder/{folder_id}")
+async def sync_folder(kb_name: str, folder_id: str, background_tasks: BackgroundTasks):
+    """
+    Sync files from a linked folder to the knowledge base.
+
+    This scans the linked folder for supported documents and processes
+    any new files that haven't been added yet.
+    """
+    try:
+        manager = get_kb_manager()
+
+        # Get linked folders and find the one with matching ID
+        folders = manager.get_linked_folders(kb_name)
+        folder_info = next((f for f in folders if f["id"] == folder_id), None)
+
+        if not folder_info:
+            raise HTTPException(status_code=404, detail=f"Linked folder '{folder_id}' not found")
+
+        folder_path = folder_info["path"]
+
+        # Check for changes (new or modified files)
+        changes = manager.detect_folder_changes(kb_name, folder_id)
+        files_to_process = changes["new_files"] + changes["modified_files"]
+
+        if not files_to_process:
+            return {"message": "No new or modified files to sync", "files": [], "file_count": 0}
+
+        # Get LLM config
+        try:
+            llm_config = get_llm_config()
+            api_key = llm_config.api_key
+            base_url = llm_config.base_url
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=f"LLM config error: {e!s}")
+
+        logger.info(
+            f"Syncing {len(files_to_process)} files from folder '{folder_path}' to KB '{kb_name}'"
+        )
+
+        # NOTE: We DO NOT update sync state here anymore.
+        # It is updated in run_upload_processing_task only after successful processing.
+        # This prevents marking files as synced if processing fails (race condition fix).
+
+        # Add background task to process files
+        background_tasks.add_task(
+            run_upload_processing_task,
+            kb_name=kb_name,
+            base_dir=str(_kb_base_dir),
+            api_key=api_key,
+            base_url=base_url,
+            uploaded_file_paths=files_to_process,
+            folder_id=folder_id,  # Pass folder_id to update state on success
+        )
+
+        return {
+            "message": f"Syncing {len(files_to_process)} files from linked folder",
+            "folder_path": folder_path,
+            "new_files": changes["new_count"],
+            "modified_files": changes["modified_count"],
+            "file_count": len(files_to_process),
+        }
+    except HTTPException:
+        raise
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Knowledge base '{kb_name}' not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

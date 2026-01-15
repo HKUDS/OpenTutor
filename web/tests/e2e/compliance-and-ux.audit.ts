@@ -4,9 +4,14 @@ import { test, expect } from "@playwright/test";
 // Focus on semantic landmarks, headings, alt text, link names, and basic error messaging.
 
 const BASE_URL =
-  process.env.WEB_BASE_URL || process.env.NEXT_PUBLIC_API_BASE || "http://localhost:3000";
+  process.env.WEB_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_BASE ||
+  "http://localhost:3000";
 
-async function expectAnyVisible(locators: import("@playwright/test").Locator[], message: string) {
+async function expectAnyVisible(
+  locators: import("@playwright/test").Locator[],
+  message: string,
+) {
   for (const loc of locators) {
     try {
       if (await loc.first().isVisible()) return;
@@ -34,12 +39,16 @@ test.describe("Compliance :: Accessibility & Semantics", () => {
         imgs.filter((img) => {
           const alt = img.getAttribute("alt");
           return !alt || alt.trim().length === 0;
-        }).length
+        }).length,
     );
-    expect(missingAltCount, `Found ${missingAltCount} <img> without alt`).toBe(0);
+    expect(missingAltCount, `Found ${missingAltCount} <img> without alt`).toBe(
+      0,
+    );
   });
 
-  test("links have accessible names (text/aria-label/title)", async ({ page }) => {
+  test("links have accessible names (text/aria-label/title)", async ({
+    page,
+  }) => {
     await page.goto(`${BASE_URL}/`);
     const namelessLinks = await page.$$eval(
       "a",
@@ -49,9 +58,12 @@ test.describe("Compliance :: Accessibility & Semantics", () => {
           const aria = (a.getAttribute("aria-label") || "").trim();
           const title = (a.getAttribute("title") || "").trim();
           return text.length === 0 && aria.length === 0 && title.length === 0;
-        }).length
+        }).length,
     );
-    expect(namelessLinks, `Found ${namelessLinks} <a> without accessible name`).toBe(0);
+    expect(
+      namelessLinks,
+      `Found ${namelessLinks} <a> without accessible name`,
+    ).toBe(0);
   });
 
   test("viewport meta present for responsive UX", async ({ page }) => {
@@ -62,13 +74,15 @@ test.describe("Compliance :: Accessibility & Semantics", () => {
 });
 
 test.describe("Compliance :: Error Handling & UX Signals", () => {
-  test("api error surfaces user-friendly feedback (alert or message)", async ({ page }) => {
+  test("api error surfaces user-friendly feedback (alert or message)", async ({
+    page,
+  }) => {
     await page.route("**/api/v1/notebook/list", (route) =>
       route.fulfill({
         status: 500,
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ detail: "Simulated Backend Failure" }),
-      })
+      }),
     );
 
     await page.goto(`${BASE_URL}/notebook`);
@@ -78,9 +92,9 @@ test.describe("Compliance :: Error Handling & UX Signals", () => {
         page.locator('[role="alert"]'),
         page.locator('[data-test="notebooks-empty"]'),
         page.locator('[data-testid="notebooks-empty"]'),
-        page.locator('text=No notebooks'),
+        page.locator("text=No notebooks"),
       ],
-      "Expected error banner or empty state after simulated failure"
+      "Expected error banner or empty state after simulated failure",
     );
   });
 });

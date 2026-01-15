@@ -260,3 +260,105 @@ export interface MimicConfig {
   selectedKb: string;
   maxQuestions?: number;
 }
+
+// ============================================
+// Context-specific types (used in GlobalContext)
+// ============================================
+
+/**
+ * Question progress info for context state
+ */
+export interface QuestionProgressInfo {
+  stage:
+    | "planning"
+    | "researching"
+    | "generating"
+    | "validating"
+    | "complete"
+    // Mimic mode stages
+    | "uploading"
+    | "parsing"
+    | "extracting"
+    | null;
+  progress: {
+    current?: number;
+    total?: number;
+    round?: number;
+    max_rounds?: number;
+    status?: string;
+  };
+  // Parallel generation info
+  subFocuses?: Array<{ id: string; focus: string; scenario_hint?: string }>;
+  activeQuestions?: string[];
+  completedQuestions?: number;
+  failedQuestions?: number;
+  extendedQuestions?: number;
+}
+
+/**
+ * Question context state (used in QuestionContext)
+ */
+export interface QuestionContextState {
+  step: "config" | "generating" | "result";
+  mode: "knowledge" | "mimic";
+  logs: Array<{ type: string; content: string; timestamp?: number }>;
+  results: QuestionResult[];
+  topic: string;
+  difficulty: string;
+  type: string;
+  count: number;
+  selectedKb: string;
+  progress: QuestionProgressInfo;
+  agentStatus: QuestionAgentStatus;
+  tokenStats: QuestionTokenStats;
+  uploadedFile: File | null;
+  paperPath: string;
+}
+
+/**
+ * Default question agent status
+ */
+export const DEFAULT_QUESTION_AGENT_STATUS: QuestionAgentStatus = {
+  QuestionGenerationAgent: "pending",
+  ValidationWorkflow: "pending",
+  RetrievalTool: "pending",
+};
+
+/**
+ * Default question token stats
+ */
+export const DEFAULT_QUESTION_TOKEN_STATS: QuestionTokenStats = {
+  model: "Unknown",
+  calls: 0,
+  tokens: 0,
+  input_tokens: 0,
+  output_tokens: 0,
+  cost: 0.0,
+};
+
+/**
+ * Initial question context state
+ */
+export const INITIAL_QUESTION_CONTEXT_STATE: QuestionContextState = {
+  step: "config",
+  mode: "knowledge",
+  logs: [],
+  results: [],
+  topic: "",
+  difficulty: "medium",
+  type: "choice",
+  count: 1,
+  selectedKb: "",
+  progress: {
+    stage: null,
+    progress: {},
+    subFocuses: [],
+    activeQuestions: [],
+    completedQuestions: 0,
+    failedQuestions: 0,
+  },
+  agentStatus: DEFAULT_QUESTION_AGENT_STATUS,
+  tokenStats: DEFAULT_QUESTION_TOKEN_STATS,
+  uploadedFile: null,
+  paperPath: "",
+};

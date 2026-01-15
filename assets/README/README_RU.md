@@ -255,7 +255,8 @@ cp .env.example .env
 | `BACKEND_PORT` | Нет | Порт backend (по умолчанию: `8001`) |
 | `FRONTEND_PORT` | Нет | Порт frontend (по умолчанию: `3782`) |
 | `TTS_*` | Нет | Настройки синтеза речи |
-| `PERPLEXITY_API_KEY` | Нет | Для веб-поиска |
+| `SEARCH_PROVIDER` | Нет | Провайдер поиска (варианты: `perplexity`, `tavily`, `serper`, `jina`, `exa`, `baidu`, по умолчанию: `perplexity`) |
+| `SEARCH_API_KEY` | Нет | Единый API-ключ для поиска |
 
 </details>
 
@@ -382,9 +383,11 @@ source venv/bin/activate
 **Установить Зависимости**:
 
 ```bash
-bash scripts/install_all.sh
+# Установка в один клик (Рекомендуется)
+python scripts/install_all.py
+# Или: bash scripts/install_all.sh
 
-# Или вручную:
+# Или ручная установка
 pip install -r requirements.txt
 npm install --prefix web
 ```

@@ -10,6 +10,7 @@ Includes:
 - paper_search_tool: Paper search tool
 - tex_downloader: LaTeX source download tool
 - tex_chunker: LaTeX text chunking tool
+- question: Question generation tools (pdf_parser, question_extractor, exam_mimic)
 """
 
 # Patch lightrag.utils BEFORE any imports that use lightrag
@@ -85,3 +86,6 @@ except ImportError as e:
         "run_code_sync",
         "web_search",
     ]
+
+# Question generation tools (lazy import to avoid circular dependencies)
+# Access via: from src.tools.question import parse_pdf_with_mineru, etc.

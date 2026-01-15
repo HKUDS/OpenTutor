@@ -7,6 +7,7 @@ Manages multiple knowledge bases and provides utilities for accessing them.
 """
 
 from datetime import datetime
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -24,11 +25,21 @@ class KnowledgeBaseManager:
         self.config = self._load_config()
 
     def _load_config(self) -> dict:
-        """Load knowledge base configuration"""
+        """Load knowledge base configuration (kb_config.json only stores KB list)"""
         if self.config_file.exists():
             with open(self.config_file, encoding="utf-8") as f:
-                return json.load(f)
-        return {"knowledge_bases": {}, "default": None}
+                config = json.load(f)
+                # Migration: remove old "default" field if present
+                if "default" in config:
+                    del config["default"]
+                    # Save cleaned config
+                    try:
+                        with open(self.config_file, "w", encoding="utf-8") as wf:
+                            json.dump(config, wf, indent=2, ensure_ascii=False)
+                    except Exception:
+                        pass
+                return config
+        return {"knowledge_bases": {}}
 
     def _save_config(self):
         """Save knowledge base configuration"""
@@ -74,8 +85,9 @@ class KnowledgeBaseManager:
 
         self.config["knowledge_bases"][name] = {"path": name, "description": description}
 
-        if set_default or not self.config.get("default"):
-            self.config["default"] = name
+        # Only set default if explicitly requested
+        if set_default:
+            self.set_default(name)
 
         self._save_config()
 
@@ -116,16 +128,44 @@ class KnowledgeBaseManager:
         return kb_dir / "raw"
 
     def set_default(self, name: str):
-        """Set default knowledge base"""
+        """Set default knowledge base using centralized config service."""
         if name not in self.list_knowledge_bases():
             raise ValueError(f"Knowledge base not found: {name}")
 
-        self.config["default"] = name
-        self._save_config()
+        # Use centralized config service only (no longer stored in kb_config.json)
+        try:
+            from src.services.config import get_kb_config_service
+
+            kb_config_service = get_kb_config_service()
+            kb_config_service.set_default_kb(name)
+        except Exception as e:
+            print(f"Warning: Failed to save default to centralized config: {e}")
 
     def get_default(self) -> str | None:
-        """Get default knowledge base name"""
-        return self.config.get("default")
+        """
+        Get default knowledge base name.
+
+        Priority:
+        1. Centralized config service (knowledge_base_configs.json)
+        2. First knowledge base in the list (auto-fallback)
+        """
+        # Try centralized config first
+        try:
+            from src.services.config import get_kb_config_service
+
+            kb_config_service = get_kb_config_service()
+            default_kb = kb_config_service.get_default_kb()
+            if default_kb and default_kb in self.list_knowledge_bases():
+                return default_kb
+        except Exception:
+            pass
+
+        # Fallback to first knowledge base in sorted list
+        kb_list = self.list_knowledge_bases()
+        if kb_list:
+            return kb_list[0]
+
+        return None
 
     def get_metadata(self, name: str | None = None) -> dict:
         """Get knowledge base metadata"""
@@ -208,11 +248,14 @@ class KnowledgeBaseManager:
         except Exception:
             content_lists_count = 0
 
+        metadata = info["metadata"]
+        rag_provider = metadata.get("rag_provider") if isinstance(metadata, dict) else None
         info["statistics"] = {
             "raw_documents": raw_count,
             "images": images_count,
             "content_lists": content_lists_count,
             "rag_initialized": rag_storage_dir.exists() and rag_storage_dir.is_dir(),
+            "rag_provider": rag_provider,  # Add RAG provider info
         }
 
         # Try to get RAG statistics
@@ -256,7 +299,9 @@ class KnowledgeBaseManager:
                         pass
 
                 if rag_stats:
-                    info["statistics"]["rag"] = rag_stats
+                    statistics = info["statistics"]
+                    if isinstance(statistics, dict):
+                        statistics["rag"] = rag_stats
             except Exception:
                 pass
 
@@ -335,6 +380,288 @@ class KnowledgeBaseManager:
 
         print(f"✓ RAG storage cleaned for '{kb_name}'")
         return True
+
+    def link_folder(self, kb_name: str, folder_path: str) -> dict:
+        """
+        Link a local folder to a knowledge base.
+
+        Args:
+            kb_name: Knowledge base name
+            folder_path: Path to local folder (supports ~, relative paths)
+
+        Returns:
+            Dict with folder info including id, path, and file count
+
+        Raises:
+            ValueError: If KB not found or folder doesn't exist
+        """
+        if kb_name not in self.list_knowledge_bases():
+            raise ValueError(f"Knowledge base not found: {kb_name}")
+
+        # Normalize path (cross-platform: handles ~, relative paths, etc.)
+        folder = Path(folder_path).expanduser().resolve()
+
+        if not folder.exists():
+            raise ValueError(f"Folder does not exist: {folder}")
+        if not folder.is_dir():
+            raise ValueError(f"Path is not a directory: {folder}")
+
+        # Get supported files in folder
+        supported_extensions = {".pdf", ".docx", ".doc", ".txt", ".md", ".markdown"}
+        files: list[Path] = []
+        for ext in supported_extensions:
+            files.extend(folder.glob(f"**/*{ext}"))
+
+        # Generate folder ID
+        import hashlib
+
+        folder_id = hashlib.md5(  # noqa: S324
+            str(folder).encode(), usedforsecurity=False
+        ).hexdigest()[:8]
+
+        # Load existing linked folders from metadata
+        kb_dir = self.base_dir / kb_name
+        metadata_file = kb_dir / "metadata.json"
+        metadata: dict = {}
+
+        if metadata_file.exists():
+            try:
+                with open(metadata_file, encoding="utf-8") as fp:
+                    metadata = json.load(fp)
+            except Exception:
+                metadata = {}
+
+        if "linked_folders" not in metadata:
+            metadata["linked_folders"] = []
+
+        # Check if already linked
+        existing_ids = [item["id"] for item in metadata.get("linked_folders", [])]
+        if folder_id in existing_ids:
+            # If already linked, treat as success (idempotent)
+            # Find and return existing info
+            for item in metadata.get("linked_folders", []):
+                if item["id"] == folder_id:
+                    return item
+
+        # Add folder info
+        folder_info = {
+            "id": folder_id,
+            "path": str(folder),
+            "added_at": datetime.now().isoformat(),
+            "file_count": len(files),
+        }
+        metadata["linked_folders"].append(folder_info)
+
+        # Save metadata
+        with open(metadata_file, "w", encoding="utf-8") as fp:
+            json.dump(metadata, fp, indent=2, ensure_ascii=False)
+
+        return folder_info
+
+    def get_linked_folders(self, kb_name: str) -> list[dict]:
+        """
+        Get list of linked folders for a knowledge base.
+
+        Args:
+            kb_name: Knowledge base name
+
+        Returns:
+            List of linked folder info dicts
+        """
+        if kb_name not in self.list_knowledge_bases():
+            raise ValueError(f"Knowledge base not found: {kb_name}")
+
+        kb_dir = self.base_dir / kb_name
+        metadata_file = kb_dir / "metadata.json"
+
+        if not metadata_file.exists():
+            return []
+
+        try:
+            with open(metadata_file, encoding="utf-8") as f:
+                metadata = json.load(f)
+                return metadata.get("linked_folders", [])
+        except Exception:
+            return []
+
+    def unlink_folder(self, kb_name: str, folder_id: str) -> bool:
+        """
+        Unlink a folder from a knowledge base.
+
+        Args:
+            kb_name: Knowledge base name
+            folder_id: Folder ID to unlink
+
+        Returns:
+            True if unlinked successfully, False if not found
+        """
+        if kb_name not in self.list_knowledge_bases():
+            raise ValueError(f"Knowledge base not found: {kb_name}")
+
+        kb_dir = self.base_dir / kb_name
+        metadata_file = kb_dir / "metadata.json"
+
+        if not metadata_file.exists():
+            return False
+
+        try:
+            with open(metadata_file, encoding="utf-8") as f:
+                metadata = json.load(f)
+        except Exception:
+            return False
+
+        linked = metadata.get("linked_folders", [])
+        new_linked = [f for f in linked if f["id"] != folder_id]
+
+        if len(new_linked) == len(linked):
+            return False  # Not found
+
+        metadata["linked_folders"] = new_linked
+
+        with open(metadata_file, "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+        return True
+
+    def scan_linked_folder(self, folder_path: str) -> list[str]:
+        """
+        Scan a linked folder and return list of supported file paths.
+
+        Args:
+            folder_path: Path to folder
+
+        Returns:
+            List of file paths (as strings)
+        """
+        folder = Path(folder_path).expanduser().resolve()
+
+        if not folder.exists() or not folder.is_dir():
+            return []
+
+        supported_extensions = {".pdf", ".docx", ".doc", ".txt", ".md", ".markdown"}
+        files = []
+
+        for ext in supported_extensions:
+            for file_path in folder.glob(f"**/*{ext}"):
+                files.append(str(file_path))
+
+        return sorted(files)
+
+    def detect_folder_changes(self, kb_name: str, folder_id: str) -> dict:
+        """
+        Detect new and modified files in a linked folder since last sync.
+
+        This enables automatic sync of changes from local folders that may
+        be synced with cloud services like SharePoint, Google Drive, etc.
+
+        Args:
+            kb_name: Knowledge base name
+            folder_id: Folder ID to check for changes
+
+        Returns:
+            Dict with 'new_files', 'modified_files', and 'has_changes' keys
+        """
+        if kb_name not in self.list_knowledge_bases():
+            raise ValueError(f"Knowledge base not found: {kb_name}")
+
+        # Get folder info
+        folders = self.get_linked_folders(kb_name)
+        folder_info = next((f for f in folders if f["id"] == folder_id), None)
+
+        if not folder_info:
+            raise ValueError(f"Linked folder not found: {folder_id}")
+
+        folder_path = Path(folder_info["path"]).expanduser().resolve()
+        last_sync = folder_info.get("last_sync")
+        synced_files = folder_info.get("synced_files", {})
+
+        # Parse last sync timestamp
+        last_sync_time = None
+        if last_sync:
+            try:
+                last_sync_time = datetime.fromisoformat(last_sync)
+            except Exception:
+                pass
+
+        # Scan current files
+        supported_extensions = {".pdf", ".docx", ".doc", ".txt", ".md", ".markdown"}
+        new_files = []
+        modified_files = []
+
+        for ext in supported_extensions:
+            for file_path in folder_path.glob(f"**/*{ext}"):
+                file_str = str(file_path)
+                file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
+
+                if file_str in synced_files:
+                    # Check if modified since last sync
+                    prev_mtime_str = synced_files[file_str]
+                    try:
+                        prev_mtime = datetime.fromisoformat(prev_mtime_str)
+                        if file_mtime > prev_mtime:
+                            modified_files.append(file_str)
+                    except Exception:
+                        modified_files.append(file_str)
+                else:
+                    # New file (not in synced files)
+                    new_files.append(file_str)
+
+        return {
+            "new_files": sorted(new_files),
+            "modified_files": sorted(modified_files),
+            "has_changes": len(new_files) > 0 or len(modified_files) > 0,
+            "new_count": len(new_files),
+            "modified_count": len(modified_files),
+        }
+
+    def update_folder_sync_state(self, kb_name: str, folder_id: str, synced_files: list[str]):
+        """
+        Update the sync state for a linked folder after successful sync.
+
+        Records which files were synced and their modification times,
+        enabling future change detection.
+
+        Args:
+            kb_name: Knowledge base name
+            folder_id: Folder ID
+            synced_files: List of file paths that were successfully synced
+        """
+        if kb_name not in self.list_knowledge_bases():
+            raise ValueError(f"Knowledge base not found: {kb_name}")
+
+        kb_dir = self.base_dir / kb_name
+        metadata_file = kb_dir / "metadata.json"
+
+        if not metadata_file.exists():
+            return
+
+        try:
+            with open(metadata_file, encoding="utf-8") as f:
+                metadata = json.load(f)
+        except Exception:
+            return
+
+        linked = metadata.get("linked_folders", [])
+
+        for folder in linked:
+            if folder["id"] == folder_id:
+                # Record sync timestamp
+                folder["last_sync"] = datetime.now().isoformat()
+
+                # Record file modification times
+                file_states = folder.get("synced_files", {})
+                for file_path in synced_files:
+                    try:
+                        p = Path(file_path)
+                        if p.exists():
+                            mtime = datetime.fromtimestamp(p.stat().st_mtime)
+                            file_states[file_path] = mtime.isoformat()
+                    except Exception:
+                        pass
+
+                folder["synced_files"] = file_states
+                folder["file_count"] = len(file_states)
+                break
 
 
 def main():

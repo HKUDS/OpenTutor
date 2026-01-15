@@ -9,6 +9,8 @@ from pathlib import Path
 import sys
 from typing import Any, Dict, List, Optional
 
+from lightrag.llm.openai import openai_complete_if_cache
+
 from src.logging import get_logger
 from src.logging.adapters import LightRAGLogContext
 
@@ -69,7 +71,7 @@ class RAGAnythingPipeline:
 
         self._setup_raganything_path()
 
-        from lightrag.llm.openai import openai_complete_if_cache
+        from openai import AsyncOpenAI
         from raganything import RAGAnything, RAGAnythingConfig
 
         from src.services.embedding import get_embedding_client
@@ -78,18 +80,52 @@ class RAGAnythingPipeline:
         llm_client = get_llm_client()
         embed_client = get_embedding_client()
 
-        def llm_model_func(prompt, system_prompt=None, history_messages=None, **kwargs):
+        # Create AsyncOpenAI client directly - bypasses LightRAG's response_format handling
+        openai_client = AsyncOpenAI(
+            api_key=llm_client.config.api_key,
+            base_url=llm_client.config.base_url,
+        )
+
+        async def llm_model_func(prompt, system_prompt=None, history_messages=None, **kwargs):
+            """Custom async LLM function that bypasses LightRAG's openai_complete_if_cache."""
             if history_messages is None:
                 history_messages = []
-            return openai_complete_if_cache(
-                llm_client.config.model,
-                prompt,
-                system_prompt=system_prompt,
-                history_messages=history_messages,
-                api_key=llm_client.config.api_key,
-                base_url=llm_client.config.base_url,
-                **kwargs,
+
+            # Build messages array
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+
+            # Add history
+            messages.extend(history_messages)
+
+            # Add current prompt
+            messages.append({"role": "user", "content": prompt})
+
+            # Whitelist only valid OpenAI parameters, filter out LightRAG-specific ones
+            valid_params = {
+                "temperature",
+                "top_p",
+                "n",
+                "stream",
+                "stop",
+                "max_tokens",
+                "presence_penalty",
+                "frequency_penalty",
+                "logit_bias",
+                "user",
+                "seed",
+            }
+            clean_kwargs = {k: v for k, v in kwargs.items() if k in valid_params}
+
+            # Call OpenAI API directly (async)
+            response = await openai_client.chat.completions.create(
+                model=llm_client.config.model,
+                messages=messages,
+                **clean_kwargs,
             )
+
+            return response.choices[0].message.content
 
         def vision_model_func(
             prompt,
@@ -163,6 +199,10 @@ class RAGAnythingPipeline:
         """
         Initialize KB using RAG-Anything's process_document_complete().
 
+        Uses FileTypeRouter to classify files and route them appropriately:
+        - PDF files -> MinerU parser (full document analysis)
+        - Text files -> Direct read + LightRAG insert (fast)
+
         Args:
             kb_name: Knowledge base name
             file_paths: List of file paths to process
@@ -172,23 +212,56 @@ class RAGAnythingPipeline:
         Returns:
             True if successful
         """
+        from ..components.routing import FileTypeRouter
+
         self.logger.info(f"Initializing KB '{kb_name}' with {len(file_paths)} files")
 
         kb_dir = Path(self.kb_base_dir) / kb_name
         content_list_dir = kb_dir / "content_list"
         content_list_dir.mkdir(parents=True, exist_ok=True)
 
+        # Classify files by type
+        classification = FileTypeRouter.classify_files(file_paths)
+
+        self.logger.info(
+            f"File classification: {len(classification.needs_mineru)} need MinerU, "
+            f"{len(classification.text_files)} text files, "
+            f"{len(classification.unsupported)} unsupported"
+        )
+
         with LightRAGLogContext(scene="knowledge_init"):
             rag = self._get_rag_instance(kb_name)
             await rag._ensure_lightrag_initialized()
 
-            for idx, file_path in enumerate(file_paths, 1):
-                self.logger.info(f"Processing [{idx}/{len(file_paths)}]: {Path(file_path).name}")
+            total_files = len(classification.needs_mineru) + len(classification.text_files)
+            idx = 0
+
+            # Process files requiring MinerU (PDF, DOCX, images)
+            for file_path in classification.needs_mineru:
+                idx += 1
+                self.logger.info(
+                    f"Processing [{idx}/{total_files}] (MinerU): {Path(file_path).name}"
+                )
                 await rag.process_document_complete(
                     file_path=file_path,
                     output_dir=str(content_list_dir),
                     parse_method="auto",
                 )
+
+            # Process text files directly (fast path)
+            for file_path in classification.text_files:
+                idx += 1
+                self.logger.info(
+                    f"Processing [{idx}/{total_files}] (direct text): {Path(file_path).name}"
+                )
+                content = await FileTypeRouter.read_text_file(file_path)
+                if content.strip():
+                    # Insert directly into LightRAG, bypassing MinerU
+                    await rag.lightrag.ainsert(content)
+
+            # Log unsupported files
+            for file_path in classification.unsupported:
+                self.logger.warning(f"Skipped unsupported file: {Path(file_path).name}")
 
         if extract_numbered_items:
             await self._extract_numbered_items(kb_name)

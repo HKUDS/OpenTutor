@@ -12,6 +12,7 @@ Components follow a simple protocol:
 # Import component modules for convenience
 from . import chunkers, embedders, indexers, parsers, retrievers
 from .base import BaseComponent, Component
+from .routing import DocumentType, FileClassification, FileTypeRouter
 
 __all__ = [
     "Component",
@@ -21,4 +22,8 @@ __all__ = [
     "embedders",
     "indexers",
     "retrievers",
+    # File type routing
+    "FileTypeRouter",
+    "FileClassification",
+    "DocumentType",
 ]

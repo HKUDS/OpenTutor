@@ -91,6 +91,7 @@ class DocumentAdder:
         api_key: str | None = None,
         base_url: str | None = None,
         progress_tracker=None,
+        rag_provider: str | None = None,
     ):
         self.kb_name = kb_name
         self.base_dir = Path(base_dir)
@@ -111,6 +112,7 @@ class DocumentAdder:
         self.api_key = api_key
         self.base_url = base_url
         self.progress_tracker = progress_tracker
+        self.rag_provider = rag_provider
         self._ensure_working_directories()
 
     def _ensure_working_directories(self):
@@ -197,15 +199,23 @@ class DocumentAdder:
         return files_to_process
 
     async def process_new_documents(self, new_files: List[Path]):
-        """Async phase: Ingests files into the RAG system."""
+        """
+        Async phase: Ingests files into the RAG system.
+
+        Uses FileTypeRouter to classify files and route them appropriately:
+        - PDF/DOCX/images -> MinerU parser (full document analysis)
+        - Text/Markdown -> Direct read + LightRAG insert (fast)
+        """
         if not new_files:
             return None
 
         if raganything_cls is None:
             raise ImportError("RAGAnything module not found.")
 
+        from src.services.rag.components.routing import FileTypeRouter
+
         # Pre-import progress stage if needed to avoid overhead in loop
-        ProgressStage = None
+        ProgressStage: Any = None
         if self.progress_tracker:
             from src.knowledge.progress_tracker import ProgressStage
 
@@ -335,15 +345,31 @@ class DocumentAdder:
             if hasattr(rag, "_ensure_lightrag_initialized"):
                 await rag._ensure_lightrag_initialized()
 
+        # Classify files by type
+        file_paths_str = [str(f) for f in new_files]
+        classification = FileTypeRouter.classify_files(file_paths_str)
+
+        logger.info(
+            f"File classification: {len(classification.needs_mineru)} need MinerU, "
+            f"{len(classification.text_files)} text files, "
+            f"{len(classification.unsupported)} unsupported"
+        )
+
         processed_files = []
-        for idx, doc_file in enumerate(new_files, 1):
+        total_files = len(classification.needs_mineru) + len(classification.text_files)
+        idx = 0
+
+        # Process files requiring MinerU (PDF, DOCX, images)
+        for doc_file_str in classification.needs_mineru:
+            doc_file = Path(doc_file_str)
+            idx += 1
             try:
                 if self.progress_tracker and ProgressStage:
                     self.progress_tracker.update(
                         ProgressStage.PROCESSING_FILE,
-                        f"Ingesting {doc_file.name}",
+                        f"Ingesting (MinerU) {doc_file.name}",
                         current=idx,
-                        total=len(new_files),
+                        total=total_files,
                     )
 
                 # Verify file still exists in raw/ (it should, as we staged it)
@@ -362,9 +388,44 @@ class DocumentAdder:
                 processed_files.append(doc_file)
                 # Store hash on success - "Canonizing" the file
                 self._record_successful_hash(doc_file)
-                logger.info(f"  ✓ Processed & Indexed: {doc_file.name}")
+                logger.info(f"  ✓ Processed (MinerU): {doc_file.name}")
             except Exception as e:
                 logger.exception(f"  ✗ Failed {doc_file.name}: {e}")
+
+        # Process text files directly (fast path - no MinerU)
+        for doc_file_str in classification.text_files:
+            doc_file = Path(doc_file_str)
+            idx += 1
+            try:
+                if self.progress_tracker and ProgressStage:
+                    self.progress_tracker.update(
+                        ProgressStage.PROCESSING_FILE,
+                        f"Ingesting (text) {doc_file.name}",
+                        current=idx,
+                        total=total_files,
+                    )
+
+                # Verify file still exists
+                if not doc_file.exists():
+                    logger.error(f"  ✗ Failed: Staged file missing {doc_file.name}")
+                    continue
+
+                # Read text file directly
+                content = await FileTypeRouter.read_text_file(str(doc_file))
+                if content.strip():
+                    # Insert directly into LightRAG, bypassing MinerU
+                    await rag.lightrag.ainsert(content)
+                    processed_files.append(doc_file)
+                    self._record_successful_hash(doc_file)
+                    logger.info(f"  ✓ Processed (text): {doc_file.name}")
+                else:
+                    logger.warning(f"  ⚠ Skipped empty file: {doc_file.name}")
+            except Exception as e:
+                logger.exception(f"  ✗ Failed {doc_file.name}: {e}")
+
+        # Log unsupported files
+        for doc_file_str in classification.unsupported:
+            logger.warning(f"  ⚠ Skipped unsupported file: {Path(doc_file_str).name}")
 
         await self.fix_structure()
         return processed_files
@@ -465,6 +526,20 @@ class DocumentAdder:
                 metadata = json.load(f)
 
             metadata["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # Update RAG provider if specified
+            if self.rag_provider:
+                metadata["rag_provider"] = self.rag_provider
+
+                # Also save to centralized config file
+                try:
+                    from src.services.config import get_kb_config_service
+
+                    kb_config_service = get_kb_config_service()
+                    kb_config_service.set_rag_provider(self.kb_name, self.rag_provider)
+                except Exception as config_err:
+                    logger.warning(f"Failed to save to centralized config: {config_err}")
+
             history = metadata.get("update_history", [])
             history.append(
                 {

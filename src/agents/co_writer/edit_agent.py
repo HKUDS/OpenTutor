@@ -57,6 +57,16 @@ class EditAgent(BaseAgent):
     """Co-writer editing agent using unified BaseAgent."""
 
     def __init__(self, language: str = "en"):
+        """
+        Initialize EditAgent.
+
+        Args:
+            language: Language setting ('en' | 'zh'), default 'en'
+
+        Note: LLM configuration (api_key, base_url, model, etc.) is loaded
+        automatically from the unified config service. Use refresh_config()
+        to pick up configuration changes made in Settings.
+        """
         super().__init__(
             module_name="co_writer",
             agent_name="edit_agent",

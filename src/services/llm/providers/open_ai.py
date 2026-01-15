@@ -54,7 +54,7 @@ class OpenAIProvider(BaseLLMProvider):
 
         return await self.execute_with_retry(_call_api)
 
-    async def stream(self, prompt: str, **kwargs) -> AsyncStreamGenerator:
+    async def stream(self, prompt: str, **kwargs) -> AsyncStreamGenerator:  # type: ignore[override]
         model = kwargs.pop("model", None) or self.config.model_name or "gpt-4o"
 
         async def _create_stream():

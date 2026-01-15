@@ -10,7 +10,6 @@ data/user/
 data/knowledge_bases/
 run_code_workspace/
 src/agents/question/reference_papers/
-tests/
 
 # ============================================
 # Python Related
@@ -86,6 +85,7 @@ outputs/
 cache/
 **/cache/
 .cache/
+.ruff_cache
 
 # Log files
 *.log

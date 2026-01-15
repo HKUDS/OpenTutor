@@ -19,7 +19,7 @@ import json
 import logging
 from pathlib import Path
 import sys
-from typing import Any, Optional
+from typing import Any, List, Optional, Union
 
 from src.config.constants import LOG_SYMBOLS, PROJECT_ROOT
 
@@ -135,7 +135,7 @@ class Logger:
         level: str = "INFO",
         console_output: bool = True,
         file_output: bool = True,
-        log_dir: Optional[str] = None,
+        log_dir: Optional[Union[str, Path]] = None,
     ):
         """
         Initialize logger.
@@ -155,16 +155,17 @@ class Logger:
         self.logger.setLevel(logging.DEBUG)  # Capture all, filter at handlers
         self.logger.handlers.clear()
         # Setup log directory
+        log_dir_path: Path
         if log_dir is None:
-            log_dir = PROJECT_ROOT / "data" / "user" / "logs"
+            log_dir_path = PROJECT_ROOT / "data" / "user" / "logs"
         else:
-            log_dir = Path(log_dir)
+            log_dir_path = Path(log_dir) if isinstance(log_dir, str) else log_dir
             # If relative path, resolve it relative to project root
-            if not log_dir.is_absolute():
-                log_dir = PROJECT_ROOT / log_dir
+            if not log_dir_path.is_absolute():
+                log_dir_path = PROJECT_ROOT / log_dir_path
 
-        log_dir.mkdir(parents=True, exist_ok=True)
-        self.log_dir = log_dir
+        log_dir_path.mkdir(parents=True, exist_ok=True)
+        self.log_dir = log_dir_path
 
         # Console handler
         if console_output:
@@ -176,7 +177,7 @@ class Logger:
         # File handler
         if file_output:
             timestamp = datetime.now().strftime("%Y%m%d")
-            log_file = log_dir / f"ai_tutor_{timestamp}.log"
+            log_file = log_dir_path / f"ai_tutor_{timestamp}.log"
 
             file_handler = logging.FileHandler(log_file, encoding="utf-8")
             file_handler.setLevel(logging.DEBUG)  # Log everything to file
@@ -186,7 +187,7 @@ class Logger:
             self._log_file = log_file
 
         # For backwards compatibility with task-specific logging
-        self._task_handlers = []
+        self._task_handlers: List[logging.Handler] = []
 
         # Display manager for TUI (optional, used by solve_agents)
         self.display_manager = None
@@ -608,8 +609,8 @@ class Logger:
             self.logger.removeHandler(handler)
 
 
-# Global logger registry
-_loggers: dict[str, Logger] = {}
+# Global logger registry - key is tuple of (name, level, console_output, file_output, log_dir)
+_loggers: dict[tuple[str, str, bool, bool, Optional[str]], "Logger"] = {}
 
 
 def get_logger(

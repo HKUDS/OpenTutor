@@ -237,7 +237,8 @@ cp .env.example .env
 | `BACKEND_PORT` | Não | Porta do backend (padrão: `8001`) |
 | `FRONTEND_PORT` | Não | Porta do frontend (padrão: `3782`) |
 | `TTS_*` | Não | Configurações de texto para voz |
-| `PERPLEXITY_API_KEY` | Não | Para busca na web |
+| `SEARCH_PROVIDER` | Não | Provedor de busca (opções: `perplexity`, `tavily`, `serper`, `jina`, `exa`, `baidu`, padrão: `perplexity`) |
+| `SEARCH_API_KEY` | Não | Chave API unificada para busca |
 
 </details>
 
@@ -364,9 +365,11 @@ source venv/bin/activate
 **Instalar Dependências**:
 
 ```bash
-bash scripts/install_all.sh
+# Instalação com um clique (Recomendado)
+python scripts/install_all.py
+# Ou: bash scripts/install_all.sh
 
-# Ou manualmente:
+# Ou instalação manual
 pip install -r requirements.txt
 npm install --prefix web
 ```

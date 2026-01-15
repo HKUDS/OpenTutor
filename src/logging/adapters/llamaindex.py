@@ -8,7 +8,7 @@ Forwards LlamaIndex logs to DeepTutor's unified logging system.
 
 from contextlib import contextmanager
 import logging
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class LlamaIndexLogForwarder(logging.Handler):
@@ -92,8 +92,8 @@ def LlamaIndexLogContext(
     min_level_int = getattr(logging, min_level.upper(), logging.INFO)
 
     # Store original state
-    original_states = []
-    forwarders = []
+    original_states: List[Dict[str, Any]] = []
+    forwarders: List[Tuple[logging.Logger, LlamaIndexLogForwarder]] = []
 
     for llama_logger in llama_loggers:
         original_states.append(

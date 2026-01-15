@@ -83,7 +83,7 @@ class LLMStats:
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
         self.total_cost = 0.0
-        self.model_used = None
+        self.model_used: Optional[str] = None
 
     def add_call(
         self,

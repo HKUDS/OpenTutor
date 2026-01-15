@@ -9,10 +9,10 @@ import traceback
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from src.agents.question import AgentCoordinator
-from src.agents.question.tools.exam_mimic import mimic_exam_questions
 from src.api.utils.history import ActivityType, history_manager
 from src.api.utils.log_interceptor import LogInterceptor
 from src.api.utils.task_id_manager import TaskIDManager
+from src.tools.question import mimic_exam_questions
 from src.utils.document_validator import DocumentValidator
 from src.utils.error_utils import format_exception_message
 
@@ -96,13 +96,19 @@ async def websocket_mimic_generate(websocket: WebSocket):
         ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
 
         class StdoutInterceptor:
-            def __init__(self, queue):
+            def __init__(self, queue, original):
                 self.queue = queue
-                self.original_stdout = sys.stdout
+                self.original_stdout = original
+                self._closed = False
 
             def write(self, message):
+                if self._closed:
+                    return
                 # Write to terminal first (with ANSI codes for color)
-                self.original_stdout.write(message)
+                try:
+                    self.original_stdout.write(message)
+                except Exception:
+                    pass
                 # Strip ANSI escape codes before sending to frontend
                 clean_message = ANSI_ESCAPE_PATTERN.sub("", message).strip()
                 # Then send to frontend (non-blocking)
@@ -119,9 +125,18 @@ async def websocket_mimic_generate(websocket: WebSocket):
                         pass
 
             def flush(self):
-                self.original_stdout.flush()
+                if not self._closed:
+                    try:
+                        self.original_stdout.flush()
+                    except Exception:
+                        pass
 
-        sys.stdout = StdoutInterceptor(log_queue)
+            def close(self):
+                """Mark interceptor as closed to prevent further writes."""
+                self._closed = True
+
+        interceptor = StdoutInterceptor(log_queue, original_stdout)
+        sys.stdout = interceptor
 
         try:
             await websocket.send_json(
@@ -256,13 +271,22 @@ async def websocket_mimic_generate(websocket: WebSocket):
                     f"Mimic generation complete: {len(generated)} succeeded, {len(failed)} failed"
                 )
 
-                await websocket.send_json({"type": "complete"})
+                try:
+                    await websocket.send_json({"type": "complete"})
+                except (RuntimeError, WebSocketDisconnect):
+                    logger.debug("WebSocket closed before complete signal could be sent")
             else:
                 error_msg = result.get("error", "Unknown error")
-                await websocket.send_json({"type": "error", "content": error_msg})
+                try:
+                    await websocket.send_json({"type": "error", "content": error_msg})
+                except (RuntimeError, WebSocketDisconnect):
+                    pass
                 logger.error(f"Mimic generation failed: {error_msg}")
 
         finally:
+            # Close interceptor and restore stdout
+            if "interceptor" in locals():
+                interceptor.close()
             sys.stdout = original_stdout
 
     except WebSocketDisconnect:
@@ -275,13 +299,27 @@ async def websocket_mimic_generate(websocket: WebSocket):
         except Exception:
             pass
     finally:
+        # Ensure stdout is always restored
         sys.stdout = original_stdout
+
+        # Clean up pusher task
         if pusher_task:
             try:
                 pusher_task.cancel()
                 await pusher_task
+            except asyncio.CancelledError:
+                pass  # Expected when cancelling
             except Exception:
                 pass
+
+        # Drain any remaining items in the queue
+        try:
+            while not log_queue.empty():
+                log_queue.get_nowait()
+        except Exception:
+            pass
+
+        # Close WebSocket
         try:
             await websocket.close()
         except Exception:
@@ -386,21 +424,12 @@ async def websocket_question_generate(websocket: WebSocket):
                     logger.debug("WebSocket closed, stopping question generation")
                     return
 
-                # Send initial agent status
-                try:
-                    await websocket.send_json(
-                        {"type": "agent_status", "all_agents": coordinator.agent_status}
-                    )
-                except (RuntimeError, WebSocketDisconnect):
-                    logger.debug("WebSocket closed, stopping question generation")
-                    return
-
                 # Use custom mode generation (new streamlined flow)
                 logger.info(f"Starting custom mode generation for {count} question(s)")
 
                 # Use the new custom generation method
                 batch_result = await coordinator.generate_questions_custom(
-                    base_requirement=requirement,
+                    requirement=requirement,
                     num_questions=count,
                 )
 

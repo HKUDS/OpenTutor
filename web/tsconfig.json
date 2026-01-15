@@ -15,7 +15,7 @@
     "incremental": true,
     "plugins": [{ "name": "next" }],
     "paths": { "@/*": ["./*"] },
-    "types": ["node", "@playwright/test"]
+    "types": ["node"]
   },
   "include": [
     "next-env.d.ts",

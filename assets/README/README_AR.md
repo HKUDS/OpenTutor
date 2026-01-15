@@ -237,7 +237,8 @@ cp .env.example .env
 | `BACKEND_PORT` | لا | منفذ الخلفية (افتراضي: `8001`) |
 | `FRONTEND_PORT` | لا | منفذ الواجهة الأمامية (افتراضي: `3782`) |
 | `TTS_*` | لا | إعدادات تحويل النص إلى كلام |
-| `PERPLEXITY_API_KEY` | لا | للبحث على الويب |
+| `SEARCH_PROVIDER` | لا | مزود البحث (الخيارات: `perplexity`, `tavily`, `serper`, `jina`, `exa`, `baidu`، الافتراضي: `perplexity`) |
+| `SEARCH_API_KEY` | لا | مفتاح API موحد للبحث |
 
 </details>
 
@@ -364,9 +365,11 @@ source venv/bin/activate
 **تثبيت المتطلبات**:
 
 ```bash
-bash scripts/install_all.sh
+# التثبيت بنقرة واحدة (موصى به)
+python scripts/install_all.py
+# أو: bash scripts/install_all.sh
 
-# أو يدوياً:
+# أو التثبيت اليدوي
 pip install -r requirements.txt
 npm install --prefix web
 ```

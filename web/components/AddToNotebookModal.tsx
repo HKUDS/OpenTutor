@@ -23,7 +23,7 @@ interface NotebookOption {
 interface AddToNotebookModalProps {
   isOpen: boolean;
   onClose: () => void;
-  recordType: "solve" | "question" | "research" | "co_writer";
+  recordType: "solve" | "question" | "research" | "co_writer" | "chat";
   title: string;
   userQuery: string;
   output: string;
@@ -151,18 +151,18 @@ export default function AddToNotebookModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl w-[480px] max-h-[80vh] flex flex-col animate-in zoom-in-95">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-[480px] max-h-[80vh] flex flex-col animate-in zoom-in-95">
         {/* Header */}
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50 rounded-t-2xl">
-          <h3 className="font-bold text-slate-900 flex items-center gap-2">
-            <Book className="w-5 h-5 text-indigo-600" />
+        <div className="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 rounded-t-2xl">
+          <h3 className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Book className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             Add to Notebook
           </h3>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-white/50 rounded-lg transition-colors"
+            className="p-1 hover:bg-white/50 dark:hover:bg-slate-700 rounded-lg transition-colors"
           >
-            <X className="w-5 h-5 text-slate-500" />
+            <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
           </button>
         </div>
 
@@ -170,33 +170,35 @@ export default function AddToNotebookModal({
         <div className="flex-1 overflow-y-auto p-4">
           {success ? (
             <div className="py-12 text-center animate-in zoom-in-95">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Check className="w-8 h-8 text-green-600" />
+              <div className="w-16 h-16 bg-green-100 dark:bg-green-900/40 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Check className="w-8 h-8 text-green-600 dark:text-green-400" />
               </div>
-              <h4 className="text-lg font-bold text-slate-900 mb-1">
+              <h4 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">
                 Added Successfully!
               </h4>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
                 Record has been saved to {selectedIds.length} notebook
                 {selectedIds.length > 1 ? "s" : ""}
               </p>
             </div>
           ) : loading ? (
             <div className="py-12 text-center">
-              <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-2" />
-              <p className="text-slate-500">Loading notebooks...</p>
+              <Loader2 className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin mx-auto mb-2" />
+              <p className="text-slate-500 dark:text-slate-400">
+                Loading notebooks...
+              </p>
             </div>
           ) : (
             <>
               {/* Record Preview */}
-              <div className="mb-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+              <div className="mb-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-100 dark:border-slate-600">
+                <div className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
                   Record Preview
                 </div>
-                <h4 className="font-semibold text-slate-900 truncate">
+                <h4 className="font-semibold text-slate-900 dark:text-slate-100 truncate">
                   {title}
                 </h4>
-                <p className="text-xs text-slate-500 line-clamp-2 mt-1">
+                <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-1">
                   {userQuery}
                 </p>
               </div>
@@ -204,12 +206,12 @@ export default function AddToNotebookModal({
               {/* Notebook Selection */}
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     Select Notebooks
                   </label>
                   <button
                     onClick={() => setShowCreateForm(!showCreateForm)}
-                    className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1"
                   >
                     <Plus className="w-3 h-3" />
                     New Notebook
@@ -218,7 +220,7 @@ export default function AddToNotebookModal({
 
                 {/* Create New Notebook Form */}
                 {showCreateForm && (
-                  <div className="mb-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100 animate-in slide-in-from-top-2">
+                  <div className="mb-3 p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl border border-indigo-100 dark:border-indigo-800 animate-in slide-in-from-top-2">
                     <input
                       type="text"
                       value={newNotebook.name}
@@ -229,11 +231,13 @@ export default function AddToNotebookModal({
                         }))
                       }
                       placeholder="Notebook name"
-                      className="w-full px-3 py-2 mb-2 border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-white"
+                      className="w-full px-3 py-2 mb-2 border border-indigo-200 dark:border-indigo-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100"
                       autoFocus
                     />
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs text-slate-500">Color:</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        Color:
+                      </span>
                       <div className="flex gap-1">
                         {COLORS.slice(0, 6).map((color) => (
                           <button
@@ -243,7 +247,7 @@ export default function AddToNotebookModal({
                             }
                             className={`w-5 h-5 rounded transition-all ${
                               newNotebook.color === color
-                                ? "ring-2 ring-offset-1 ring-slate-400 scale-110"
+                                ? "ring-2 ring-offset-1 ring-slate-400 dark:ring-slate-500 dark:ring-offset-slate-800 scale-110"
                                 : ""
                             }`}
                             style={{ backgroundColor: color }}
@@ -254,7 +258,7 @@ export default function AddToNotebookModal({
                     <div className="flex justify-end gap-2">
                       <button
                         onClick={() => setShowCreateForm(false)}
-                        className="px-3 py-1.5 text-xs text-slate-600 hover:bg-white rounded-lg transition-colors"
+                        className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors"
                       >
                         Cancel
                       </button>
@@ -273,9 +277,11 @@ export default function AddToNotebookModal({
                 {/* Notebook List */}
                 {notebooks.length === 0 ? (
                   <div className="py-8 text-center">
-                    <FolderOpen className="w-10 h-10 text-slate-200 mx-auto mb-2" />
-                    <p className="text-sm text-slate-500">No notebooks yet</p>
-                    <p className="text-xs text-slate-400">
+                    <FolderOpen className="w-10 h-10 text-slate-200 dark:text-slate-600 mx-auto mb-2" />
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      No notebooks yet
+                    </p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">
                       Create your first notebook above
                     </p>
                   </div>
@@ -287,8 +293,8 @@ export default function AddToNotebookModal({
                         onClick={() => toggleNotebook(nb.id)}
                         className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all border-2 text-left ${
                           selectedIds.includes(nb.id)
-                            ? "bg-indigo-50 border-indigo-300"
-                            : "bg-white border-slate-200 hover:border-indigo-200 hover:bg-slate-50"
+                            ? "bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700"
+                            : "bg-white dark:bg-slate-700/50 border-slate-200 dark:border-slate-600 hover:border-indigo-200 dark:hover:border-indigo-700 hover:bg-slate-50 dark:hover:bg-slate-700"
                         }`}
                       >
                         <div
@@ -301,10 +307,10 @@ export default function AddToNotebookModal({
                           <BookOpen className="w-5 h-5" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-slate-900 truncate text-sm">
+                          <h4 className="font-semibold text-slate-900 dark:text-slate-100 truncate text-sm">
                             {nb.name}
                           </h4>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
                             {nb.record_count} records
                           </p>
                         </div>
@@ -312,7 +318,7 @@ export default function AddToNotebookModal({
                           className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
                             selectedIds.includes(nb.id)
                               ? "bg-indigo-600 border-indigo-600"
-                              : "border-slate-300"
+                              : "border-slate-300 dark:border-slate-500"
                           }`}
                         >
                           {selectedIds.includes(nb.id) && (
@@ -330,8 +336,8 @@ export default function AddToNotebookModal({
 
         {/* Footer */}
         {!success && !loading && (
-          <div className="p-4 border-t border-slate-100 flex justify-between items-center">
-            <span className="text-xs text-slate-500">
+          <div className="p-4 border-t border-slate-100 dark:border-slate-700 flex justify-between items-center">
+            <span className="text-xs text-slate-500 dark:text-slate-400">
               {selectedIds.length > 0
                 ? `${selectedIds.length} notebook${selectedIds.length > 1 ? "s" : ""} selected`
                 : "Select at least one notebook"}
@@ -339,7 +345,7 @@ export default function AddToNotebookModal({
             <div className="flex gap-2">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors text-sm"
+                className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-sm"
               >
                 Cancel
               </button>

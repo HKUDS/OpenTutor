@@ -3,14 +3,18 @@ Embedding Configuration
 =======================
 
 Configuration management for embedding services.
+Simplified version - loads from unified config service or falls back to .env.
 """
 
 from dataclasses import dataclass
+import logging
 import os
 from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -63,18 +67,11 @@ def _to_bool(value: Optional[str], default: bool) -> bool:
 
 def get_embedding_config() -> EmbeddingConfig:
     """
-    Load embedding configuration from environment variables or provider manager.
+    Load embedding configuration.
 
     Priority:
-    1. Active provider from embedding_providers.json
+    1. Active configuration from unified config service
     2. Environment variables (.env)
-
-    Strategy for environment variables:
-    1. Read EMBEDDING_BINDING to determine active provider
-    2. Try provider-specific variables first (e.g., JINA_EMBEDDING_MODEL)
-    3. Fall back to generic EMBEDDING_* variables
-
-    This allows easy switching between providers without changing all vars.
 
     Returns:
         EmbeddingConfig: Configuration dataclass
@@ -82,63 +79,38 @@ def get_embedding_config() -> EmbeddingConfig:
     Raises:
         ValueError: If required configuration is missing
     """
-    # 1. Try to get active provider from provider config manager
+    # 1. Try to get active config from unified config service
     try:
-        from .provider_config import embedding_provider_config_manager
+        from src.services.config import get_active_embedding_config
 
-        active_provider = embedding_provider_config_manager.get_active_provider()
-
-        if active_provider:
+        config = get_active_embedding_config()
+        if config and config.get("model"):
             return EmbeddingConfig(
-                binding=active_provider.binding,
-                model=active_provider.model,
-                api_key=active_provider.api_key or "",  # Empty string for local providers
-                base_url=active_provider.base_url,
-                api_version=getattr(active_provider, "api_version", None),
-                dim=active_provider.dimensions,
-                input_type=active_provider.input_type,
-                normalized=active_provider.normalized,
-                truncate=active_provider.truncate,
+                binding=config.get("provider", "openai"),
+                model=config["model"],
+                api_key=config.get("api_key", ""),
+                base_url=config.get("base_url"),
+                api_version=config.get("api_version"),
+                dim=config.get("dimensions", 3072),
             )
+    except ImportError:
+        # Unified config service not yet available, fall back to env
+        pass
     except Exception as e:
-        print(f"⚠️ Failed to load active embedding provider: {e}")
+        logger.warning(f"Failed to load from unified config: {e}")
 
     # 2. Fallback to environment variables
     binding = _strip_value(os.getenv("EMBEDDING_BINDING", "openai"))
-
-    # Provider-specific prefix mapping
-    prefix_map = {
-        "openai": "OPENAI",
-        "jina": "JINA",
-        "google": "GOOGLE",
-        "cohere": "COHERE",
-        "azure_openai": "AZURE",
-        "huggingface": "HF",
-        "ollama": "OLLAMA",
-        "lm_studio": "LM_STUDIO",
-    }
-
-    prefix = prefix_map.get(binding, "")
-
-    # Try provider-specific vars first, then fall back to generic
-    def get_with_fallback(var_name: str, generic_name: str) -> Optional[str]:
-        if prefix:
-            specific = _strip_value(os.getenv(f"{prefix}_{var_name}"))
-            if specific:
-                return specific
-        return _strip_value(os.getenv(generic_name))
-
-    model = get_with_fallback("EMBEDDING_MODEL", "EMBEDDING_MODEL")
-    api_key = get_with_fallback("EMBEDDING_API_KEY", "EMBEDDING_API_KEY")
-    base_url = get_with_fallback("EMBEDDING_HOST", "EMBEDDING_HOST")
-    api_version = get_with_fallback("EMBEDDING_API_VERSION", "EMBEDDING_API_VERSION")
-    dim_str = get_with_fallback("EMBEDDING_DIM", "EMBEDDING_DIM")
+    model = _strip_value(os.getenv("EMBEDDING_MODEL"))
+    api_key = _strip_value(os.getenv("EMBEDDING_API_KEY"))
+    base_url = _strip_value(os.getenv("EMBEDDING_HOST"))
+    api_version = _strip_value(os.getenv("EMBEDDING_API_VERSION"))
+    dim_str = _strip_value(os.getenv("EMBEDDING_DIMENSION"))
 
     # Strict mode: Model is required
     if not model:
         raise ValueError(
-            f"Error: EMBEDDING_MODEL not set for binding '{binding}'. "
-            f"Set either {prefix}_EMBEDDING_MODEL or EMBEDDING_MODEL in .env file"
+            "EMBEDDING_MODEL not set. Please configure it in .env file or add a configuration in Settings"
         )
 
     # Check if API key is required
@@ -148,13 +120,11 @@ def get_embedding_config() -> EmbeddingConfig:
 
     if requires_key and not api_key:
         raise ValueError(
-            f"Error: EMBEDDING_API_KEY not set for binding '{binding}'. "
-            f"Set {prefix}_EMBEDDING_API_KEY or EMBEDDING_API_KEY in .env file"
+            "EMBEDDING_API_KEY not set. Please configure it in .env file or add a configuration in Settings"
         )
     if not base_url:
         raise ValueError(
-            f"Error: EMBEDDING_HOST not set for binding '{binding}'. "
-            f"Set {prefix}_EMBEDDING_HOST or EMBEDDING_HOST in .env file"
+            "EMBEDDING_HOST not set. Please configure it in .env file or add a configuration in Settings"
         )
 
     # Get optional configuration
@@ -172,7 +142,7 @@ def get_embedding_config() -> EmbeddingConfig:
     return EmbeddingConfig(
         binding=binding,
         model=model,
-        api_key=api_key,
+        api_key=api_key or "",
         base_url=base_url,
         api_version=api_version,
         dim=dim,

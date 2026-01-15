@@ -5,10 +5,9 @@ Pipeline Factory
 Factory for creating and managing RAG pipelines.
 """
 
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, List, Optional
 
-from .pipeline import RAGPipeline
-from .pipelines import academic, lightrag, llamaindex
+from .pipelines import lightrag, llamaindex
 from .pipelines.raganything import RAGAnythingPipeline
 
 # Pipeline registry
@@ -16,13 +15,10 @@ _PIPELINES: Dict[str, Callable] = {
     "raganything": RAGAnythingPipeline,  # Full multimodal: MinerU parser, deep analysis (slow, thorough)
     "lightrag": lightrag.LightRAGPipeline,  # Knowledge graph: PDFParser, fast text-only (medium speed)
     "llamaindex": llamaindex.LlamaIndexPipeline,  # Vector-only: Simple chunking, fast (fastest)
-    "academic": academic.AcademicPipeline,
 }
 
 
-def get_pipeline(
-    name: str = "raganything", kb_base_dir: Optional[str] = None, **kwargs
-) -> Union[RAGPipeline, RAGAnythingPipeline]:
+def get_pipeline(name: str = "raganything", kb_base_dir: Optional[str] = None, **kwargs):
     """
     Get a pre-configured pipeline by name.
 
@@ -43,13 +39,19 @@ def get_pipeline(
 
     factory = _PIPELINES[name]
 
-    # All pipelines now accept kb_base_dir
-    if name == "raganything":
+    # Handle different pipeline types:
+    # - lightrag, academic: functions that return RAGPipeline
+    # - llamaindex, raganything: classes that need instantiation
+    if name in ("lightrag", "academic"):
+        # LightRAGPipeline and AcademicPipeline are factory functions
+        return factory(kb_base_dir=kb_base_dir)
+    elif name in ("llamaindex", "raganything"):
+        # LlamaIndexPipeline and RAGAnythingPipeline are classes
         if kb_base_dir:
             kwargs["kb_base_dir"] = kb_base_dir
-        return factory(**kwargs) if kwargs else factory()
+        return factory(**kwargs)
     else:
-        # Component-based pipelines - pass kb_base_dir
+        # Default: try calling with kb_base_dir
         return factory(kb_base_dir=kb_base_dir)
 
 
@@ -62,24 +64,19 @@ def list_pipelines() -> List[Dict[str, str]]:
     """
     return [
         {
-            "id": "raganything",
-            "name": "RAG-Anything",
-            "description": "End-to-end academic document processing (MinerU + LightRAG)",
+            "id": "llamaindex",
+            "name": "LlamaIndex",
+            "description": "Pure vector retrieval, fastest processing speed.",
         },
         {
             "id": "lightrag",
             "name": "LightRAG",
-            "description": "Component-based pipeline with knowledge graph",
+            "description": "Lightweight knowledge graph retrieval, fast processing of text documents.",
         },
         {
-            "id": "llamaindex",
-            "name": "LlamaIndex",
-            "description": "Fast vector-based retrieval",
-        },
-        {
-            "id": "academic",
-            "name": "Academic",
-            "description": "Academic documents with numbered item extraction",
+            "id": "raganything",
+            "name": "RAG-Anything",
+            "description": "Multimodal document processing with chart and formula extraction, builds knowledge graphs.",
         },
     ]
 

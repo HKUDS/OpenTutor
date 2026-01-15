@@ -19,9 +19,6 @@ class DeepTutorError(Exception):
         if self.details:
             return f"{self.message} (details: {self.details})"
         return self.message
-        if self.details:
-            return f"{self.message} (details: {self.details})"
-        return self.message
 
 
 class ConfigurationError(DeepTutorError):

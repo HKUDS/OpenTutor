@@ -77,7 +77,7 @@ jobs:
             type=ref,event=tag
 
       - name: Build and push AMD64 image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
@@ -148,7 +148,7 @@ jobs:
             type=raw,value=${{ github.ref_name }}-arm64,enable=${{ startsWith(github.ref, 'refs/tags/') }}
 
       - name: Build and push ARM64 image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile

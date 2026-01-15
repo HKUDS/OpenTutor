@@ -47,7 +47,7 @@ services:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-large}
       - EMBEDDING_API_KEY=${EMBEDDING_API_KEY}
       - EMBEDDING_HOST=${EMBEDDING_HOST}
-      - EMBEDDING_DIM=${EMBEDDING_DIM:-3072}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-3072}
       - EMBEDDING_MAX_TOKENS=${EMBEDDING_MAX_TOKENS:-8192}
       # TTS Configuration (Optional)
       - TTS_MODEL=${TTS_MODEL:-}
@@ -56,12 +56,7 @@ services:
       - TTS_VOICE=${TTS_VOICE:-alloy}
       # Web Search Configuration (Optional)
       - SEARCH_PROVIDER=${SEARCH_PROVIDER:-perplexity}
-      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
-      - BAIDU_API_KEY=${BAIDU_API_KEY:-}
-      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
-      - EXA_API_KEY=${EXA_API_KEY:-}
-      - SERPER_API_KEY=${SERPER_API_KEY:-}
-      - JINA_API_KEY=${JINA_API_KEY:-}
+      - SEARCH_API_KEY=${SEARCH_API_KEY:-}
       # Logging Configuration
       - RAG_TOOL_MODULE_LOG_LEVEL=${RAG_TOOL_MODULE_LOG_LEVEL:-INFO}
       # ============================================

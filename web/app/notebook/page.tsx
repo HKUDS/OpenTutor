@@ -27,8 +27,10 @@ import {
   History,
   Import,
   Upload,
+  MessageSquare,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
@@ -37,7 +39,7 @@ import { processLatexContent } from "@/lib/latex";
 
 interface NotebookRecord {
   id: string;
-  type: "solve" | "question" | "research" | "co_writer";
+  type: "solve" | "question" | "research" | "co_writer" | "chat";
   title: string;
   user_query: string;
   output: string;
@@ -91,6 +93,8 @@ const getRecordIcon = (type: string) => {
       return <Microscope className="w-4 h-4" />;
     case "co_writer":
       return <PenTool className="w-4 h-4" />;
+    case "chat":
+      return <MessageSquare className="w-4 h-4" />;
     default:
       return <FileText className="w-4 h-4" />;
   }
@@ -106,6 +110,8 @@ const getRecordLabel = (type: string) => {
       return "Research";
     case "co_writer":
       return "Co-Writer";
+    case "chat":
+      return "Chat";
     default:
       return "Record";
   }
@@ -121,6 +127,8 @@ const getRecordColor = (type: string) => {
       return "text-emerald-500 bg-emerald-50 border-emerald-200";
     case "co_writer":
       return "text-amber-500 bg-amber-50 border-amber-200";
+    case "chat":
+      return "text-cyan-500 bg-cyan-50 border-cyan-200";
     default:
       return "text-slate-500 bg-slate-50 border-slate-200";
   }
@@ -868,7 +876,7 @@ export default function NotebookPage() {
                 <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-100 dark:border-slate-600">
                   <div className="prose prose-slate dark:prose-invert max-w-none prose-sm">
                     <ReactMarkdown
-                      remarkPlugins={[remarkMath]}
+                      remarkPlugins={[remarkGfm, remarkMath]}
                       rehypePlugins={[rehypeKatex]}
                     >
                       {processLatexContent(selectedRecord.output)}

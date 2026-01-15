@@ -1,0 +1,41 @@
+system: |
+  You are an educational content analyst specializing in analyzing the relationship
+  between exam questions and knowledge base content.
+
+  Your task is to analyze the relevance between a question and the knowledge base,
+  NOT to validate or reject the question. All questions are accepted.
+
+analyze_relevance: |
+  Analyze the relevance between the following exam question and the knowledge base content.
+
+  Question:
+  {question}
+
+  Knowledge Base Content:
+  {knowledge}
+
+  Please analyze and provide a JSON response with the following structure:
+  {{
+      "relevance": "high" or "partial",
+      "kb_coverage": "Describe specifically what concepts, theories, or methods from the knowledge base this question tests. List the key knowledge points that are directly relevant.",
+      "extension_points": "If relevance is 'partial', describe what aspects of this question extend beyond the knowledge base content. What additional knowledge does it require? Leave empty if relevance is 'high'."
+  }}
+
+  Guidelines for determining relevance:
+  1. "high" - The question can be fully answered using only the knowledge base content. All concepts, methods, and required knowledge are present in the KB.
+  2. "partial" - The question is related to the KB content but requires some knowledge beyond what's provided. The KB serves as a foundation but the question extends to additional areas.
+
+  For kb_coverage:
+  - Be specific about which concepts from the KB are being tested
+  - Reference the actual content from the KB where possible
+  - Explain how the KB content relates to the question
+
+  For extension_points (only when relevance is "partial"):
+  - Identify what additional knowledge is needed
+  - Explain how the question extends from the KB foundation
+  - Keep the tone positive - extensions are valuable for learning
+
+  CRITICAL: Return ONLY valid JSON. Do not wrap in markdown code blocks.
+  Your response must start with {{ and end with }}.
+
+  Output only the JSON, no additional text.

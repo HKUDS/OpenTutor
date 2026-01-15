@@ -17,7 +17,6 @@ import uuid
 from openai import AsyncAzureOpenAI, AsyncOpenAI
 
 from src.agents.base_agent import BaseAgent
-from src.services.config import load_config_with_main
 from src.services.tts import get_tts_config
 
 # Import shared stats from edit_agent for legacy compatibility
@@ -35,6 +34,16 @@ class NarratorAgent(BaseAgent):
     """Note Narration Agent - Generate narration script and convert to audio"""
 
     def __init__(self, language: str = "en"):
+        """
+        Initialize NarratorAgent.
+
+        Args:
+            language: Language setting ('en' | 'zh'), default 'en'
+
+        Note: LLM configuration (api_key, base_url, model, etc.) is loaded
+        automatically from the unified config service. Use refresh_config()
+        to pick up configuration changes made in Settings.
+        """
         # Use "narrator" as module_name to get independent temperature/max_tokens config
         super().__init__(
             module_name="narrator",
@@ -56,24 +65,18 @@ class NarratorAgent(BaseAgent):
         self._load_tts_config()
 
     def _load_tts_config(self):
-        """Load TTS-specific configuration."""
-        # Load main config file to get TTS default settings
-        try:
-            config = load_config_with_main("solve_config.yaml")
-            self.tts_settings = config.get("tts", {})
-            self.default_voice = self.tts_settings.get("default_voice", "alloy")
-            self.logger.info(f"TTS settings loaded from config: voice={self.default_voice}")
-        except Exception as e:
-            self.logger.warning(f"Failed to load TTS settings from config, using defaults: {e}")
-            self.default_voice = "alloy"
-
+        """Load TTS-specific configuration from unified config service."""
         try:
             self.tts_config = get_tts_config()
+            # Get voice from unified config (defaults to "alloy")
+            self.default_voice = self.tts_config.get("voice", "alloy")
+            self.logger.info(f"TTS settings loaded: voice={self.default_voice}")
             # Validate TTS configuration
             self._validate_tts_config()
         except Exception as e:
             self.logger.error(f"Failed to load TTS config: {e}", exc_info=True)
             self.tts_config = None
+            self.default_voice = "alloy"
 
     def _validate_tts_config(self):
         """Validate TTS configuration completeness and format"""

@@ -1,6 +1,37 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+
+// Type declarations for FileSystem Entry API (drag & drop folder support)
+interface FileSystemEntry {
+  isFile: boolean;
+  isDirectory: boolean;
+  name: string;
+}
+
+interface FileSystemFileEntry extends FileSystemEntry {
+  file(
+    successCallback: (file: File) => void,
+    errorCallback?: (error: Error) => void,
+  ): void;
+}
+
+interface FileSystemDirectoryEntry extends FileSystemEntry {
+  createReader(): FileSystemDirectoryReader;
+}
+
+interface FileSystemDirectoryReader {
+  readEntries(
+    successCallback: (entries: FileSystemEntry[]) => void,
+    errorCallback?: (error: Error) => void,
+  ): void;
+}
+
+declare global {
+  interface DataTransferItem {
+    webkitGetAsEntry?(): FileSystemEntry | null;
+  }
+}
 import {
   BookOpen,
   Database,
@@ -15,6 +46,9 @@ import {
   Loader2,
   X,
   RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  Star,
 } from "lucide-react";
 import { apiUrl, wsUrl } from "@/lib/api";
 
@@ -26,6 +60,7 @@ interface KnowledgeBase {
     images: number;
     content_lists: number;
     rag_initialized: boolean;
+    rag_provider?: string;
     rag?: {
       chunks?: number;
       entities?: number;
@@ -44,6 +79,14 @@ interface ProgressInfo {
   error?: string;
 }
 
+interface UploadFile {
+  file: File;
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
 export default function KnowledgePage() {
   const [kbs, setKbs] = useState<KnowledgeBase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,12 +95,244 @@ export default function KnowledgePage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [targetKb, setTargetKb] = useState<string>("");
   const [uploading, setUploading] = useState(false);
-  const [files, setFiles] = useState<FileList | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
   const [newKbName, setNewKbName] = useState("");
   const [dragActive, setDragActive] = useState(false);
+  const [ragProvider, setRagProvider] = useState<string>("llamaindex");
+  const [ragProviders, setRagProviders] = useState<
+    Array<{ id: string; name: string; description: string }>
+  >([]);
   const [progressMap, setProgressMap] = useState<Record<string, ProgressInfo>>(
     {},
   );
+
+  // Toast notification system
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
+
+  // Helper function to generate unique ID
+  const generateFileId = () => Math.random().toString(36).substring(2, 15);
+
+  // Helper function to get file extension
+  const getFileExtension = (filename: string): string => {
+    const parts = filename.split(".");
+    return parts.length > 1 ? parts.pop()?.toLowerCase() || "" : "";
+  };
+
+  // Supported file extensions (matching backend DocumentValidator.ALLOWED_EXTENSIONS)
+  const SUPPORTED_EXTENSIONS = [
+    "pdf",
+    "txt",
+    "md", // Documents
+    "doc",
+    "docx",
+    "rtf", // Word documents
+    "html",
+    "htm",
+    "xml",
+    "json", // Web/Data formats
+    "csv",
+    "xlsx",
+    "xls", // Spreadsheets
+    "pptx",
+    "ppt", // Presentations
+  ];
+
+  const isSupportedFile = (filename: string): boolean => {
+    const ext = getFileExtension(filename);
+    return SUPPORTED_EXTENSIONS.includes(ext);
+  };
+
+  // Helper function to convert File to UploadFile
+  const fileToUploadFile = (file: File): UploadFile => ({
+    file,
+    id: generateFileId(),
+    name: file.name,
+    type: getFileExtension(file.name),
+    size: file.size,
+  });
+
+  // Helper function to add files (avoiding duplicates)
+  const addFiles = (newFiles: File[]) => {
+    setUploadFiles((prev) => {
+      const existingNames = new Set(prev.map((f) => f.name));
+      const uniqueNewFiles = newFiles
+        .filter((f) => !existingNames.has(f.name))
+        .map(fileToUploadFile);
+      return [...prev, ...uniqueNewFiles];
+    });
+  };
+
+  // Helper function to remove a file
+  const removeFile = (fileId: string) => {
+    setUploadFiles((prev) => prev.filter((f) => f.id !== fileId));
+  };
+
+  // Helper function to clear all files
+  const clearAllFiles = () => {
+    setUploadFiles([]);
+  };
+
+  // Helper function to recursively read directory entries
+  const readDirectoryRecursively = async (
+    dirEntry: FileSystemDirectoryEntry,
+  ): Promise<File[]> => {
+    const files: File[] = [];
+    const reader = dirEntry.createReader();
+
+    const readEntries = (): Promise<FileSystemEntry[]> => {
+      return new Promise((resolve, reject) => {
+        reader.readEntries(resolve, reject);
+      });
+    };
+
+    const getFile = (fileEntry: FileSystemFileEntry): Promise<File> => {
+      return new Promise((resolve, reject) => {
+        fileEntry.file(resolve, reject);
+      });
+    };
+
+    let entries: FileSystemEntry[];
+    do {
+      entries = await readEntries();
+      for (const entry of entries) {
+        if (entry.isFile) {
+          const file = await getFile(entry as FileSystemFileEntry);
+          // Filter supported file types
+          if (isSupportedFile(file.name)) {
+            files.push(file);
+          }
+        } else if (entry.isDirectory) {
+          const subFiles = await readDirectoryRecursively(
+            entry as FileSystemDirectoryEntry,
+          );
+          files.push(...subFiles);
+        }
+      }
+    } while (entries.length > 0);
+
+    return files;
+  };
+
+  // Helper function to process dropped items (files and folders)
+  const processDroppedItems = async (dataTransfer: DataTransfer) => {
+    const items = dataTransfer.items;
+    const allFiles: File[] = [];
+
+    const processItem = async (item: DataTransferItem): Promise<File[]> => {
+      const entry = item.webkitGetAsEntry?.();
+      if (!entry) {
+        // Fallback: try to get as file
+        const file = item.getAsFile();
+        if (file && isSupportedFile(file.name)) {
+          return [file];
+        }
+        return [];
+      }
+
+      if (entry.isFile) {
+        return new Promise((resolve) => {
+          (entry as FileSystemFileEntry).file(
+            (file) => {
+              if (isSupportedFile(file.name)) {
+                resolve([file]);
+              } else {
+                resolve([]);
+              }
+            },
+            () => resolve([]),
+          );
+        });
+      } else if (entry.isDirectory) {
+        return readDirectoryRecursively(entry as FileSystemDirectoryEntry);
+      }
+      return [];
+    };
+
+    // Process all items in parallel
+    const promises: Promise<File[]>[] = [];
+    for (let i = 0; i < items.length; i++) {
+      promises.push(processItem(items[i]));
+    }
+
+    const results = await Promise.all(promises);
+    results.forEach((files) => allFiles.push(...files));
+
+    return allFiles;
+  };
+
+  // Helper function to format file size
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  };
+
+  // Helper function to get file icon based on type
+  const getFileIcon = (type: string) => {
+    switch (type) {
+      case "pdf":
+        return <FileText className="w-4 h-4 text-red-500" />;
+      case "md":
+        return <FileText className="w-4 h-4 text-blue-500" />;
+      case "txt":
+        return <FileText className="w-4 h-4 text-slate-500" />;
+      case "doc":
+      case "docx":
+      case "rtf":
+        return <FileText className="w-4 h-4 text-blue-600" />;
+      case "html":
+      case "htm":
+      case "xml":
+        return <FileText className="w-4 h-4 text-orange-500" />;
+      case "json":
+        return <FileText className="w-4 h-4 text-yellow-600" />;
+      case "csv":
+      case "xlsx":
+      case "xls":
+        return <FileText className="w-4 h-4 text-green-600" />;
+      case "pptx":
+      case "ppt":
+        return <FileText className="w-4 h-4 text-orange-600" />;
+      default:
+        return <FileText className="w-4 h-4 text-slate-400" />;
+    }
+  };
+
+  // Helper function to get file type label
+  const getFileTypeLabel = (type: string): string => {
+    const labels: Record<string, string> = {
+      pdf: "PDF",
+      md: "Markdown",
+      txt: "Text",
+      doc: "Word",
+      docx: "Word",
+      rtf: "RTF",
+      html: "HTML",
+      htm: "HTML",
+      xml: "XML",
+      json: "JSON",
+      csv: "CSV",
+      xlsx: "Excel",
+      xls: "Excel",
+      pptx: "PowerPoint",
+      ppt: "PowerPoint",
+    };
+    return labels[type] || type.toUpperCase();
+  };
+
+  const showToast = (
+    message: string,
+    type: "success" | "error" | "info" = "info",
+  ) => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   // Use ref only for WebSocket connections (no need for state as it's not used in render)
   const wsConnectionsRef = useRef<Record<string, WebSocket>>({});
   const kbsNamesRef = useRef<string[]>([]);
@@ -205,6 +480,22 @@ export default function KnowledgePage() {
   useEffect(() => {
     fetchKnowledgeBases();
   }, [fetchKnowledgeBases]);
+
+  // Fetch RAG providers
+  useEffect(() => {
+    const fetchRagProviders = async () => {
+      try {
+        const res = await fetch(apiUrl("/api/v1/knowledge/rag-providers"));
+        if (res.ok) {
+          const data = await res.json();
+          setRagProviders(data.providers || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch RAG providers:", err);
+      }
+    };
+    fetchRagProviders();
+  }, []);
 
   // Establish WebSocket connections for all KBs to receive progress updates (only when KB names change)
   useEffect(() => {
@@ -393,7 +684,7 @@ export default function KnowledgePage() {
       fetchKnowledgeBases();
     } catch (err) {
       console.error(err);
-      alert("Failed to delete knowledge base");
+      showToast("Failed to delete knowledge base", "error");
     }
   };
 
@@ -443,13 +734,18 @@ export default function KnowledgePage() {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!files || files.length === 0 || !targetKb) return;
+    if (uploadFiles.length === 0 || !targetKb) return;
 
     setUploading(true);
     const formData = new FormData();
-    Array.from(files).forEach((file) => {
-      formData.append("files", file);
+    uploadFiles.forEach((uploadFile) => {
+      formData.append("files", uploadFile.file);
     });
+
+    // Add rag_provider to form data if user selected one different from KB's existing provider
+    if (ragProvider) {
+      formData.append("rag_provider", ragProvider);
+    }
 
     try {
       const res = await fetch(apiUrl(`/api/v1/knowledge/${targetKb}/upload`), {
@@ -459,13 +755,16 @@ export default function KnowledgePage() {
       if (!res.ok) throw new Error("Upload failed");
 
       setUploadModalOpen(false);
-      setFiles(null);
+      clearAllFiles();
       // Refresh immediately to establish WebSocket connection
       await fetchKnowledgeBases();
-      alert("Files uploaded successfully! Processing started in background.");
+      showToast(
+        "Files uploaded successfully! Processing started in background.",
+        "success",
+      );
     } catch (err) {
       console.error(err);
-      alert("Failed to upload files");
+      showToast("Failed to upload files", "error");
     } finally {
       setUploading(false);
     }
@@ -473,13 +772,14 @@ export default function KnowledgePage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newKbName || !files || files.length === 0) return;
+    if (!newKbName || uploadFiles.length === 0) return;
 
     setUploading(true);
     const formData = new FormData();
     formData.append("name", newKbName);
-    Array.from(files).forEach((file) => {
-      formData.append("files", file);
+    formData.append("rag_provider", ragProvider);
+    uploadFiles.forEach((uploadFile) => {
+      formData.append("files", uploadFile.file);
     });
 
     try {
@@ -503,6 +803,7 @@ export default function KnowledgePage() {
           images: 0,
           content_lists: 0,
           rag_initialized: false,
+          rag_provider: ragProvider,
         },
       };
 
@@ -530,20 +831,19 @@ export default function KnowledgePage() {
       }));
 
       setCreateModalOpen(false);
-      setFiles(null);
+      clearAllFiles();
       setNewKbName("");
+      setRagProvider("llamaindex"); // Reset to default
 
       // Delay refresh to get full info (but user can already see the new KB)
       setTimeout(async () => {
         await fetchKnowledgeBases();
       }, 1000);
 
-      alert(
-        "Knowledge base created successfully! Initialization started in background.",
-      );
+      showToast("Knowledge base created successfully!", "success");
     } catch (err: any) {
       console.error(err);
-      alert(`Failed to create knowledge base: ${err.message}`);
+      showToast(`Failed to create knowledge base: ${err.message}`, "error");
     } finally {
       setUploading(false);
     }
@@ -559,12 +859,25 @@ export default function KnowledgePage() {
     }
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setFiles(e.dataTransfer.files);
+
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      // Use the new folder-aware processing
+      const droppedFiles = await processDroppedItems(e.dataTransfer);
+      if (droppedFiles.length > 0) {
+        addFiles(droppedFiles);
+      }
+    } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      // Fallback for browsers that don't support DataTransferItem
+      const validFiles = Array.from(e.dataTransfer.files).filter((file) =>
+        isSupportedFile(file.name),
+      );
+      if (validFiles.length > 0) {
+        addFiles(validFiles);
+      }
     }
   }, []);
 
@@ -595,8 +908,9 @@ export default function KnowledgePage() {
           </button>
           <button
             onClick={() => {
-              setFiles(null);
+              clearAllFiles();
               setNewKbName("");
+              setRagProvider("llamaindex");
               setCreateModalOpen(true);
             }}
             className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors flex items-center gap-2 shadow-lg shadow-slate-900/20"
@@ -645,18 +959,73 @@ export default function KnowledgePage() {
                     <h3 className="font-bold text-slate-900 dark:text-slate-100">
                       {kb.name}
                     </h3>
-                    {kb.is_default && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase tracking-wide border border-blue-100 dark:border-blue-800 mt-1">
-                        Default
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5 mt-1">
+                      {kb.is_default && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase tracking-wide border border-blue-100 dark:border-blue-800">
+                          Default
+                        </span>
+                      )}
+                      {kb.statistics.rag_provider && (
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
+                            kb.statistics.rag_provider === "raganything"
+                              ? "bg-purple-50 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-800"
+                              : kb.statistics.rag_provider === "lightrag"
+                                ? "bg-emerald-50 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800"
+                                : "bg-amber-50 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-800"
+                          }`}
+                        >
+                          {kb.statistics.rag_provider === "raganything"
+                            ? "RAG-Anything"
+                            : kb.statistics.rag_provider === "lightrag"
+                              ? "LightRAG"
+                              : kb.statistics.rag_provider === "llamaindex"
+                                ? "LlamaIndex"
+                                : kb.statistics.rag_provider}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {!kb.is_default && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(
+                            apiUrl(`/api/v1/knowledge/default/${kb.name}`),
+                            {
+                              method: "PUT",
+                            },
+                          );
+                          if (!res.ok) throw new Error("Failed to set default");
+                          showToast(
+                            `Set "${kb.name}" as default knowledge base`,
+                            "success",
+                          );
+                          fetchKnowledgeBases();
+                        } catch (err) {
+                          console.error(err);
+                          showToast(
+                            "Failed to set default knowledge base",
+                            "error",
+                          );
+                        }
+                      }}
+                      className="p-2 hover:bg-amber-100 dark:hover:bg-amber-900/40 rounded-lg text-slate-500 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                      title="Set as Default"
+                    >
+                      <Star className="w-4 h-4" />
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setTargetKb(kb.name);
-                      setFiles(null);
+                      clearAllFiles();
+                      // Set RAG provider to KB's existing provider or default
+                      setRagProvider(
+                        kb.statistics.rag_provider || "llamaindex",
+                      );
                       setUploadModalOpen(true);
                     }}
                     className="p-2 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
@@ -819,10 +1188,30 @@ export default function KnowledgePage() {
                     }
                     if (kb.statistics.rag) {
                       return (
-                        <div className="mt-2 flex gap-3 text-[10px] text-slate-400 dark:text-slate-500">
-                          <span>{kb.statistics.rag.chunks} chunks</span>
-                          <span>•</span>
-                          <span>{kb.statistics.rag.entities} entities</span>
+                        <div className="mt-2 space-y-1">
+                          <div className="flex gap-3 text-[10px] text-slate-400 dark:text-slate-500">
+                            <span>{kb.statistics.rag.chunks} chunks</span>
+                            <span>•</span>
+                            <span>{kb.statistics.rag.entities} entities</span>
+                          </div>
+                          {kb.statistics.rag_provider && (
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                              Provider:{" "}
+                              <span className="font-semibold text-slate-600 dark:text-slate-300">
+                                {kb.statistics.rag_provider}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                    if (kb.statistics.rag_provider) {
+                      return (
+                        <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400">
+                          Provider:{" "}
+                          <span className="font-semibold text-slate-600 dark:text-slate-300">
+                            {kb.statistics.rag_provider}
+                          </span>
                         </div>
                       );
                     }
@@ -845,7 +1234,7 @@ export default function KnowledgePage() {
 
       {/* Create KB Modal */}
       {createModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 mt-40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 ">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
@@ -876,6 +1265,57 @@ export default function KnowledgePage() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  RAG Provider
+                </label>
+                <select
+                  value={ragProvider}
+                  onChange={(e) => setRagProvider(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  {ragProviders.length > 0 ? (
+                    ragProviders.map((provider) => (
+                      <option key={provider.id} value={provider.id}>
+                        {provider.name}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="llamaindex">LlamaIndex</option>
+                      <option value="lightrag">LightRAG</option>
+                      <option value="raganything">RAG-Anything</option>
+                    </>
+                  )}
+                </select>
+                {/* Provider description */}
+                <div className="mt-2 p-2.5 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-100 dark:border-slate-600">
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    {(() => {
+                      const selectedProvider = ragProviders.find(
+                        (p) => p.id === ragProvider,
+                      );
+                      if (selectedProvider?.description) {
+                        return selectedProvider.description;
+                      }
+                      // Fallback descriptions
+                      const fallbackDescriptions: Record<string, string> = {
+                        llamaindex:
+                          "Pure vector retrieval, fastest processing speed.",
+                        lightrag:
+                          "Lightweight knowledge graph retrieval, fast processing of text documents.",
+                        raganything:
+                          "Multimodal document processing with chart and formula extraction, builds knowledge graphs.",
+                      };
+                      return (
+                        fallbackDescriptions[ragProvider] ||
+                        "Select a RAG pipeline suitable for your document type"
+                      );
+                    })()}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Upload Documents
                 </label>
                 <div
@@ -894,25 +1334,92 @@ export default function KnowledgePage() {
                     multiple
                     className="hidden"
                     id="kb-file-upload"
-                    onChange={(e) => setFiles(e.target.files)}
-                    accept=".pdf,.txt,.md"
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        const validFiles = Array.from(e.target.files).filter(
+                          (file) => isSupportedFile(file.name),
+                        );
+                        addFiles(validFiles);
+                      }
+                      e.target.value = ""; // Reset input to allow re-selecting same files
+                    }}
+                    accept=".pdf,.txt,.md,.doc,.docx,.rtf,.html,.htm,.xml,.json,.csv,.xlsx,.xls,.pptx,.ppt"
                   />
+
+                  {/* Drop zone / Click to upload area */}
                   <label
                     htmlFor="kb-file-upload"
-                    className="cursor-pointer flex flex-col items-center gap-2"
+                    className={`cursor-pointer flex flex-col items-center gap-2 ${uploadFiles.length > 0 ? "p-4" : "p-8"}`}
                   >
                     <Upload
-                      className={`w-8 h-8 ${dragActive ? "text-blue-500 dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}
+                      className={`w-6 h-6 ${dragActive ? "text-blue-500 dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}
                     />
                     <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                      {files && files.length > 0
-                        ? `${files.length} files selected`
-                        : "Drag & drop files here or click to browse"}
+                      {uploadFiles.length > 0
+                        ? "Click or drop to add more files"
+                        : "Drag & drop files or folders here"}
                     </span>
                     <span className="text-xs text-slate-400 dark:text-slate-500">
-                      Supports PDF, TXT, MD
+                      PDF, Word, Excel, PPT, TXT, MD, HTML, CSV, JSON...
                     </span>
                   </label>
+
+                  {/* File list */}
+                  {uploadFiles.length > 0 && (
+                    <div className="border-t border-slate-200 dark:border-slate-600 px-3 py-2 max-h-48 overflow-y-auto">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                          {uploadFiles.length} file
+                          {uploadFiles.length > 1 ? "s" : ""} selected
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            clearAllFiles();
+                          }}
+                          className="text-xs text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-medium"
+                        >
+                          Clear all
+                        </button>
+                      </div>
+                      <div className="space-y-1">
+                        {uploadFiles.map((file) => (
+                          <div
+                            key={file.id}
+                            className="flex items-center justify-between gap-2 p-2 bg-white dark:bg-slate-700 rounded-lg border border-slate-100 dark:border-slate-600 group"
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              {getFileIcon(file.type)}
+                              <div className="min-w-0 flex-1">
+                                <p
+                                  className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate"
+                                  title={file.name}
+                                >
+                                  {file.name}
+                                </p>
+                                <p className="text-xs text-slate-400 dark:text-slate-500">
+                                  {getFileTypeLabel(file.type)} •{" "}
+                                  {formatFileSize(file.size)}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                removeFile(file.id);
+                              }}
+                              className="p-1 text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                              title="Remove file"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -926,9 +1433,7 @@ export default function KnowledgePage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={
-                    !newKbName || !files || files.length === 0 || uploading
-                  }
+                  disabled={!newKbName || uploadFiles.length === 0 || uploading}
                   className="flex-1 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium hover:bg-slate-800 dark:hover:bg-slate-200 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {uploading ? (
@@ -959,34 +1464,168 @@ export default function KnowledgePage() {
               </button>
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-              Upload PDF, TXT, or MD files to{" "}
+              Upload documents to{" "}
               <strong className="text-slate-700 dark:text-slate-200">
                 {targetKb}
               </strong>
-              .
             </p>
 
             <form onSubmit={handleUpload} className="space-y-4">
-              <div className="border-2 border-dashed border-slate-200 dark:border-slate-600 rounded-xl p-8 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors bg-slate-50 dark:bg-slate-700/50">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  RAG Provider (Optional)
+                </label>
+                <select
+                  value={ragProvider}
+                  onChange={(e) => setRagProvider(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                  {ragProviders.length > 0 ? (
+                    ragProviders.map((provider) => (
+                      <option key={provider.id} value={provider.id}>
+                        {provider.name}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="llamaindex">LlamaIndex</option>
+                      <option value="lightrag">LightRAG</option>
+                      <option value="raganything">RAG-Anything</option>
+                    </>
+                  )}
+                </select>
+                {/* Provider description */}
+                <div className="mt-2 p-2.5 bg-slate-50 dark:bg-slate-700/50 rounded-lg border border-slate-100 dark:border-slate-600">
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    {(() => {
+                      const selectedProvider = ragProviders.find(
+                        (p) => p.id === ragProvider,
+                      );
+                      if (selectedProvider?.description) {
+                        return selectedProvider.description;
+                      }
+                      const fallbackDescriptions: Record<string, string> = {
+                        llamaindex:
+                          "Pure vector retrieval, fastest processing speed.",
+                        lightrag:
+                          "Lightweight knowledge graph retrieval, fast processing of text documents.",
+                        raganything:
+                          "Multimodal document processing with chart and formula extraction, builds knowledge graphs.",
+                      };
+                      return (
+                        fallbackDescriptions[ragProvider] ||
+                        "Select a RAG pipeline suitable for your document type"
+                      );
+                    })()}
+                  </p>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Leave as-is to use the KB&apos;s existing provider
+                </p>
+              </div>
+
+              <div
+                className={`border-2 border-dashed rounded-xl transition-colors ${
+                  dragActive
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
+                    : "border-slate-200 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 bg-slate-50 dark:bg-slate-700/50"
+                }`}
+                onDragEnter={handleDrag}
+                onDragLeave={handleDrag}
+                onDragOver={handleDrag}
+                onDrop={handleDrop}
+              >
                 <input
                   type="file"
                   multiple
                   className="hidden"
                   id="file-upload"
-                  onChange={(e) => setFiles(e.target.files)}
-                  accept=".pdf,.txt,.md"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      const validFiles = Array.from(e.target.files).filter(
+                        (file) => isSupportedFile(file.name),
+                      );
+                      addFiles(validFiles);
+                    }
+                    e.target.value = ""; // Reset input to allow re-selecting same files
+                  }}
+                  accept=".pdf,.txt,.md,.doc,.docx,.rtf,.html,.htm,.xml,.json,.csv,.xlsx,.xls,.pptx,.ppt"
                 />
+
+                {/* Drop zone / Click to upload area */}
                 <label
                   htmlFor="file-upload"
-                  className="cursor-pointer flex flex-col items-center gap-2"
+                  className={`cursor-pointer flex flex-col items-center gap-2 ${uploadFiles.length > 0 ? "p-4" : "p-8"}`}
                 >
-                  <Upload className="w-8 h-8 text-slate-400 dark:text-slate-500" />
+                  <Upload
+                    className={`w-6 h-6 ${dragActive ? "text-blue-500 dark:text-blue-400" : "text-slate-400 dark:text-slate-500"}`}
+                  />
                   <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                    {files && files.length > 0
-                      ? `${files.length} files selected`
-                      : "Click to browse files"}
+                    {uploadFiles.length > 0
+                      ? "Click or drop to add more files"
+                      : "Drag & drop files or folders here"}
+                  </span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">
+                    PDF, Word, Excel, PPT, TXT, MD, HTML, CSV, JSON...
                   </span>
                 </label>
+
+                {/* File list */}
+                {uploadFiles.length > 0 && (
+                  <div className="border-t border-slate-200 dark:border-slate-600 px-3 py-2 max-h-48 overflow-y-auto">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                        {uploadFiles.length} file
+                        {uploadFiles.length > 1 ? "s" : ""} selected
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          clearAllFiles();
+                        }}
+                        className="text-xs text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-medium"
+                      >
+                        Clear all
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      {uploadFiles.map((file) => (
+                        <div
+                          key={file.id}
+                          className="flex items-center justify-between gap-2 p-2 bg-white dark:bg-slate-700 rounded-lg border border-slate-100 dark:border-slate-600 group"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            {getFileIcon(file.type)}
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate"
+                                title={file.name}
+                              >
+                                {file.name}
+                              </p>
+                              <p className="text-xs text-slate-400 dark:text-slate-500">
+                                {getFileTypeLabel(file.type)} •{" "}
+                                {formatFileSize(file.size)}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              removeFile(file.id);
+                            }}
+                            className="p-1 text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                            title="Remove file"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3">
@@ -999,7 +1638,7 @@ export default function KnowledgePage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!files || uploading}
+                  disabled={uploadFiles.length === 0 || uploading}
                   className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {uploading ? (

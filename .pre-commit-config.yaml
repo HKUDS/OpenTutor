@@ -16,34 +16,24 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
-      # Remove trailing whitespace
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
         exclude: ^(assets/roster/.*\.svg|.*\.min\.(js|css)|.*\.lock|.*\.log|.*\.pdf|.*\.zip|.*\.tar\.gz)
 
-      # Ensure files end with a newline
       - id: end-of-file-fixer
         exclude: ^(assets/roster/.*\.svg|.*\.min\.(js|css)|.*\.lock|.*\.log|.*\.pdf|.*\.zip|.*\.tar\.gz)
 
-      # Check YAML files for syntax errors
       - id: check-yaml
-        args: [--unsafe]  # Allow custom tags in YAML
+        args: [--unsafe]
 
-      # Check JSON files for syntax errors
       - id: check-json
         exclude: ^(.*\.lock|.*\.log)
 
-      # Prevent committing large files
       - id: check-added-large-files
         args: [--maxkb=6144]
 
-      # Detect merge conflict markers
       - id: check-merge-conflict
-
-      # Detect case conflicts in file names
       - id: check-case-conflict
-
-      # Check for files that would conflict in case-insensitive filesystems
       - id: check-toml
 
   # ============================================
@@ -52,33 +42,21 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.7
     hooks:
-      # Ruff linting - removing --exit-zero to ensure we catch issues before they land
       - id: ruff
-        args: [--fix]
+        # Added --quiet to suppress logs; --exit-zero makes it a "soft fail" if desired
+        args: [--fix, --quiet, --exit-zero]
 
-      # Ruff import sorting
       - id: ruff-format
+        args: [--quiet]
 
   # ============================================
   # Frontend code formatting and linting
   # ============================================
-  # Note: ESLint is disabled for now due to missing config file in /web
-  # - repo: https://github.com/pre-commit/mirrors-eslint
-  #   rev: v9.17.0
-  #   hooks:
-  #     - id: eslint
-  #       files: ^web/.*\.(js|jsx|ts|tsx)$
-  #       exclude: ^web/(node_modules|\.next|out|dist|build)/
-  #       additional_dependencies:
-  #         - eslint@^9.0.0
-  #         - eslint-config-next@^15.0.0
-  #         - "@eslint/eslintrc"
-  #       args: [--fix]
-
   - repo: https://github.com/pre-commit/mirrors-prettier
     rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
+        args: [--log-level, warn]
         files: ^web/.*\.(css|scss|json|jsonc|yaml|yml|md|graphql|html|ts|tsx|js|jsx)$
         exclude: ^web/(node_modules|\.next|out|dist|build)/
 
@@ -92,3 +70,45 @@ repos:
         args: ['--baseline', '.secrets.baseline']
         exclude: package-lock.json
         pass_filenames: false
+
+  # Replaced Safety with pip-audit due to version 3.x breakdown
+  # NOTE: pip-audit disabled due to pip-api upstream bug with non-ASCII paths on Windows
+  # (UnicodeDecodeError when username contains Chinese characters)
+  # See: https://github.com/di/pip-api/issues/123
+  # - repo: https://github.com/pypa/pip-audit
+  #   rev: v2.7.3
+  #   hooks:
+  #     - id: pip-audit
+  #       args: ["--desc", "on"]
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml, -q]
+        exclude: ^tests/
+
+  # ============================================
+  # Docstring coverage checking
+  # ============================================
+  - repo: https://github.com/econchick/interrogate
+    rev: 1.7.0
+    hooks:
+      - id: interrogate
+        args: [-v, -q, --exclude=tests/, --exclude=scripts/, --ignore-init-method, --ignore-private]
+        pass_filenames: false
+
+  # ============================================
+  # Type checking
+  # ============================================
+  # Type checking - currently relaxed due to gradual type adoption
+  # TODO: Gradually enable stricter checks as types are added
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports, --no-error-summary, --no-strict-optional]
+        exclude: ^(tests/|scripts/|src/agents/|src/services/rag/|src/api/routers/)
+        additional_dependencies:
+          - types-PyYAML
+          - types-requests

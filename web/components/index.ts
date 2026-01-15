@@ -10,6 +10,7 @@ export { default as Sidebar } from "./Sidebar";
 export { default as ActivityDetail } from "./ActivityDetail";
 export { default as CoWriterEditor } from "./CoWriterEditor";
 export { default as AddToNotebookModal } from "./AddToNotebookModal";
+export { default as LayoutWrapper } from "./LayoutWrapper";
 
 // Re-export types if needed
 export type {} from "./AddToNotebookModal";

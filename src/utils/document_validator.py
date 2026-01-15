@@ -4,6 +4,7 @@
 Document Validator - Validation utilities for document uploads
 """
 
+import mimetypes
 import os
 import re
 from typing import ClassVar
@@ -14,6 +15,9 @@ class DocumentValidator:
 
     # Maximum file size in bytes (100MB)
     MAX_FILE_SIZE: ClassVar[int] = 100 * 1024 * 1024
+
+    # Maximum file size for PDF processing (50MB to prevent resource exhaustion)
+    MAX_PDF_SIZE: ClassVar[int] = 50 * 1024 * 1024
 
     # Allowed file extensions
     ALLOWED_EXTENSIONS: ClassVar[set[str]] = {
@@ -32,6 +36,25 @@ class DocumentValidator:
         ".xls",
         ".pptx",
         ".ppt",
+    }
+
+    # MIME type mapping for additional validation
+    ALLOWED_MIME_TYPES: ClassVar[set[str]] = {
+        "application/pdf",
+        "text/plain",
+        "text/markdown",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/rtf",
+        "text/html",
+        "application/xml",
+        "text/xml",
+        "application/json",
+        "text/csv",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     }
 
     @staticmethod
@@ -58,6 +81,13 @@ class DocumentValidator:
                 f"File too large: {file_size} bytes. Maximum allowed: {DocumentValidator.MAX_FILE_SIZE} bytes"
             )
 
+        # Additional size check for PDFs to prevent resource exhaustion
+        _, ext = os.path.splitext(filename.lower())
+        if ext == ".pdf" and file_size is not None and file_size > DocumentValidator.MAX_PDF_SIZE:
+            raise ValueError(
+                f"PDF file too large: {file_size} bytes. Maximum allowed for PDFs: {DocumentValidator.MAX_PDF_SIZE} bytes"
+            )
+
         # Sanitize filename - remove path components and dangerous characters
         # Extract just the filename, removing any path components
         safe_name = os.path.basename(filename)
@@ -70,11 +100,17 @@ class DocumentValidator:
             raise ValueError("Invalid filename")
 
         # Check file extension
-        _, ext = os.path.splitext(safe_name.lower())
         exts_to_check = allowed_extensions or DocumentValidator.ALLOWED_EXTENSIONS
         if ext not in exts_to_check:
             raise ValueError(
                 f"Unsupported file type: {ext}. Allowed types: {', '.join(exts_to_check)}"
+            )
+
+        # Additional MIME type validation for security
+        guessed_mime, _ = mimetypes.guess_type(filename)
+        if guessed_mime and guessed_mime not in DocumentValidator.ALLOWED_MIME_TYPES:
+            raise ValueError(
+                f"MIME type validation failed: {guessed_mime}. File may be malicious or corrupted."
             )
 
         return safe_name

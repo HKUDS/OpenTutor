@@ -29,9 +29,9 @@ FRONTEND_PORT=3782
 # Remote access
 NEXT_PUBLIC_API_BASE=http://your-server-ip:8001
 
-# Web search
-SEARCH_PROVIDER=perplexity  # or: baidu
-PERPLEXITY_API_KEY=your_key
+# Web search (unified API key)
+SEARCH_PROVIDER=perplexity  # Options: perplexity, tavily, serper, jina, exa, baidu
+SEARCH_API_KEY=your_search_api_key
 
 # TTS
 TTS_MODEL=
@@ -133,9 +133,8 @@ EMBEDDING_API_KEY=your_api_key
 # ============================================================================
 # Web Search Configuration - Optional
 # ============================================================================
-SEARCH_PROVIDER=perplexity                # Options: perplexity, baidu
-PERPLEXITY_API_KEY=your_perplexity_key
-BAIDU_API_KEY=your_baidu_key              # For Baidu AI Search (百度AI搜索)
+SEARCH_PROVIDER=perplexity                # Options: perplexity, tavily, serper, jina, exa, baidu
+SEARCH_API_KEY=your_search_api_key        # Unified API key for all search providers
 
 # ============================================================================
 # TTS (Text-to-Speech) Configuration - Optional

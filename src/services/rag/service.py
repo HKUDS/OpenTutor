@@ -109,8 +109,17 @@ class RAGService:
             result = await service.search("What is ML?", "textbook")
             print(result["answer"])
         """
-        self.logger.info(f"Searching KB '{kb_name}' with query: {query[:50]}...")
-        pipeline = self._get_pipeline()
+        # Get the provider from KB metadata, fallback to instance provider
+        provider = self._get_provider_for_kb(kb_name)
+
+        self.logger.info(
+            f"Searching KB '{kb_name}' with provider '{provider}' and query: {query[:50]}..."
+        )
+
+        # Get pipeline for the specific provider
+        from .factory import get_pipeline
+
+        pipeline = get_pipeline(provider, kb_base_dir=self.kb_base_dir)
 
         result = await pipeline.search(query=query, kb_name=kb_name, mode=mode, **kwargs)
 
@@ -122,11 +131,45 @@ class RAGService:
         if "content" not in result and "answer" in result:
             result["content"] = result["answer"]
         if "provider" not in result:
-            result["provider"] = self.provider
+            result["provider"] = provider
         if "mode" not in result:
             result["mode"] = mode
 
         return result
+
+    def _get_provider_for_kb(self, kb_name: str) -> str:
+        """
+        Get the RAG provider for a specific knowledge base from its metadata.
+        Falls back to instance provider or env var if not found in metadata.
+
+        Args:
+            kb_name: Knowledge base name
+
+        Returns:
+            Provider name (e.g., 'llamaindex', 'lightrag', 'raganything')
+        """
+        try:
+            import json
+
+            metadata_file = Path(self.kb_base_dir) / kb_name / "metadata.json"
+
+            if metadata_file.exists():
+                with open(metadata_file, encoding="utf-8") as f:
+                    metadata = json.load(f)
+                    provider = metadata.get("rag_provider")
+                    if provider:
+                        self.logger.info(f"Using provider '{provider}' from KB metadata")
+                        return provider
+
+            # Fallback to instance provider
+            self.logger.info(f"No provider in metadata, using instance provider: {self.provider}")
+            return self.provider
+
+        except Exception as e:
+            self.logger.warning(
+                f"Error reading provider from metadata: {e}, using instance provider"
+            )
+            return self.provider
 
     async def delete(self, kb_name: str) -> bool:
         """

@@ -1,6 +1,45 @@
+<div align="center">
+
+<img src="assets/logo-ver2.png" alt="DeepTutor Logo" width="150" style="border-radius: 15px;">
+
+# DeepTutor: AI-Powered Personalized Learning Assistant
+
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind-3.4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![License](https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square)](LICENSE)
+
+<p align="center">
+  <a href="https://discord.gg/eRsjPgMU4t"><img src="https://img.shields.io/badge/Discord-Join_Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+  &nbsp;&nbsp;
+  <a href="./Communication.md"><img src="https://img.shields.io/badge/Feishu-Join_Group-00D4AA?style=for-the-badge&logo=feishu&logoColor=white" alt="Feishu"></a>
+  &nbsp;&nbsp;
+  <a href="https://github.com/HKUDS/DeepTutor/issues/78"><img src="https://img.shields.io/badge/WeChat-Join_Group-07C160?style=for-the-badge&logo=wechat&logoColor=white" alt="WeChat"></a>
+</p>
+
+
+
+[**Quick Start**](#quick-start) · [**Core Modules**](#core-modules) · [**FAQ**](#faq)
+
+[🇨🇳 中文](assets/README/README_CN.md) · [🇯🇵 日本語](assets/README/README_JA.md) · [🇪🇸 Español](assets/README/README_ES.md) · [🇫🇷 Français](assets/README/README_FR.md) · [🇸🇦 العربية](assets/README/README_AR.md) · [🇷🇺 Русский](assets/README/README_RU.md) · [🇮🇳 हिन्दी](assets/README/README_HI.md) · [🇵🇹 Português](assets/README/README_PT.md)
+
+</div>
+
+<div align="center">
+
+📚 **Massive Document Knowledge Q&A** &nbsp;•&nbsp; 🎨 **Interactive Learning Visualization**<br>
+🎯 **Knowledge Reinforcement** &nbsp;•&nbsp; 🔍 **Deep Research & Idea Generation**
+
+</div>
+
+---
 ### 📰 News
 
-> **[2026.1.1]** Join our [Discord Community](https://discord.gg/zpP9cssj) and [GitHub Discussions](https://github.com/HKUDS/DeepTutor/discussions) - shape the future of DeepTutor! 💬
+> **[2026.1.15]** DeepTutor [v0.5.0](https://github.com/HKUDS/DeepTutor/releases/tag/v0.5.0) is out! Fixed multiple environment configuration and stability issues. We recommend everyone to pull the latest version! 🎉
+
+> **[2026.1.1]** Happy New Year! Join our [Discord Community](https://discord.gg/zpP9cssj), [Wechat Community](https://github.com/HKUDS/DeepTutor/issues/78), or [Discussions](https://github.com/HKUDS/DeepTutor/discussions) - shape the future of DeepTutor! 💬
 
 > **[2025.12.30]** Visit our [Official Website](https://hkuds.github.io/DeepTutor/) for more details!
 
@@ -8,9 +47,11 @@
 
 ### 📦 Releases
 
-> **[2026.1.9]** Release [v0.4.1](https://github.com/HKUDS/DeepTutor/releases/tag/v0.4.1) with LLM Provider system overhaul, Question Generation robustness improvements, and codebase cleanup - Thanks to all the contributors!
+> **[2026.1.15]** Release [v0.5.0](https://github.com/HKUDS/DeepTutor/releases/tag/v0.5.0) - Unified LLM & Embedding services, RAG pipeline selection, and major enhancements to Home, History, QuestionGen & Settings modules -- Thanks to all the contributors!
 <details>
 <summary>History releases</summary>
+
+> **[2026.1.9]** Release [v0.4.1](https://github.com/HKUDS/DeepTutor/releases/tag/v0.4.1) with LLM Provider system overhaul, Question Generation robustness improvements, and codebase cleanup - Thanks to all the contributors!
 
 > **[2026.1.9]** Release [v0.4.0](https://github.com/HKUDS/DeepTutor/releases/tag/v0.4.0) with new code structure, multiple llm & embeddings support - Thanks to all the contributors!
 
@@ -202,9 +243,14 @@
 
 ## 📋 Todo
 > 🌟 Star to follow our future updates!
-- [ x ] Support More RAG Pipelines
-- [ x ] DataBase Robostness and Visualization
-- [   ] Personalized Interaction with Notebook
+- [ x ] Multi-linguistic support
+- [ x ] DeepTutor Community
+- [ x ] Video & Audio file support
+- [ x ] Atomic RAG pipeline customize
+- [ - ] Incremental Knowledge-base Edit
+- [ - ] Personalized Workspace
+- [ - ] DataBase Visualization
+- [ - ] Online Demo
 
 ## 🚀 Getting Started
 
@@ -241,9 +287,8 @@ cp .env.example .env
 | `FRONTEND_PORT` | No | Frontend port (default: `3782`) |
 | `NEXT_PUBLIC_API_BASE` | No | **Frontend API URL** - Set this for remote/LAN access (e.g., `http://192.168.1.100:8001`) |
 | `TTS_*` | No | Text-to-Speech settings |
-| `SEARCH_PROVIDER` | No | Search provider (options: `perplexity`, `baidu`, default: `perplexity`) |
-| `PERPLEXITY_API_KEY` | No | For Perplexity web search |
-| `BAIDU_API_KEY` | No | For Baidu AI search |
+| `SEARCH_PROVIDER` | No | Search provider (options: `perplexity`, `tavily`, `serper`, `jina`, `exa`, `baidu`, default: `perplexity`) |
+| `SEARCH_API_KEY` | No | Unified API key for all search providers |
 
 > 💡 **Remote Access**: If accessing from another device (e.g., `192.168.31.66:3782`), add to `.env`:
 > ```bash
@@ -379,6 +424,11 @@ python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activat
 **2. Install Dependencies**:
 
 ```bash
+# One-click installation (Recommended)
+python scripts/install_all.py
+# Or: bash scripts/install_all.sh
+
+# Or manual installation
 pip install -r requirements.txt
 npm install --prefix web
 ```
@@ -1313,6 +1363,66 @@ docker run -d --name deeptutor \
 **Solution**
 - **Check backend logs**
 - **Confirm URL format**: `ws://localhost:8001/api/v1/...`
+
+</details>
+
+<details>
+<summary><b>Settings page shows "Error loading data" with HTTPS reverse proxy?</b></summary>
+
+**Problem**
+
+When deploying behind an HTTPS reverse proxy (e.g., nginx), the Settings page shows "Error loading data" and browser DevTools reveals that HTTPS requests are being redirected to HTTP (307 redirect).
+
+**Cause**
+
+This issue has been fixed in v0.5.0+. If you're using an older version, the problem was caused by FastAPI's automatic trailing slash redirects generating HTTP URLs instead of preserving the original HTTPS protocol.
+
+**Solution (for v0.5.0+)**
+
+Update to the latest version. The fix disables automatic slash redirects to prevent protocol downgrade.
+
+**Recommended nginx Configuration**
+
+When using nginx as an HTTPS reverse proxy, use the following configuration:
+
+```nginx
+# Frontend
+location / {
+    proxy_pass http://localhost:3782;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# Backend API
+location /api/ {
+    proxy_pass http://localhost:8001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;  # Important: preserves original protocol
+}
+
+# WebSocket support
+location /api/v1/ {
+    proxy_pass http://localhost:8001;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+**Environment Variable**
+
+Set in `.env`:
+```bash
+NEXT_PUBLIC_API_BASE=https://your-domain.com:port
+```
+
+See: [GitHub Issue #112](https://github.com/HKUDS/DeepTutor/issues/112)
 
 </details>
 

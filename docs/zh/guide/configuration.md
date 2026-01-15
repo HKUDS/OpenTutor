@@ -35,9 +35,9 @@ FRONTEND_PORT=3782
 # 远程访问
 NEXT_PUBLIC_API_BASE=http://your-server-ip:8001
 
-# 网络搜索
-SEARCH_PROVIDER=perplexity  # 或：baidu
-PERPLEXITY_API_KEY=your_key
+# 网络搜索（统一 API Key）
+SEARCH_PROVIDER=perplexity  # 可选：perplexity, tavily, serper, jina, exa, baidu
+SEARCH_API_KEY=your_search_api_key
 
 # TTS 语音合成
 TTS_MODEL=

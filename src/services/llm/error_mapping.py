@@ -8,6 +8,15 @@ from dataclasses import dataclass
 import logging
 from typing import Callable, List, Optional, Type
 
+# Import unified exceptions from exceptions.py
+from .exceptions import (
+    LLMAPIError,
+    LLMAuthenticationError,
+    LLMError,
+    LLMRateLimitError,
+    ProviderContextWindowError,
+)
+
 try:
     import openai  # type: ignore
 
@@ -18,37 +27,6 @@ except ImportError:  # pragma: no cover
 
 
 logger = logging.getLogger(__name__)
-
-
-class LLMError(Exception):
-    """Base exception for all LLM-related errors."""
-
-
-class LLMAPIError(LLMError):
-    """Generic API error raised for provider-specific failures."""
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        status_code: Optional[int] = None,
-        provider: Optional[str] = None,
-    ) -> None:
-        super().__init__(message)
-        self.status_code = status_code
-        self.provider = provider
-
-
-class LLMAuthenticationError(LLMAPIError):
-    """Authentication/authorization related error for LLM providers."""
-
-
-class LLMRateLimitError(LLMAPIError):
-    """Rate limiting / quota exhaustion error for LLM providers."""
-
-
-class ProviderContextWindowError(LLMAPIError):
-    """Error indicating the request exceeded the provider's context window."""
 
 
 ErrorClassifier = Callable[[Exception], bool]

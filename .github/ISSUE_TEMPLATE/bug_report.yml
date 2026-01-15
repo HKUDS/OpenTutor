@@ -58,7 +58,7 @@ body:
     id: configused
     attributes:
       label: Configuration Used
-      description: The AI-Tutor configuration used (if applicable).
+      description: The DeepTutor configuration used (if applicable).
       placeholder: |
         # Paste your config here or describe the settings
   - type: textarea
@@ -72,7 +72,7 @@ body:
     attributes:
       label: Additional Information
       description: |
-        - AI-Tutor Version: e.g., v0.1.0
+        - DeepTutor Version: e.g., v0.5.0
         - Operating System: e.g., macOS 14.0, Windows 11, Ubuntu 22.04
         - Python Version: e.g., 3.10.0
         - Node.js Version: e.g., 18.17.0
@@ -80,7 +80,7 @@ body:
         - Related Issues: e.g., #1
         - Any other relevant information.
       value: |
-        - AI-Tutor Version:
+        - DeepTutor Version:
         - Operating System:
         - Python Version:
         - Node.js Version:
