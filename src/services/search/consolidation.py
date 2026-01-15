@@ -387,9 +387,11 @@ class AnswerConsolidator:
             f"[Consolidation] Context: {len(context.get('results', []))} results, "
             f"{len(context.get('citations', []))} citations, max_results={context.get('max_results')}"
         )
-        if context.get('results'):
-            first_result = context['results'][0]
-            _logger.info(f"[Consolidation] First result in context: title='{first_result.get('title', '')[:50]}', snippet='{first_result.get('snippet', '')[:100]}'...")
+        if context.get("results"):
+            first_result = context["results"][0]
+            _logger.info(
+                f"[Consolidation] First result in context: title='{first_result.get('title', '')[:50]}', snippet='{first_result.get('snippet', '')[:100]}'..."
+            )
 
         try:
             rendered = template.render(**context)

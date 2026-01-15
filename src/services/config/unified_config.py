@@ -49,7 +49,7 @@ PROVIDER_OPTIONS = {
     ],
     ConfigType.EMBEDDING: ["openai", "azure_openai", "ollama", "jina", "cohere", "huggingface"],
     ConfigType.TTS: ["openai", "azure_openai"],
-    ConfigType.SEARCH: ["perplexity", "tavily", "exa", "jina", "serper", "baidu"],
+    ConfigType.SEARCH: ["perplexity", "tavily", "exa", "jina", "serper", "baidu", "searxng"],
 }
 
 # Environment variable mappings for each service type

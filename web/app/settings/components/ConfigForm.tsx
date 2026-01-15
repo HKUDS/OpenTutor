@@ -296,8 +296,8 @@ export default function ConfigForm({
           </div>
         </div>
 
-        {/* Base URL (not for search) */}
-        {!isSearchConfig && (
+        {/* Base URL (not for search, except searxng) */}
+        {(!isSearchConfig || (isSearchConfig && provider === "searxng")) && (
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               Base URL
