@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Send,
   Loader2,
@@ -15,6 +15,9 @@ import {
   Search,
   Sparkles,
   FileText,
+  History,
+  PanelLeftClose,
+  PanelLeft,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -25,6 +28,8 @@ import { useGlobal } from "@/context/GlobalContext";
 import { API_BASE_URL, apiUrl } from "@/lib/api";
 import { processLatexContent } from "@/lib/latex";
 import AddToNotebookModal from "@/components/AddToNotebookModal";
+import useSolverSession from "@/hooks/useSolverSession";
+import SessionHistory from "@/components/solver/SessionHistory";
 
 const resolveArtifactUrl = (url?: string | null, outputDir?: string) => {
   if (!url) return "";
@@ -53,11 +58,25 @@ const resolveArtifactUrl = (url?: string | null, outputDir?: string) => {
 };
 
 export default function SolverPage() {
-  const { solverState, setSolverState, startSolver } = useGlobal();
+  const { solverState, setSolverState, startSolver, stopSolver } = useGlobal();
+
+  // Session persistence
+  const {
+    session,
+    isLoading: isSessionLoading,
+    createSession,
+    addMessage,
+    updateTokenStats,
+    clearSession,
+    loadActiveSession,
+    setSession,
+  } = useSolverSession();
 
   // Local state for input
   const [inputQuestion, setInputQuestion] = useState("");
   const [kbs, setKbs] = useState<string[]>([]);
+  const [showHistory, setShowHistory] = useState(true);
+  const [isSwitching, setIsSwitching] = useState(false);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -65,6 +84,7 @@ export default function SolverPage() {
   const prevMessagesLengthRef = useRef<number>(0);
   const prevIsSolvingForLogsRef = useRef<boolean>(false);
   const prevIsSolvingForChatRef = useRef<boolean>(false);
+  const prevMessageCountRef = useRef<number>(0);
 
   // Notebook modal state
   const [showNotebookModal, setShowNotebookModal] = useState(false);
@@ -73,6 +93,198 @@ export default function SolverPage() {
     userQuery: string;
     output: string;
   } | null>(null);
+
+  // Restore session on mount
+  useEffect(() => {
+    if (
+      !isSessionLoading &&
+      session &&
+      session.messages.length > 0 &&
+      !isSwitching
+    ) {
+      // Restore messages from session if solverState is empty
+      if (solverState.messages.length === 0) {
+        const restoredMessages = session.messages.map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          outputDir: m.output_dir || undefined,
+        }));
+        setSolverState((prev) => ({
+          ...prev,
+          messages: restoredMessages,
+          selectedKb: session.knowledge_base || prev.selectedKb,
+        }));
+        prevMessageCountRef.current = restoredMessages.length;
+      }
+    }
+  }, [
+    isSessionLoading,
+    session,
+    solverState.messages.length,
+    setSolverState,
+    isSwitching,
+  ]);
+
+  // Save new messages to session
+  useEffect(() => {
+    // Skip if switching sessions or loading
+    if (isSwitching || isSessionLoading || !session) return;
+
+    const currentCount = solverState.messages.length;
+    if (currentCount > prevMessageCountRef.current) {
+      // New message was added
+      const newMessages = solverState.messages.slice(
+        prevMessageCountRef.current,
+      );
+      for (const msg of newMessages) {
+        addMessage(msg.role, msg.content, msg.outputDir);
+      }
+    }
+    prevMessageCountRef.current = currentCount;
+  }, [
+    solverState.messages,
+    session,
+    addMessage,
+    isSwitching,
+    isSessionLoading,
+  ]);
+
+  // Save token stats when they change
+  useEffect(() => {
+    if (session && solverState.tokenStats.calls > 0 && !isSwitching) {
+      updateTokenStats(solverState.tokenStats);
+    }
+  }, [solverState.tokenStats, session, updateTokenStats, isSwitching]);
+
+  // Warn before page unload if there's unsaved content
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (solverState.isSolving || inputQuestion.trim()) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [solverState.isSolving, inputQuestion]);
+
+  // Create session if none exists when starting
+  const handleStartWithSession = useCallback(
+    async (question: string, kb: string) => {
+      if (!session) {
+        await createSession(kb);
+      }
+      startSolver(question, kb);
+    },
+    [session, createSession, startSolver],
+  );
+
+  // Start a new chat session
+  const handleNewSession = useCallback(async () => {
+    if (isSwitching) return;
+    setIsSwitching(true);
+
+    // 1. Stop any ongoing solving
+    if (stopSolver) stopSolver();
+
+    // 2. Clear Session Hook State FIRST to prevent sync effects
+    setSession(null);
+    await clearSession();
+
+    // 3. Clear Global Solver State
+    setSolverState((prev) => ({
+      ...prev,
+      messages: [],
+      logs: [],
+      isSolving: false,
+      question: "",
+      agentStatus: {
+        InvestigateAgent: "pending",
+        NoteAgent: "pending",
+        ManagerAgent: "pending",
+        SolveAgent: "pending",
+        ToolAgent: "pending",
+        ResponseAgent: "pending",
+        PrecisionAnswerAgent: "pending",
+      },
+      tokenStats: {
+        model: "Unknown",
+        calls: 0,
+        tokens: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        cost: 0.0,
+      },
+    }));
+
+    // 4. Reset Refs
+    prevMessageCountRef.current = 0;
+
+    setIsSwitching(false);
+  }, [setSolverState, clearSession, setSession, isSwitching]);
+
+  // Load a previous session
+  const handleSelectSession = useCallback(
+    async (sessionId: string) => {
+      if (isSwitching || session?.id === sessionId) return;
+      setIsSwitching(true);
+
+      try {
+        // 1. Fetch new session data first
+        const response = await fetch(
+          apiUrl(`/api/v1/solver/sessions/${sessionId}`),
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+
+          // 2. Clear current session state (hook and global)
+          setSession(null); // Stop effects
+          setSolverState((prev) => ({
+            ...prev,
+            messages: [],
+            logs: [],
+            isSolving: false,
+          }));
+
+          // 3. Prepare restored messages
+          const restoredMessages = data.messages.map(
+            (m: { role: string; content: string; output_dir?: string }) => ({
+              role: m.role as "user" | "assistant",
+              content: m.content,
+              outputDir: m.output_dir || undefined,
+            }),
+          );
+
+          // 4. Set Global State with NEW messages
+          setSolverState((prev) => ({
+            ...prev,
+            messages: restoredMessages,
+            selectedKb: data.knowledge_base || prev.selectedKb,
+            isSolving: false,
+            logs: [],
+          }));
+
+          // 5. Update ref to match new length (PREVENT APPENDING)
+          prevMessageCountRef.current = restoredMessages.length;
+
+          // 6. Activate session backend
+          await fetch(apiUrl(`/api/v1/solver/sessions/${sessionId}/activate`), {
+            method: "POST",
+          });
+
+          // 7. Update Hook State with Data explicitly
+          setSession(data);
+        }
+      } catch (e) {
+        console.error("Failed to load session:", e);
+      } finally {
+        setIsSwitching(false);
+      }
+    },
+    [setSolverState, setSession, isSwitching, session?.id],
+  );
 
   useEffect(() => {
     // Fetch knowledge bases on mount only
@@ -162,19 +374,55 @@ export default function SolverPage() {
 
   const handleStart = () => {
     if (!inputQuestion.trim()) return;
-    startSolver(inputQuestion, solverState.selectedKb);
+    handleStartWithSession(inputQuestion, solverState.selectedKb);
     setInputQuestion("");
   };
 
   return (
-    <div className="h-screen flex gap-0 animate-fade-in overflow-hidden">
+    <div className="h-screen flex gap-0 animate-fade-in overflow-hidden relative">
+      {/* Loading Overlay */}
+      {isSwitching && (
+        <div className="absolute inset-0 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+              Loading session...
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Session History Sidebar */}
+      {showHistory && (
+        <div className="w-64 flex-shrink-0 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 overflow-hidden">
+          <SessionHistory
+            currentSessionId={session?.id}
+            onSelectSession={handleSelectSession}
+            onNewSession={handleNewSession}
+          />
+        </div>
+      )}
+
       {/* Left Panel: Chat Interface */}
       <div className="flex-1 flex flex-col bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 overflow-hidden min-h-0">
         {/* Chat Header */}
         <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex justify-between items-center backdrop-blur-sm shrink-0">
-          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-semibold">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-            Smart Solver
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
+              title={showHistory ? "Hide history" : "Show history"}
+            >
+              {showHistory ? (
+                <PanelLeftClose className="w-4 h-4" />
+              ) : (
+                <PanelLeft className="w-4 h-4" />
+              )}
+            </button>
+            <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-semibold">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+              Smart Solver
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <select

@@ -19,6 +19,7 @@ from src.api.routers import (
     research,
     settings,
     solve,
+    solver_sessions,
     system,
 )
 from src.logging import get_logger
@@ -189,6 +190,7 @@ app.include_router(settings.router, prefix="/api/v1/settings", tags=["settings"]
 app.include_router(system.router, prefix="/api/v1/system", tags=["system"])
 app.include_router(config.router, prefix="/api/v1/config", tags=["config"])
 app.include_router(agent_config.router, prefix="/api/v1/agent-config", tags=["agent-config"])
+app.include_router(solver_sessions.router, tags=["solver-sessions"])
 
 
 @app.get("/")
