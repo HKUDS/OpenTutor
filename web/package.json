@@ -30,7 +30,7 @@
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.53.2",
+    "@playwright/test": "^1.57.0",
     "@types/node": "^25",
     "@types/react": "^19",
     "@types/react-dom": "^19",

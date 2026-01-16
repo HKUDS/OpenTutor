@@ -29,7 +29,7 @@ interface FileSystemDirectoryReader {
 
 declare global {
   interface DataTransferItem {
-    webkitGetAsEntry?(): FileSystemEntry | null;
+    webkitGetAsEntry(): FileSystemEntry | null;
   }
 }
 import {
