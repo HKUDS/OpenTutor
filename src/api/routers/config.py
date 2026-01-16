@@ -70,10 +70,14 @@ class SearchConfigCreate(ConfigBase):
     """Search configuration for creation.
 
     Uses unified SEARCH_API_KEY environment variable.
+    SearXNG provider also supports base_url configuration.
     """
 
     api_key: str | Dict[str, str] = Field(
         ..., description="API key or {'use_env': 'SEARCH_API_KEY'}"
+    )
+    base_url: Optional[str | Dict[str, str]] = Field(
+        None, description="Base URL for self-hosted providers like SearXNG"
     )
 
 

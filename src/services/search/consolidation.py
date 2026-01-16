@@ -136,6 +136,50 @@ PROVIDER_TEMPLATES = {
 {% endfor %}
 ---
 *{{ results|length }} academic papers found via Google Scholar*""",
+    # -------------------------------------------------------------------------
+    # SEARXNG TEMPLATE
+    # -------------------------------------------------------------------------
+    "searxng": """{% if answers %}
+### Direct Answers
+{% for answer in answers %}
+{{ answer }}
+{% endfor %}
+
+---
+{% endif %}
+{% if infoboxes %}
+{% for infobox in infoboxes %}
+## {{ infobox.infobox }}{% if infobox.id %} ({{ infobox.id }}){% endif %}
+
+{{ infobox.content }}
+{% if infobox.urls %}
+{% for url in infobox.urls[:3] %}
+- [{{ url.title }}]({{ url.url }})
+{% endfor %}
+{% endif %}
+
+---
+{% endfor %}
+{% endif %}
+### Search Results for "{{ query }}"
+
+{% for result in results[:max_results] %}
+**[{{ loop.index }}] {{ result.title }}**
+{{ result.snippet }}
+{% if result.date %}*{{ result.date }}*{% endif %}
+{% if result.attributes.engine %}*via {{ result.attributes.engine }}*{% endif %}
+{{ result.url }}
+
+{% endfor %}
+{% if suggestions %}
+---
+*Suggestions: {% for s in suggestions[:5] %}{{ s }}{% if not loop.last %}, {% endif %}{% endfor %}*
+{% endif %}
+{% if corrections %}
+*Did you mean: {% for c in corrections[:3] %}{{ c }}{% if not loop.last %}, {% endif %}{% endfor %}*
+{% endif %}
+---
+*{{ results|length }} results from SearXNG metasearch*""",
 }
 
 
@@ -157,6 +201,7 @@ class AnswerConsolidator:
         "serper": "serper",
         "jina": "jina",
         "serper_scholar": "serper_scholar",
+        "searxng": "searxng",
     }
 
     def __init__(
@@ -317,6 +362,15 @@ class AnswerConsolidator:
             context["links"] = metadata.get("links", {})
             context["images"] = metadata.get("images", {})
 
+        # -----------------------------------------------------------------
+        # SEARXNG-specific context
+        # -----------------------------------------------------------------
+        elif provider_lower == "searxng":
+            context["answers"] = metadata.get("answers", [])
+            context["infoboxes"] = metadata.get("infoboxes", [])
+            context["suggestions"] = metadata.get("suggestions", [])
+            context["corrections"] = metadata.get("corrections", [])
+
         return context
 
     def _consolidate_with_template(self, response: WebSearchResponse) -> str:
@@ -329,13 +383,19 @@ class AnswerConsolidator:
 
         # Build context with provider-specific fields
         context = self._build_provider_context(response)
-        _logger.debug(
-            f"Context has {len(context.get('results', []))} results, {len(context.get('citations', []))} citations"
+        _logger.info(
+            f"Context: {len(context.get('results', []))} results, "
+            f"{len(context.get('citations', []))} citations, max_results={context.get('max_results')}"
         )
+        if context.get("results"):
+            first_result = context["results"][0]
+            _logger.debug(
+                f"First result: title='{first_result.get('title', '')[:50]}', snippet='{first_result.get('snippet', '')[:100]}'..."
+            )
 
         try:
             rendered = template.render(**context)
-            _logger.debug("Template rendered successfully")
+            _logger.debug(f"Template rendered ({len(rendered)} chars)")
             return rendered
         except Exception as e:
             _logger.error(f"Template rendering failed: {e}")

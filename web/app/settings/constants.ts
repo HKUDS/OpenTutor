@@ -36,11 +36,27 @@ export const PROVIDER_OPTIONS: Record<ConfigType, string[]> = {
     "lm_studio",
   ],
   tts: ["openai", "azure_openai"],
-  search: ["perplexity", "tavily", "exa", "jina", "serper", "baidu"],
+  search: [
+    // Cloud providers
+    "perplexity",
+    "tavily",
+    "exa",
+    "jina",
+    "serper",
+    "baidu",
+    // Self-hosted
+    "searxng",
+  ],
 };
 
 // Local providers that don't require API keys
-export const LOCAL_PROVIDERS = ["ollama", "lm_studio", "vllm", "llama_cpp"];
+export const LOCAL_PROVIDERS = [
+  "ollama",
+  "lm_studio",
+  "vllm",
+  "llama_cpp",
+  "searxng",
+];
 
 // Default base URLs for local providers
 export const LOCAL_PROVIDER_URLS: Record<string, string> = {
@@ -48,6 +64,7 @@ export const LOCAL_PROVIDER_URLS: Record<string, string> = {
   lm_studio: "http://localhost:1234/v1",
   vllm: "http://localhost:8000/v1",
   llama_cpp: "http://localhost:8080/v1",
+  searxng: "http://localhost:8888",
 };
 
 // Voice options for TTS

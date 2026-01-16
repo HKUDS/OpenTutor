@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from src.logging import get_logger
-from src.services.config import PROJECT_ROOT, load_config_with_main
+from src.services.config import PROJECT_ROOT, get_active_search_config, load_config_with_main
 
 from .base import SEARCH_API_KEY_ENV, BaseSearchProvider
 from .consolidation import CONSOLIDATION_TYPES, PROVIDER_TEMPLATES, AnswerConsolidator
@@ -153,9 +153,16 @@ def web_search(
             "provider": "disabled",
         }
 
-    # Determine provider: function arg > env var > config > default
+    # Get unified config for active search settings
+    unified_config = get_active_search_config() or {}
+
+    # Determine provider: function arg > unified config > env var > yaml config > default
     provider_name = (
-        provider or os.environ.get("SEARCH_PROVIDER") or config.get("provider") or "perplexity"
+        provider
+        or unified_config.get("provider")
+        or os.environ.get("SEARCH_PROVIDER")
+        or config.get("provider")
+        or "perplexity"
     ).lower()
 
     # Determine consolidation from config if not provided
@@ -172,8 +179,16 @@ def web_search(
         provider_kwargs.setdefault("enable_deep_search", baidu_enable_deep_search)
         provider_kwargs.setdefault("search_recency_filter", baidu_search_recency_filter)
 
+    # Pass api_key from unified config if available
+    if unified_config.get("api_key"):
+        provider_kwargs.setdefault("api_key", unified_config["api_key"])
+
+    # Pass base_url from unified config for providers that need it (e.g., SearXNG)
+    if provider_name == "searxng" and unified_config.get("base_url"):
+        provider_kwargs.setdefault("base_url", unified_config["base_url"])
+
     # Get provider instance
-    search_provider = get_provider(provider_name)
+    search_provider = get_provider(provider_name, **provider_kwargs)
 
     _logger.progress(f"[{search_provider.name}] Searching: {query[:50]}...")
 

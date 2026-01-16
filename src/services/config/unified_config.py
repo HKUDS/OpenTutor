@@ -49,7 +49,7 @@ PROVIDER_OPTIONS = {
     ],
     ConfigType.EMBEDDING: ["openai", "azure_openai", "ollama", "jina", "cohere", "huggingface"],
     ConfigType.TTS: ["openai", "azure_openai"],
-    ConfigType.SEARCH: ["perplexity", "tavily", "exa", "jina", "serper", "baidu"],
+    ConfigType.SEARCH: ["perplexity", "tavily", "exa", "jina", "serper", "baidu", "searxng"],
 }
 
 # Environment variable mappings for each service type
@@ -80,6 +80,7 @@ ENV_VAR_MAPPINGS = {
     ConfigType.SEARCH: {
         "provider": "SEARCH_PROVIDER",
         "api_key": "SEARCH_API_KEY",  # Unified API key for all providers
+        "base_url": "SEARCH_BASE_URL",  # For self-hosted providers like SearXNG
     },
 }
 
@@ -246,6 +247,7 @@ class UnifiedConfigManager:
                 **base_config,
                 "provider": _get_env_value(env_mapping.get("provider")) or "perplexity",
                 "api_key": {"use_env": "SEARCH_API_KEY"},
+                "base_url": {"use_env": "SEARCH_BASE_URL"},
             }
 
         return base_config
@@ -327,6 +329,7 @@ class UnifiedConfigManager:
                 "is_default": True,
                 "provider": provider,
                 "api_key": "***",
+                "base_url": _get_env_value(env_mapping.get("base_url")) or "",
             }
 
         return {"id": "default", "name": "Default (from .env)", "is_default": True}
@@ -374,6 +377,7 @@ class UnifiedConfigManager:
                 "id": "default",
                 "provider": provider,
                 "api_key": _get_env_value(env_mapping.get("api_key")) or "",
+                "base_url": _get_env_value(env_mapping.get("base_url")) or "",
             }
 
         return {"id": "default"}
