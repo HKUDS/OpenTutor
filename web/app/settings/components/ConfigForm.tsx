@@ -54,9 +54,15 @@ export default function ConfigForm({
     return !!(value && typeof value === "object" && "use_env" in value);
   };
 
+  // Helper to check if a value is masked (hidden for security)
+  const isMaskedValue = (value: any): boolean => {
+    return value === "***";
+  };
+
   // Helper to get display value
   const getDisplayValue = (value: any): string => {
     if (isEnvReference(value)) return "";
+    if (isMaskedValue(value)) return "";
     return typeof value === "string" ? value : "";
   };
 
@@ -66,6 +72,11 @@ export default function ConfigForm({
     : false;
   const initialUseEnvApiKey = editConfig
     ? isEnvReference(editConfig.api_key)
+    : false;
+
+  // Track if original API key was masked (stored key that shouldn't be overwritten if empty)
+  const originalApiKeyWasMasked = editConfig
+    ? isMaskedValue(editConfig.api_key)
     : false;
 
   // Form state
@@ -180,12 +191,21 @@ export default function ConfigForm({
       const payload: Record<string, any> = {
         name,
         provider,
-        api_key: isLocalProvider
+      };
+
+      // Determine the API key value to send
+      // In edit mode, if the original key was masked and user didn't enter a new one,
+      // don't include api_key in payload to preserve the existing stored key
+      const shouldPreserveExistingApiKey =
+        isEditMode && originalApiKeyWasMasked && !apiKey && !useEnvApiKey;
+
+      if (!shouldPreserveExistingApiKey) {
+        payload.api_key = isLocalProvider
           ? apiKey || ""
           : useEnvApiKey
             ? { use_env: getEnvVarForApiKey(configType) }
-            : apiKey,
-      };
+            : apiKey;
+      }
 
       if (!isSearchConfig) {
         payload.base_url = useEnvBaseUrl
@@ -372,7 +392,9 @@ export default function ConfigForm({
                     ? "Not required"
                     : useEnvApiKey
                       ? `Using ${getEnvVarForApiKey(configType)} from .env`
-                      : "sk-..."
+                      : isEditMode && originalApiKeyWasMasked
+                        ? "Leave empty to keep existing key"
+                        : "sk-..."
                 }
                 className={`w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                   useEnvApiKey

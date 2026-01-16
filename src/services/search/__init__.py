@@ -179,6 +179,10 @@ def web_search(
         provider_kwargs.setdefault("enable_deep_search", baidu_enable_deep_search)
         provider_kwargs.setdefault("search_recency_filter", baidu_search_recency_filter)
 
+    # Pass api_key from unified config if available
+    if unified_config.get("api_key"):
+        provider_kwargs.setdefault("api_key", unified_config["api_key"])
+
     # Pass base_url from unified config for providers that need it (e.g., SearXNG)
     if provider_name == "searxng" and unified_config.get("base_url"):
         provider_kwargs.setdefault("base_url", unified_config["base_url"])
