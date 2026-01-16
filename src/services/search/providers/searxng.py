@@ -20,8 +20,8 @@ Note: JSON format must be enabled in SearXNG settings.yml:
         - json
 """
 
-import os
 from datetime import datetime
+import os
 from typing import Any
 
 import requests
