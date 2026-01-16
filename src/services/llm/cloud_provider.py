@@ -18,7 +18,7 @@ from lightrag.llm.openai import openai_complete_if_cache
 _lightrag_logger = logging.getLogger("lightrag")
 _openai_logger = logging.getLogger("openai")
 
-from .capabilities import supports_response_format
+from .capabilities import get_capability, supports_response_format
 from .config import get_token_limit_kwargs
 from .exceptions import LLMAPIError, LLMAuthenticationError, LLMConfigError
 from .utils import (
@@ -206,6 +206,11 @@ async def _openai_complete(
             "temperature": kwargs.get("temperature", 0.7),
         }
 
+        # Handle forced temperature (e.g., o1/o3/gpt-5 models that only support 1.0)
+        forced_temp = get_capability(binding, "forced_temperature", model)
+        if forced_temp is not None:
+            data["temperature"] = forced_temp
+
         # Handle max_tokens / max_completion_tokens based on model
         max_tokens = kwargs.get("max_tokens") or kwargs.get("max_completion_tokens") or 4096
         data.update(get_token_limit_kwargs(model, max_tokens))
@@ -282,6 +287,11 @@ async def _openai_stream(
         "temperature": kwargs.get("temperature", 0.7),
         "stream": True,
     }
+
+    # Handle forced temperature (e.g., o1/o3/gpt-5 models that only support 1.0)
+    forced_temp = get_capability(binding, "forced_temperature", model)
+    if forced_temp is not None:
+        data["temperature"] = forced_temp
 
     # Handle max_tokens / max_completion_tokens based on model
     max_tokens = kwargs.get("max_tokens") or kwargs.get("max_completion_tokens")
