@@ -161,6 +161,8 @@ MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
         "supports_response_format": False,
         "system_in_messages": False,
     },
+    # Note: Temperature constraints for o1/o3 models are now handled in
+    # parameters.py via MODEL_CONSTRAINTS and sanitize_model_params()
 }
 
 
