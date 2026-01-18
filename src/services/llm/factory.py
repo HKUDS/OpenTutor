@@ -52,8 +52,8 @@ from .utils import is_local_llm_server
 logger = get_logger("LLMFactory")
 
 # Default retry configuration
-DEFAULT_MAX_RETRIES = 3
-DEFAULT_RETRY_DELAY = 1.0  # seconds
+DEFAULT_MAX_RETRIES = 5  # Increased for complex agents like Research
+DEFAULT_RETRY_DELAY = 2.0  # seconds
 DEFAULT_EXPONENTIAL_BACKOFF = True
 
 
@@ -197,8 +197,8 @@ async def complete(
             | tenacity.retry_if_exception_type(LLMTimeoutError)
             | tenacity.retry_if_exception(_is_retriable_llm_api_error)
         ),
-        wait=tenacity.wait_exponential(multiplier=retry_delay, min=retry_delay, max=60),
-        stop=tenacity.stop_after_attempt(max_retries + 1),
+        wait=tenacity.wait_exponential(multiplier=retry_delay, min=retry_delay, max=120),
+        stop=tenacity.stop_after_attempt(max_retries + 2),
         before_sleep=lambda retry_state: logger.warning(
             f"LLM call failed (attempt {retry_state.attempt_number}/{max_retries + 1}), "
             f"retrying in {retry_state.upcoming_sleep:.1f}s... Error: {str(retry_state.outcome.exception())}"

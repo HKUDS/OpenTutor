@@ -412,6 +412,9 @@ async def websocket_ideagen(websocket: WebSocket):
             task_manager.update_task_status(task_id, "error", error=str(e))
 
         try:
+            # Send explicit error message for consistency and better frontend handling
+            await websocket.send_json({"type": "error", "content": str(e)})
+            
             await send_status(
                 websocket,
                 IdeaGenStage.ERROR,
