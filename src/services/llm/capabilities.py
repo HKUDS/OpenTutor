@@ -29,7 +29,6 @@ PROVIDER_CAPABILITIES: dict[str, dict[str, Any]] = {
         "supports_tools": True,
         "system_in_messages": True,  # System prompt goes in messages array
         "newer_models_use_max_completion_tokens": True,
-        "forced_temperature": None,
     },
     "azure_openai": {
         "supports_response_format": True,
@@ -38,7 +37,6 @@ PROVIDER_CAPABILITIES: dict[str, dict[str, Any]] = {
         "system_in_messages": True,
         "newer_models_use_max_completion_tokens": True,
         "requires_api_version": True,
-        "forced_temperature": None,
     },
     # Anthropic
     "anthropic": {
@@ -47,7 +45,6 @@ PROVIDER_CAPABILITIES: dict[str, dict[str, Any]] = {
         "supports_tools": True,
         "system_in_messages": False,  # System is a separate parameter
         "has_thinking_tags": False,
-        "forced_temperature": None,
     },
     "claude": {  # Alias for anthropic
         "supports_response_format": False,
@@ -55,7 +52,6 @@ PROVIDER_CAPABILITIES: dict[str, dict[str, Any]] = {
         "supports_tools": True,
         "system_in_messages": False,
         "has_thinking_tags": False,
-        "forced_temperature": None,
     },
     # DeepSeek
     "deepseek": {
@@ -133,7 +129,6 @@ DEFAULT_CAPABILITIES: dict[str, Any] = {
     "supports_tools": False,
     "system_in_messages": True,
     "has_thinking_tags": False,
-    "forced_temperature": None,
 }
 
 # Model-specific overrides
@@ -166,16 +161,8 @@ MODEL_OVERRIDES: dict[str, dict[str, Any]] = {
         "supports_response_format": False,
         "system_in_messages": False,
     },
-    # Models requiring forced temperature
-    "gpt-5": {
-        "forced_temperature": 1.0,
-    },
-    "o1": {
-        "forced_temperature": 1.0,
-    },
-    "o3": {
-        "forced_temperature": 1.0,
-    },
+    # Note: Temperature constraints for o1/o3 models are now handled in
+    # parameters.py via MODEL_CONSTRAINTS and sanitize_model_params()
 }
 
 

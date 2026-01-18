@@ -18,9 +18,9 @@ from lightrag.llm.openai import openai_complete_if_cache
 _lightrag_logger = logging.getLogger("lightrag")
 _openai_logger = logging.getLogger("openai")
 
-from .capabilities import get_capability, supports_response_format
-from .config import get_token_limit_kwargs
+from .capabilities import supports_response_format
 from .exceptions import LLMAPIError, LLMAuthenticationError, LLMConfigError
+from .parameters import sanitize_model_params
 from .utils import (
     build_auth_headers,
     build_chat_url,
@@ -203,17 +203,11 @@ async def _openai_complete(
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
-            "temperature": kwargs.get("temperature", 0.7),
         }
 
-        # Handle forced temperature (e.g., o1/o3/gpt-5 models that only support 1.0)
-        forced_temp = get_capability(binding, "forced_temperature", model)
-        if forced_temp is not None:
-            data["temperature"] = forced_temp
-
-        # Handle max_tokens / max_completion_tokens based on model
-        max_tokens = kwargs.get("max_tokens") or kwargs.get("max_completion_tokens") or 4096
-        data.update(get_token_limit_kwargs(model, max_tokens))
+        # Sanitize parameters (handles temperature, max_tokens, etc.)
+        sanitized = sanitize_model_params(binding, model, kwargs)
+        data.update(sanitized)
 
         # Include response_format if present in kwargs
         if "response_format" in kwargs:
@@ -284,19 +278,12 @@ async def _openai_stream(
     data = {
         "model": model,
         "messages": msg_list,
-        "temperature": kwargs.get("temperature", 0.7),
         "stream": True,
     }
 
-    # Handle forced temperature (e.g., o1/o3/gpt-5 models that only support 1.0)
-    forced_temp = get_capability(binding, "forced_temperature", model)
-    if forced_temp is not None:
-        data["temperature"] = forced_temp
-
-    # Handle max_tokens / max_completion_tokens based on model
-    max_tokens = kwargs.get("max_tokens") or kwargs.get("max_completion_tokens")
-    if max_tokens:
-        data.update(get_token_limit_kwargs(model, max_tokens))
+    # Sanitize parameters (handles temperature, max_tokens, etc.)
+    sanitized = sanitize_model_params(binding, model, kwargs)
+    data.update(sanitized)
 
     # Include response_format if present in kwargs
     if "response_format" in kwargs:
