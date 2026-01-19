@@ -58,7 +58,7 @@ arxiv>=2.0.0
 # ============================================
 # Scientific computing (for RAG and code execution)
 # ============================================
-numpy>=1.24.0,<2.0.0  # NumPy 1.24+ required for array API, <2.0 for compatibility
+numpy>=1.24.0,<3.0.0  # NumPy 1.24+ required for array API, <2.0 for compatibility
 # matplotlib>=3.7.0  # Uncomment if needed for plotting
 # scipy>=1.11.0      # Uncomment if needed for scientific computing
 # pandas>=2.0.0      # Uncomment if needed for data analysis
